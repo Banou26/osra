@@ -16,7 +16,7 @@ export const registerListener = <T extends Resolvers>({
 }) => {
   const listener = async (event: MessageEvent<ApiMessageData>) => {
     if (!event.data || typeof event.data !== 'object') return
-    if (!event.source || event.data?.source !== key ) return
+    if (event.data?.source !== key ) return
     if (filter && !filter(event)) return
 
     const { type, data, port } = event.data
