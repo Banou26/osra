@@ -1,8 +1,4 @@
-
-
-
-export type TransferableObject = ArrayBuffer | MessagePort | ReadableStream | WritableStream | TransformStream | /* AudioData | */ ImageBitmap /* | VideoFrame | OffscreenCanvas */
-
+import { TransferableObject } from './types'
 
 const isTransferable = (value: any) =>
   value instanceof ArrayBuffer ? true :
