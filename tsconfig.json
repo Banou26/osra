@@ -3,6 +3,7 @@
     "target": "ESNext",
     "module": "ESNext",
     "lib": ["dom", "dom.iterable", "esnext"],
+    "emitDeclarationOnly": true,
     "declaration": true,
     "composite": false,
     "outDir": "./build",
@@ -11,5 +12,6 @@
     "noImplicitAny": false,
     "strictNullChecks": true,
     "noUncheckedIndexedAccess": true,
-  }
+  },
+  "include": ["src/**/*"]
 }

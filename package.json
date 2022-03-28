@@ -1,0 +1,28 @@
+{
+  "name": "osra",
+  "version": "0.0.1",
+  "description": "Easy communication between workers",
+  "main": "build/index.js",
+  "scripts": {
+    "type-check": "tsc --incremental",
+    "type-check-watch": "tsc --watch --incremental",
+    "build": "esbuild ./src/index.ts --format=esm --bundle --outfile=build/index.js && npm run type-check",
+    "build-watch": "esbuild --watch ./src/index.ts --format=esm --bundle --outfile=build/index.js",
+    "dev": "concurrently \"npm run build-watch\" \"npm run type-check-watch\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Banou26/osra.git"
+  },
+  "author": "Banou26",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Banou26/osra/issues"
+  },
+  "homepage": "https://github.com/Banou26/osra#readme",
+  "devDependencies": {
+    "concurrently": "^7.0.0",
+    "esbuild": "^0.14.28",
+    "typescript": "^4.6.3"
+  }
+}
