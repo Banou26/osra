@@ -1,7 +1,7 @@
 import type { Target, Resolvers, Resolver } from './types'
 
 import { MESSAGE_SOURCE_KEY } from './shared'
-import { getTransferableObjects } from './utils'
+import { getTransferableObjects, makeObjectProxiedFunctions, proxyObjectFunctions } from './utils'
 
 /**
  * Call a function with the provided arguments and get its return value back
@@ -15,15 +15,18 @@ export const call =
       port1.addEventListener(
         'message',
         ({ data }) => {
-          resolve(data)
+          const proxiedData = makeObjectProxiedFunctions(data)
+          console.log('call message', proxiedData)
+          resolve(proxiedData)
           port1.close()
           port2.close()
         },
         { once: true }
       )
       port1.start()
-
-      const transferables = getTransferableObjects(data)
+      const proxiedData = proxyObjectFunctions(data)
+      const transferables = getTransferableObjects(proxiedData)
+      console.log('call', proxiedData)
       target.postMessage(
         {
           source: key,
@@ -43,11 +46,16 @@ export const call =
  */
 export const makeCallListener =
   <T extends Resolver>(func: T) =>
+    // @ts-ignore
     async (data: Parameters<T>[0], { port, ...rest }: Parameters<T>[1]): Promise<Awaited<ReturnType<T>>> => {
-      const result = await func(data, { port, ...rest })
-      const transferables = getTransferableObjects(result)
-      port.postMessage(result, { transfer: transferables as unknown as Transferable[] })
+      const proxiedData = makeObjectProxiedFunctions(data)
+      // @ts-ignore
+      const result = await func(proxiedData, { port, ...rest })
+      const proxyData = proxyObjectFunctions(result)
+      const transferables = getTransferableObjects(proxyData)
+      console.log('makeCallListener', proxyData, func)
+      port.postMessage(proxyData, { transfer: transferables as unknown as Transferable[] })
       port.close()
       // This returns the result value for typing reasons, the actual value isn't useable as transferables cannot be used.
-      return result
+      return proxyData
     }
