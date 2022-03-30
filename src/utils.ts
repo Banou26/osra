@@ -26,10 +26,10 @@ const PROXY_FUNCTION_PROPERTY = '__proxyFunctionPort__'
 export const makeProxyFunction = (func) => {
   const { port1, port2 } = new MessageChannel()
   port1.addEventListener('message', (ev) => {
-    const res = func(...ev.data)
-    const transferables = getTransferableObjects(res)
-    port1.postMessage(proxyObjectFunctions(res), { transfer: transferables as unknown as Transferable[] })
-    console.log('makeProxyFunction funcCall', ev.data, res, func)
+    const result = func(...ev.data)
+    const proxiedResult = proxyObjectFunctions(result)
+    const transferables = getTransferableObjects(proxiedResult)
+    port1.postMessage(proxiedResult, { transfer: transferables as unknown as Transferable[] })
   })
   port1.start()
   return port2
@@ -51,21 +51,19 @@ export const proxyObjectFunctions = (value: any) =>
   ) :
   value
 
-export const makeProxiedFunction = (port: MessagePort) => {
-  return (...args) => {
-    return new Promise((resolve, reject) => {
-      console.log('makeProxiedFunction funcCall', args)
-      const proxiedArguments = proxyObjectFunctions(args)
-      const transferables = getTransferableObjects(proxiedArguments)
-      port.addEventListener('message', (ev) => {
-        console.log('makeProxiedFunction message response', args, makeObjectProxiedFunctions(ev.data))
-        resolve(makeObjectProxiedFunctions(ev.data))
+// todo: implement reject
+export const makeProxiedFunction =
+  (port: MessagePort) =>
+    (...args) =>
+      new Promise((resolve, reject) => {
+        const proxiedArguments = proxyObjectFunctions(args)
+        const transferables = getTransferableObjects(proxiedArguments)
+        port.addEventListener('message', (ev) => {
+          resolve(makeObjectProxiedFunctions(ev.data))
+        })
+        port.start()
+        port.postMessage(proxiedArguments, { transfer: transferables as unknown as Transferable[] })
       })
-      port.start()
-      port.postMessage(proxiedArguments, { transfer: transferables as unknown as Transferable[] })
-    })
-  }
-}
 
 export const makeObjectProxiedFunctions = (value: any) =>
   isTransferable(value) ? value :

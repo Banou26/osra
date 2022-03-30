@@ -16,7 +16,6 @@ export const call =
         'message',
         ({ data }) => {
           const proxiedData = makeObjectProxiedFunctions(data)
-          console.log('call message', proxiedData)
           resolve(proxiedData)
           port1.close()
           port2.close()
@@ -26,7 +25,6 @@ export const call =
       port1.start()
       const proxiedData = proxyObjectFunctions(data)
       const transferables = getTransferableObjects(proxiedData)
-      console.log('call', proxiedData)
       target.postMessage(
         {
           source: key,
@@ -46,16 +44,14 @@ export const call =
  */
 export const makeCallListener =
   <T extends Resolver>(func: T) =>
-    // @ts-ignore
-    async (data: Parameters<T>[0], { port, ...rest }: Parameters<T>[1]): Promise<Awaited<ReturnType<T>>> => {
+    async (data: Parameters<T>[0], extra: Parameters<T>[1]): Promise<Awaited<ReturnType<T>>> => {
+      const { port } = extra
       const proxiedData = makeObjectProxiedFunctions(data)
-      // @ts-ignore
-      const result = await func(proxiedData, { port, ...rest })
+      const result = await func(proxiedData, extra)
       const proxyData = proxyObjectFunctions(result)
       const transferables = getTransferableObjects(proxyData)
-      console.log('makeCallListener', proxyData, func)
       port.postMessage(proxyData, { transfer: transferables as unknown as Transferable[] })
       port.close()
       // This returns the result value for typing reasons, the actual value isn't useable as transferables cannot be used.
-      return proxyData
+      return result
     }

@@ -20,7 +20,7 @@ export type StructruredCloneTransferableType =
 
 export type Target = Window | ServiceWorker | Worker
 
-export type Resolver = (data: StructruredCloneTransferableType, extra?: ApiResolverOptions) => any
+export type Resolver = (data: StructruredCloneTransferableType, extra: ApiResolverOptions) => any
 
 export type Resolvers = {
   [key: string]: Resolver
