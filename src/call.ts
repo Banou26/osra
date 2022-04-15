@@ -29,7 +29,7 @@ export const call =
         {
           source: key,
           type,
-          data,
+          data: proxiedData,
           port: port2
         },
         {
