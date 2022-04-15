@@ -2,6 +2,9 @@
   "name": "osra",
   "version": "0.0.1",
   "description": "Easy communication between workers",
+  "files": [
+    "./build"
+  ],
   "main": "build/index.js",
   "scripts": {
     "type-check": "tsc --incremental",
