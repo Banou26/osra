@@ -1,12 +1,12 @@
 import { TransferableObject } from './types'
 
 const isTransferable = (value: any) =>
-  value instanceof ArrayBuffer ? true :
-  value instanceof MessagePort ? true :
-  value instanceof ReadableStream ? true :
-  value instanceof WritableStream ? true :
-  value instanceof TransformStream ? true :
-  value instanceof ImageBitmap ? true :
+  globalThis.ArrayBuffer && value instanceof globalThis.ArrayBuffer ? true :
+  globalThis.MessagePort && value instanceof globalThis.MessagePort ? true :
+  globalThis.ReadableStream && value instanceof globalThis.ReadableStream ? true :
+  globalThis.WritableStream && value instanceof globalThis.WritableStream ? true :
+  globalThis.TransformStream && value instanceof globalThis.TransformStream ? true :
+  globalThis.ImageBitmap && value instanceof globalThis.ImageBitmap ? true :
   false
 
 export const getTransferableObjects = (value: any): TransferableObject[] => {
