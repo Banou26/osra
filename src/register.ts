@@ -6,6 +6,7 @@ export const registerListener = <T extends Resolvers>({
   target,
   resolvers,
   filter,
+  map,
   key = MESSAGE_SOURCE_KEY
 }: {
   target: WindowEventHandlers
@@ -22,7 +23,8 @@ export const registerListener = <T extends Resolvers>({
     const { type, data, port } = event.data
     const resolver = resolvers[type]
     if (!resolver) throw new Error(`Osra received a message of type "${type}" but no resolver was found for type.`)
-    resolver(data, { event, type, port })
+    if (map) resolver(...map(data, { event, type, port }))
+    else resolver(data, { event, type, port })
   }
   target.addEventListener('message', listener)
 

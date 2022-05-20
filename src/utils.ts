@@ -25,11 +25,17 @@ const PROXY_FUNCTION_PROPERTY = '__proxyFunctionPort__'
 
 export const makeProxyFunction = (func) => {
   const { port1, port2 } = new MessageChannel()
-  port1.addEventListener('message', (ev) => {
-    const result = func(...ev.data)
-    const proxiedResult = proxyObjectFunctions(result)
-    const transferables = getTransferableObjects(proxiedResult)
-    port1.postMessage(proxiedResult, { transfer: transferables as unknown as Transferable[] })
+  port1.addEventListener('message', async (ev) => {
+    try {
+      const result = await func(...ev.data)
+      const proxiedResult = proxyObjectFunctions(result)
+      const transferables = getTransferableObjects(proxiedResult)
+      port1.postMessage({ result: proxiedResult }, { transfer: transferables as unknown as Transferable[] })
+    } catch (err) {
+      port1.postMessage({ error: err })
+    }
+    port1.close()
+    port2.close()
   })
   port1.start()
   return port2
@@ -59,7 +65,8 @@ export const makeProxiedFunction =
         const proxiedArguments = proxyObjectFunctions(args)
         const transferables = getTransferableObjects(proxiedArguments)
         port.addEventListener('message', (ev) => {
-          resolve(makeObjectProxiedFunctions(ev.data))
+          if (ev.data.error) reject(ev.data.error)
+          else resolve(makeObjectProxiedFunctions(ev.data.result))
         })
         port.start()
         port.postMessage(proxiedArguments, { transfer: transferables as unknown as Transferable[] })

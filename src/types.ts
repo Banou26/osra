@@ -3,7 +3,7 @@ export type TransferableObject =
   TransformStream | /* AudioData | */ ImageBitmap /* | VideoFrame | OffscreenCanvas */
 
 export interface StructuredCloneObject {
-  [key: string | number | symbol]: StructuredCloneType
+  [key: keyof any]: StructuredCloneType
 }
 
 export type StructuredCloneType =
@@ -11,7 +11,7 @@ export type StructuredCloneType =
   ImageBitmap | ImageData | Array<StructuredCloneType> | StructuredCloneObject | Map<StructuredCloneType, StructuredCloneType> | Set<StructuredCloneType>
 
 export interface StructruredCloneTransferableObject {
-  [key: string | number | symbol]: StructruredCloneTransferableType
+  [key: keyof any]: StructruredCloneTransferableType
 }
 
 export type StructruredCloneTransferableType =
