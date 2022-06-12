@@ -34,8 +34,7 @@ export const makeProxyFunction = (func) => {
     } catch (err) {
       port1.postMessage({ error: err })
     }
-    port1.close()
-    port2.close()
+    // Keep the port open, the function might be called many times.
   })
   port1.start()
   return port2
