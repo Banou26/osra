@@ -9,7 +9,7 @@ export const registerListener = <T extends Resolvers>({
   map,
   key = MESSAGE_SOURCE_KEY
 }: {
-  target: WindowEventHandlers
+  target: WindowEventHandlers | ServiceWorkerContainer | Worker | SharedWorker
   resolvers: T
   filter?: (event: MessageEvent<any>) => boolean
   map?: (...args: Parameters<Resolver>) => Parameters<Resolver>
