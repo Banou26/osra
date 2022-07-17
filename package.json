@@ -3,7 +3,7 @@
   "version": "0.0.4",
   "description": "Easy communication between workers",
   "files": [
-    "./build"
+    "build"
   ],
   "main": "build/index.js",
   "scripts": {
