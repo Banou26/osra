@@ -1,4 +1,4 @@
-import type { Target, Resolvers, Resolver } from './types'
+import type { Target, Resolvers, ApiResolverOptions, StructuredCloneTransferableObject } from './types'
 
 import { MESSAGE_SOURCE_KEY } from './shared'
 import { getTransferableObjects, makeObjectProxiedFunctions, proxyObjectFunctions } from './utils'
@@ -47,7 +47,7 @@ export const call =
  * Make a listener for a call
  */
 export const makeCallListener =
-  <T extends Resolver>(func: T) =>
+<T2 extends StructuredCloneTransferableObject, T extends (data: T2, extra: ApiResolverOptions) => any = (data: T2, extra: ApiResolverOptions) => any>(func: T) =>
     async (data: Parameters<T>[0], extra: Parameters<T>[1]): Promise<Awaited<ReturnType<T>>> => {
       const { port } = extra
       const proxiedData = makeObjectProxiedFunctions(data)
