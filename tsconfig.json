@@ -10,6 +10,7 @@
     "sourceMap": true,
     "moduleResolution": "node",
     "noImplicitAny": false,
+    "strict": true,
     "strictNullChecks": true,
     "noUncheckedIndexedAccess": true,
   },
