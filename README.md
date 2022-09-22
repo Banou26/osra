@@ -50,11 +50,11 @@ export type StructuredCloneType =
   boolean | null | undefined | number | BigInt | string | Date | RegExp | Blob | File | FileList | ArrayBuffer | ArrayBufferView |
   ImageBitmap | ImageData | Array<StructuredCloneType> | StructuredCloneObject | Map<StructuredCloneType, StructuredCloneType> | Set<StructuredCloneType>
 
-export interface StructruredCloneTransferableObject {
-  [key: string | number | symbol]: StructruredCloneTransferableType
+export interface StructuredCloneTransferableObject {
+  [key: string | number | symbol]: StructuredCloneTransferableType
 }
 
-export type StructruredCloneTransferableType =
-  StructuredCloneType | TransferableObject | Array<StructruredCloneTransferableType> | StructruredCloneTransferableObject |
-  Map<StructruredCloneTransferableType, StructruredCloneTransferableType> | Set<StructruredCloneTransferableType>
+export type StructuredCloneTransferableType =
+  StructuredCloneType | TransferableObject | Array<StructuredCloneTransferableType> | StructuredCloneTransferableObject |
+  Map<StructuredCloneTransferableType, StructuredCloneTransferableType> | Set<StructuredCloneTransferableType>
 ```
