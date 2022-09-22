@@ -10,12 +10,12 @@ export type StructuredCloneType =
   boolean | null | undefined | number | BigInt | string | Date | RegExp | Blob | File | FileList | ArrayBuffer | ArrayBufferView |
   ImageBitmap | ImageData | Array<StructuredCloneType> | StructuredCloneObject | Map<StructuredCloneType, StructuredCloneType> | Set<StructuredCloneType>
 
-export interface StructruredCloneTransferableObject {
+export interface StructuredCloneTransferableObject {
   [key: keyof any]: StructruredCloneTransferableType
 }
 
 export type StructruredCloneTransferableType =
-  StructuredCloneType | TransferableObject | Array<StructruredCloneTransferableType> | StructruredCloneTransferableObject |
+  StructuredCloneType | TransferableObject | Array<StructruredCloneTransferableType> | StructuredCloneTransferableObject |
   Map<StructruredCloneTransferableType, StructruredCloneTransferableType> | Set<StructruredCloneTransferableType>
 
 export type Target = Window | ServiceWorker | Worker
