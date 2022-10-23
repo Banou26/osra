@@ -15,7 +15,7 @@ export const registerListener = <T extends Resolvers>({
   map?: (...args: Parameters<Resolver>) => Parameters<Resolver>
   key?: string
 }) => {
-  const listener = async (event: MessageEvent<ApiMessageData>) => {
+  const listener = (event: MessageEvent<ApiMessageData>) => {
     if (!event.data || typeof event.data !== 'object') return
     if (event.data?.source !== key ) return
     if (filter && !filter(event)) return
@@ -26,7 +26,7 @@ export const registerListener = <T extends Resolvers>({
     if (map) resolver(...map(data, { event, type, port }))
     else resolver(data, { event, type, port })
   }
-  target.addEventListener('message', listener)
+  target.addEventListener('message', listener as EventListener)
 
   return {
     listener,
