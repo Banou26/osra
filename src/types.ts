@@ -1,5 +1,5 @@
 export type TransferableObject =
-  ArrayBuffer | MessagePort | ReadableStream | WritableStream |
+  SharedArrayBuffer | ArrayBuffer | MessagePort | ReadableStream | WritableStream |
   TransformStream | /* AudioData | */ ImageBitmap /* | VideoFrame | OffscreenCanvas */
 
 export type StructuredCloneObject = {
