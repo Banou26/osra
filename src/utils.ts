@@ -1,6 +1,7 @@
 import { TransferableObject } from './types'
 
 const isTransferable = (value: any) =>
+  globalThis.SharedArrayBuffer && value instanceof globalThis.SharedArrayBuffer ? true :
   globalThis.ArrayBuffer && value instanceof globalThis.ArrayBuffer ? true :
   globalThis.MessagePort && value instanceof globalThis.MessagePort ? true :
   globalThis.ReadableStream && value instanceof globalThis.ReadableStream ? true :
