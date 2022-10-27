@@ -1,7 +1,10 @@
 import { TransferableObject } from './types'
 
-const isTransferable = (value: any) =>
+const isClonable = (value: any) =>
   globalThis.SharedArrayBuffer && value instanceof globalThis.SharedArrayBuffer ? true :
+  false
+
+const isTransferable = (value: any) =>
   globalThis.ArrayBuffer && value instanceof globalThis.ArrayBuffer ? true :
   globalThis.MessagePort && value instanceof globalThis.MessagePort ? true :
   globalThis.ReadableStream && value instanceof globalThis.ReadableStream ? true :
@@ -13,6 +16,7 @@ const isTransferable = (value: any) =>
 export const getTransferableObjects = (value: any): TransferableObject[] => {
   const transferables: TransferableObject[] = []
   const recurse = (value: any) => 
+    isClonable(value) ? undefined :
     isTransferable(value) ? transferables.push(value) :
     Array.isArray(value) ? value.map(recurse) :
     value && typeof value === 'object' ? Object.values(value).map(recurse) :
@@ -42,6 +46,7 @@ export const makeProxyFunction = (func) => {
 }
 
 export const proxyObjectFunctions = (value: any) =>
+  isClonable(value) ? value :
   isTransferable(value) ? value :
   typeof value === 'function' ? ({ [PROXY_FUNCTION_PROPERTY]: makeProxyFunction(value) }) :
   Array.isArray(value) ? value.map(proxyObjectFunctions) :
@@ -73,6 +78,7 @@ export const makeProxiedFunction =
       })
 
 export const makeObjectProxiedFunctions = (value: any) =>
+  isClonable(value) ? value :
   isTransferable(value) ? value :
   value && typeof value === 'object' && value[PROXY_FUNCTION_PROPERTY] ? makeProxiedFunction(value[PROXY_FUNCTION_PROPERTY]) :
   Array.isArray(value) ? value.map(proxyObjectFunctions) :
