@@ -32,8 +32,9 @@ export type RestrictedParametersType<T extends (data: never, extra: ApiResolverO
     : never
 
 export type ValidateResolvers<T extends Record<PropertyKey, (data: never, extra: ApiResolverOptions) => unknown>> =
-  T extends { [K in keyof T]: RestrictedParametersType<T[K]> } ? T
-  : never
+  T extends { [K in keyof T]: RestrictedParametersType<T[K]> }
+    ? T
+    : never
 
 export type Resolvers = Record<PropertyKey, (data: never, extra: ApiResolverOptions) => unknown>
 

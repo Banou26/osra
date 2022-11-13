@@ -1,4 +1,4 @@
-import type { Target, Resolvers, ApiResolverOptions, StructuredCloneTransferableType } from './types'
+import type { Target, Resolvers, ApiResolverOptions, StructuredCloneTransferableObject, StructuredCloneTransferableType, RestrictedParametersType } from './types'
 
 import { MESSAGE_SOURCE_KEY } from './shared'
 import { getTransferableObjects, makeObjectProxiedFunctions, proxyObjectFunctions } from './utils'
@@ -47,10 +47,10 @@ export const call =
  * Make a listener for a call
  */
 export const makeCallListener =
-<T extends StructuredCloneTransferableType, T2 extends (data: T, extra?: ApiResolverOptions) => any>(func: T2) =>
-    async (data: T, extra: ApiResolverOptions): Promise<Awaited<ReturnType<T2>>> => {
+<T extends (data: never, extra: ApiResolverOptions) => unknown>(func: T) =>
+    (async (data: RestrictedParametersType<T>, extra: ApiResolverOptions): Promise<Awaited<ReturnType<T>>> => {
       const { port } = extra
-      const proxiedData = makeObjectProxiedFunctions(data)
+      const proxiedData = makeObjectProxiedFunctions(data) as Parameters<T>[0]
       try {
         const result = await func(proxiedData, extra)
         const proxyData = proxyObjectFunctions(result)
@@ -58,10 +58,10 @@ export const makeCallListener =
         port.postMessage({ result: proxyData }, { transfer: transferables as unknown as Transferable[] })
         port.close()
         // This returns the result value for typing reasons, the actual value isn't useable as transferables cannot be used.
-        return result
+        return result as Awaited<ReturnType<T>>
       } catch (error) {
         port.postMessage({ error })
         port.close()
         throw error
       }
-    }
+    }) as unknown as T
