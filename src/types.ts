@@ -7,16 +7,18 @@ export type StructuredCloneObject = {
 }
 
 export type StructuredCloneType =
-  boolean | null | undefined | number | BigInt | string | Date | RegExp | Blob | File | FileList | ArrayBuffer | ArrayBufferView |
+  void | boolean | null | undefined | number | BigInt | string | Date | RegExp | Blob | File | FileList | ArrayBuffer | ArrayBufferView |
   ImageBitmap | ImageData | Array<StructuredCloneType> | StructuredCloneObject | Map<StructuredCloneType, StructuredCloneType> | Set<StructuredCloneType>
 
 export type StructuredCloneTransferableObject = {
   [key: string]: StructuredCloneTransferableType
 }
 
+export type ProxiedType = (...args: StructuredCloneTransferableType[]) => StructuredCloneTransferableType | Promise<StructuredCloneTransferableType>
+
 export type StructuredCloneTransferableType =
   StructuredCloneType | TransferableObject | Array<StructuredCloneTransferableType> | StructuredCloneTransferableObject |
-  Map<StructuredCloneTransferableType, StructuredCloneTransferableType> | Set<StructuredCloneTransferableType>
+  Map<StructuredCloneTransferableType, StructuredCloneTransferableType> | Set<StructuredCloneTransferableType> | ProxiedType
 
 export type Target = Window | ServiceWorker | Worker
 
