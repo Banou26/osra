@@ -1,4 +1,4 @@
-import type { Target, Resolvers, ApiResolverOptions, StructuredCloneTransferableObject, StructuredCloneTransferableType } from './types'
+import type { Target, Resolvers, ApiResolverOptions, StructuredCloneTransferableType } from './types'
 
 import { MESSAGE_SOURCE_KEY } from './shared'
 import { getTransferableObjects, makeObjectProxiedFunctions, proxyObjectFunctions } from './utils'
@@ -7,7 +7,7 @@ import { getTransferableObjects, makeObjectProxiedFunctions, proxyObjectFunction
  * Call a function with the provided arguments and get its return value back
  */
 export const call =
- <T extends StructuredCloneTransferableType, T2 extends Resolvers<T>>(target: Target, { key = MESSAGE_SOURCE_KEY }: { key?: string } = { key: MESSAGE_SOURCE_KEY }) =>
+ <T2 extends Resolvers>(target: Target, { key = MESSAGE_SOURCE_KEY }: { key?: string } = { key: MESSAGE_SOURCE_KEY }) =>
    <T3 extends keyof T2>(type: T3, data?: Parameters<T2[T3]>[0]): Promise<Awaited<ReturnType<T2[T3]>>> =>
     new Promise((resolve, reject) => {
       const { port1, port2 } = new MessageChannel()
@@ -47,8 +47,8 @@ export const call =
  * Make a listener for a call
  */
 export const makeCallListener =
-<T extends StructuredCloneTransferableObject, T2 extends (data: T, extra: ApiResolverOptions<T>) => any = (data: T, extra: ApiResolverOptions<T>) => any>(func: T2) =>
-    async (data: Parameters<T2>[0], extra: Parameters<T2>[1]): Promise<Awaited<ReturnType<T2>>> => {
+<T extends StructuredCloneTransferableType, T2 extends (data: T, extra?: ApiResolverOptions) => any>(func: T2) =>
+    async (data: T, extra: ApiResolverOptions): Promise<Awaited<ReturnType<T2>>> => {
       const { port } = extra
       const proxiedData = makeObjectProxiedFunctions(data)
       try {
