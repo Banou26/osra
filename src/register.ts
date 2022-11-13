@@ -1,7 +1,6 @@
 import type { ApiMessageData, ApiResolverOptions, Resolvers, ValidateResolvers } from './types'
 
 import { MESSAGE_SOURCE_KEY } from './shared'
-// import { call, makeCallListener } from './call'
 
 export const registerListener = <T extends Record<PropertyKey, (data: never, extra: ApiResolverOptions) => unknown>>({
   target,
@@ -34,26 +33,3 @@ export const registerListener = <T extends Record<PropertyKey, (data: never, ext
     resolvers
   }
 }
-
-// const res = registerListener({
-//   target: globalThis as unknown as Window,
-//   resolvers: {
-//     bruh: async (data: { foo: string }) => {
-
-//     },
-//     init: async ({ foo }: { foo: number }) => {
-  
-//     },
-//     init2: async ({ bar }: { bar: number }) => {
-//     }
-//   }
-// })
-
-// res.resolvers.init({ foo: 'bruh' })
-
-// // // res.resolvers.init({ foo: 1 }, { event: null, type: 'init', port: null })
-
-
-// const target = call<typeof res['resolvers']>(window)
-
-// target('init', { foo: 'bar' })

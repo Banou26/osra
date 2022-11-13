@@ -20,8 +20,6 @@ export type StructuredCloneTransferableType =
 
 export type Target = Window | ServiceWorker | Worker
 
-// export type Resolver<T extends StructuredCloneTransferableType> = (data: T, extra: ApiResolverOptions) => any
-
 /**
  * Solution by mkantor#7432
  * https://www.typescriptlang.org/play#code/C4TwDgpgBACghgJzgWwsCCDOBBBEBCcA5pgPIBmAysAgJYB2J29AJgHICuyARhpgDwAVKBAAe6VpigAKFnGBwAXFHoQAbhgCUUALwA+KB3oBregHsA7vQM6AUFBmz5SqACUIAYzMIW-GAjNIBFAAaQgQABooTBoGIigAHxUuXgQ9bX0VdS0RcQhJKGEAfkKoZVUNBFtbUEgoADU4ABtaOXR3TDMmyoFhMQkWKXcvHz8AoNDwqKcFcuyEDIMjU0trG3tS-vzBqABvKABtEKgGKGNws3JCgF1leCRUdCxcAmIyKljGHFZOHj4hI7XAwAXygJUEGzmlWqXnoMSgeHiOigQlyAyGnm8vn8gQwk0iMjaLgqOUyy3MVj0emkeE63T4ykaLTaEA6XR6QnSymEmV2GzwwA4CHohlYEHIDAgLCgcCk5NWMqkEOBMLMcOACIgUmRiOkfIc5DMZmUspA9A8hOcyn2huN0U+8WBiz2wIiG24iBNmDNFr1UFtUGB1v9RvKKQwgedu1d7rgAC8vT6ZPsPQhA8HU2G-mmnboDNHbE6gA
