@@ -1,6 +1,6 @@
 {
   "name": "osra",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "description": "Easy communication between workers",
   "files": [
     "build"
