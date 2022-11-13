@@ -20,20 +20,20 @@ export type StructuredCloneTransferableType =
 
 export type Target = Window | ServiceWorker | Worker
 
-export type Resolver = (data: StructuredCloneTransferableType, extra: ApiResolverOptions) => any
+export type Resolver<T extends StructuredCloneTransferableType> = (data: T, extra: ApiResolverOptions<T>) => any
 
-export type Resolvers = {
-  [key: string]: Resolver
+export type Resolvers<T extends StructuredCloneTransferableType> = {
+  [key: string]: Resolver<T>
 }
 
-export type ApiResolverOptions<T extends Resolvers = Resolvers, T2 = {}> = T2 & {
+export type ApiResolverOptions<T extends StructuredCloneTransferableType, T2 extends Resolvers<T> = Resolvers<T>, T3 = {}> = T3 & {
   event: MessageEvent<any>
-  type: keyof T
+  type: keyof T2
   port: MessagePort
 }
 
-export type ApiMessageData<T extends Resolvers = Resolvers> = {
-  type: keyof T
+export type ApiMessageData<T extends StructuredCloneTransferableType, T2 extends Resolvers<T> = Resolvers<T>> = {
+  type: keyof T2
   data: any
   port: MessagePort
   source: string
