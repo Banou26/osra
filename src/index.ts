@@ -1,7 +1,6 @@
 import type {
   ApiMessageData,
   ApiResolverOptions,
-  Resolver,
   Resolvers,
   StructuredCloneTransferableObject,
   StructuredCloneTransferableType,
@@ -14,7 +13,6 @@ import type {
 export type {
   ApiMessageData,
   ApiResolverOptions,
-  Resolver,
   Resolvers,
   StructuredCloneTransferableObject,
   StructuredCloneTransferableType,

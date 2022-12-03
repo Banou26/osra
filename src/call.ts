@@ -1,4 +1,4 @@
-import type { Target, Resolvers, ApiResolverOptions, StructuredCloneTransferableObject } from './types'
+import type { Target, Resolvers, ApiResolverOptions, StructuredCloneTransferableObject, StructuredCloneTransferableType, RestrictedParametersType } from './types'
 
 import { MESSAGE_SOURCE_KEY } from './shared'
 import { getTransferableObjects, makeObjectProxiedFunctions, proxyObjectFunctions } from './utils'
@@ -7,8 +7,8 @@ import { getTransferableObjects, makeObjectProxiedFunctions, proxyObjectFunction
  * Call a function with the provided arguments and get its return value back
  */
 export const call =
- <T extends Resolvers>(target: Target, { key = MESSAGE_SOURCE_KEY }: { key?: string } = { key: MESSAGE_SOURCE_KEY }) =>
-   <T2 extends keyof T>(type: T2, data?: Parameters<T[T2]>[0]): Promise<Awaited<ReturnType<T[T2]>>> =>
+ <T2 extends Resolvers>(target: Target, { key = MESSAGE_SOURCE_KEY }: { key?: string } = { key: MESSAGE_SOURCE_KEY }) =>
+   <T3 extends keyof T2>(type: T3, data?: Parameters<T2[T3]>[0]): Promise<Awaited<ReturnType<T2[T3]>>> =>
     new Promise((resolve, reject) => {
       const { port1, port2 } = new MessageChannel()
 
@@ -47,10 +47,10 @@ export const call =
  * Make a listener for a call
  */
 export const makeCallListener =
-<T2 extends StructuredCloneTransferableObject, T extends (data: T2, extra: ApiResolverOptions) => any = (data: T2, extra: ApiResolverOptions) => any>(func: T) =>
-    async (data: Parameters<T>[0], extra: Parameters<T>[1]): Promise<Awaited<ReturnType<T>>> => {
+<T extends (data: never, extra: ApiResolverOptions) => unknown>(func: T) =>
+    (async (data: RestrictedParametersType<T>, extra: ApiResolverOptions): Promise<Awaited<ReturnType<T>>> => {
       const { port } = extra
-      const proxiedData = makeObjectProxiedFunctions(data)
+      const proxiedData = makeObjectProxiedFunctions(data) as Parameters<T>[0]
       try {
         const result = await func(proxiedData, extra)
         const proxyData = proxyObjectFunctions(result)
@@ -58,10 +58,10 @@ export const makeCallListener =
         port.postMessage({ result: proxyData }, { transfer: transferables as unknown as Transferable[] })
         port.close()
         // This returns the result value for typing reasons, the actual value isn't useable as transferables cannot be used.
-        return result
+        return result as Awaited<ReturnType<T>>
       } catch (error) {
         port.postMessage({ error })
         port.close()
         throw error
       }
-    }
+    }) as unknown as T
