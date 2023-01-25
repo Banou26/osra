@@ -47,7 +47,7 @@ export const call =
  * Make a listener for a call
  */
 export const makeCallListener =
-<T extends (data: never, extra: ApiResolverOptions) => unknown>(func: T) =>
+<T extends (data: any, extra: ApiResolverOptions) => unknown>(func: T) =>
     (async (data: RestrictedParametersType<T>, extra: ApiResolverOptions): Promise<Awaited<ReturnType<T>>> => {
       const { port } = extra
       const proxiedData = makeObjectProxiedFunctions(data) as Parameters<T>[0]

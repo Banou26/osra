@@ -1,8 +1,9 @@
 import type { ApiMessageData, ApiResolverOptions, Resolvers, ValidateResolvers } from './types'
 
 import { MESSAGE_SOURCE_KEY } from './shared'
+import { call } from './call'
 
-export const registerListener = <T extends Record<PropertyKey, (data: never, extra: ApiResolverOptions) => unknown>>({
+export const registerListener = <T extends Record<PropertyKey, (data: any, extra: ApiResolverOptions) => unknown>>({
   target,
   resolvers,
   filter,
