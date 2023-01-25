@@ -22,23 +22,27 @@ export type StructuredCloneTransferableType =
 
 export type Target = Window | ServiceWorker | Worker
 
+type NormalizeRecord<T> = T extends Record<any, any> ? { [K in keyof T]: NormalizeRecord<T[K]> } : T
+
 /**
  * Solution by mkantor#7432
  * https://www.typescriptlang.org/play#code/C4TwDgpgBACghgJzgWwsCCDOBBBEBCcA5pgPIBmAysAgJYB2J29AJgHICuyARhpgDwAVKBAAe6VpigAKFnGBwAXFHoQAbhgCUUALwA+KB3oBregHsA7vQM6AUFBmz5SqACUIAYzMIW-GAjNIBFAAaQgQABooTBoGIigAHxUuXgQ9bX0VdS0RcQhJKGEAfkKoZVUNBFtbUEgoADU4ABtaOXR3TDMmyoFhMQkWKXcvHz8AoNDwqKcFcuyEDIMjU0trG3tS-vzBqABvKABtEKgGKGNws3JCgF1leCRUdCxcAmIyKljGHFZOHj4hI7XAwAXygJUEGzmlWqXnoMSgeHiOigQlyAyGnm8vn8gQwk0iMjaLgqOUyy3MVj0emkeE63T4ykaLTaEA6XR6QnSymEmV2GzwwA4CHohlYEHIDAgLCgcCk5NWMqkEOBMLMcOACIgUmRiOkfIc5DMZmUspA9A8hOcyn2huN0U+8WBiz2wIiG24iBNmDNFr1UFtUGB1v9RvKKQwgedu1d7rgAC8vT6ZPsPQhA8HU2G-mmnboDNHbE6gA
  * https://discord.gg/typescript
  * https://discord.com/channels/508357248330760243/1041386152315342999
+ * +
+ * saghen#6423 from friend discord https://discord.com/channels/790293936589504523/819301407215190026/1067635967801962587
  */
-export type RestrictedParametersType<T extends (data: never, extra: ApiResolverOptions) => unknown> =
-  ((data: Record<PropertyKey, StructuredCloneTransferableType>, extra?: ApiResolverOptions) => never) extends T
+export type RestrictedParametersType<T extends (data: any, extra: ApiResolverOptions) => unknown> =
+  NormalizeRecord<Parameters<T>[0]> extends Record<PropertyKey, StructuredCloneTransferableType>
     ? T
     : never
 
-export type ValidateResolvers<T extends Record<PropertyKey, (data: never, extra: ApiResolverOptions) => unknown>> =
+export type ValidateResolvers<T extends Record<PropertyKey, (data: any, extra: ApiResolverOptions) => unknown>> =
   T extends { [K in keyof T]: RestrictedParametersType<T[K]> }
     ? T
     : never
 
-export type Resolvers = Record<PropertyKey, (data: never, extra: ApiResolverOptions) => unknown>
+export type Resolvers = Record<PropertyKey, (data: any, extra: ApiResolverOptions) => unknown>
 
 export type ApiResolverOptions<T2 extends Resolvers = Resolvers, T3 = {}> = T3 & {
   event: MessageEvent<any>
