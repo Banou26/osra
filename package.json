@@ -6,10 +6,11 @@
     "build"
   ],
   "main": "build/index.js",
+  "type": "module",
   "scripts": {
-    "type-check": "tsc --incremental",
-    "type-check-watch": "tsc --watch --incremental",
-    "build": "esbuild ./src/index.ts --format=esm --bundle --outfile=build/index.js && npm run type-check",
+    "type-check": "tsc",
+    "type-check-watch": "tsc --watch",
+    "build": "vite build && npm run type-check",
     "build-watch": "esbuild --watch ./src/index.ts --format=esm --bundle --outfile=build/index.js",
     "dev": "concurrently \"npm run build-watch\" \"npm run type-check-watch\"",
     "copy-tests-html": "copyfiles -u 1 ./tests/*/index.html tests/build",
@@ -36,8 +37,8 @@
     "concurrently": "^7.0.0",
     "copyfiles": "^2.4.1",
     "epk": "^0.16.0",
-    "esbuild": "^0.14.28",
     "mime": "^3.0.0",
-    "typescript": "^4.9.4"
+    "typescript": "^4.9.4",
+    "vite": "^4.0.4"
   }
 }
