@@ -1,7 +1,5 @@
 import makeEventTarget from './event-target'
 
-
-
 /**
  * Call a package function and get its return value back
  */
@@ -25,8 +23,6 @@ export const makeEventChannelListener =
       port.postMessage(result, transferables)
     }
 
-
-
 /**
  * Call a host API function
  */
@@ -44,34 +40,3 @@ export const makeEventChannelListener =
     events
   }
 }
-
-// /**
-//  * Call a host API function
-//  */
-// export const makeEventChannelCall = (type: InstalledPackage, data?: any, transfer: Transferable[] = []) => {
-//   // const events = makeEventTarget()
-//   // const { port1, port2 } = new MessageChannel()
-
-//   // port1.addEventListener(
-//   //   'message',
-//   //   ({ type, data }) => events.dispatch(type, data)
-//   // )
-//   // port1.start()
-
-//   // window.parent.postMessage(
-//   //   {
-//   //     source: 'oz-package-api',
-//   //     type,
-//   //     data,
-//   //     port: port2
-//   //   },
-//   //   '*',
-//   //   [port2, ...transfer ?? []]
-//   // )
-//   // return {
-//   //   send: (type: Api, data?: any, transfer: Transferable[] = []) => send(port1, { type, data }, transfer),
-//   //   events,
-//   //   port1,
-//   //   port2
-//   // }
-// }
