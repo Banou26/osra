@@ -56,3 +56,27 @@ export type ApiMessageData<T2 extends Resolvers = Resolvers> = {
   port: MessagePort
   source: string
 }
+
+export type StructuredCloneRestrictedParametersType<T extends (data: any, extra: ApiResolverOptions) => unknown> =
+  NormalizeRecord<Parameters<T>[0]> extends Record<PropertyKey, StructuredCloneType>
+    ? T
+    : never
+
+export type StructuredCloneValidateResolvers<T extends Record<PropertyKey, (data: any, extra: ApiResolverOptions) => unknown>> =
+  T extends { [K in keyof T]: StructuredCloneRestrictedParametersType<T[K]> }
+    ? T
+    : never
+
+export type WebsocketResolvers = Record<PropertyKey, (data: any, extra: WebsocketApiResolverOptions) => unknown>
+
+export type WebsocketApiResolverOptions<T2 extends WebsocketResolvers = WebsocketResolvers, T3 = {}> = T3 & {
+  event: MessageEvent<any>
+  type: keyof T2
+  port: MessagePort
+}
+
+export type WebsocketApiMessageData<T2 extends WebsocketResolvers = WebsocketResolvers> = {
+  type: keyof T2
+  data: any
+  source: string
+}

@@ -32,6 +32,7 @@
   "devDependencies": {
     "@types/chai-as-promised": "^7.1.5",
     "@types/node": "^18.11.18",
+    "@types/ws": "^8.5.4",
     "chai": "^4.3.6",
     "chai-as-promised": "^7.1.1",
     "concurrently": "^7.0.0",
