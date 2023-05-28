@@ -1,10 +1,10 @@
 import { TransferableObject } from './types'
 
-const isClonable = (value: any) =>
+export const isClonable = (value: any) =>
   globalThis.SharedArrayBuffer && value instanceof globalThis.SharedArrayBuffer ? true :
   false
 
-const isTransferable = (value: any) =>
+export const isTransferable = (value: any) =>
   globalThis.ArrayBuffer && value instanceof globalThis.ArrayBuffer ? true :
   globalThis.MessagePort && value instanceof globalThis.MessagePort ? true :
   globalThis.ReadableStream && value instanceof globalThis.ReadableStream ? true :
@@ -26,7 +26,8 @@ export const getTransferableObjects = (value: any): TransferableObject[] => {
   return transferables
 }
 
-const PROXY_FUNCTION_PROPERTY = '__proxyFunctionPort__'
+export const PROXY_FUNCTION_PROPERTY = '__proxyFunctionPort__'
+export const PROXY_MESSAGE_CHANNEL_PROPERTY = '__proxyMessageChannelPort__'
 
 export const makeProxyFunction = (func) => {
   const { port1, port2 } = new MessageChannel()

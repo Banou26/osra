@@ -13,6 +13,7 @@
     "strict": true,
     "strictNullChecks": true,
     "noUncheckedIndexedAccess": true,
+    "allowSyntheticDefaultImports": true
   },
   "include": ["src/**/*"]
 }

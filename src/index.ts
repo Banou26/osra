@@ -24,3 +24,5 @@ export type {
 
 export * from './register'
 export * from './call'
+
+export * from './webextension'
