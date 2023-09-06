@@ -70,10 +70,12 @@ export const makeProxiedFunction =
       new Promise((resolve, reject) => {
         const proxiedArguments = proxyObjectFunctions(args)
         const transferables = getTransferableObjects(proxiedArguments)
-        port.addEventListener('message', (ev) => {
+        const listener = (ev) => {
           if (ev.data.error) reject(ev.data.error)
           else resolve(makeObjectProxiedFunctions(ev.data.result))
-        })
+          port.removeEventListener('message', listener)
+        }
+        port.addEventListener('message', listener)
         port.start()
         port.postMessage(proxiedArguments, { transfer: transferables as unknown as Transferable[] })
       })
