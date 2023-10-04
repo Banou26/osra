@@ -20,7 +20,7 @@ export type StructuredCloneTransferableType =
   StructuredCloneType | TransferableObject | Array<StructuredCloneTransferableType> | StructuredCloneTransferableObject |
   Map<StructuredCloneTransferableType, StructuredCloneTransferableType> | Set<StructuredCloneTransferableType> | ProxiedType
 
-export type Target = Window | ServiceWorker | Worker
+export type Target = Window | ServiceWorker | Worker | MessagePort
 
 type NormalizeRecord<T> = T extends Record<any, any> ? { [K in keyof T]: NormalizeRecord<T[K]> } : T
 

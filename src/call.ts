@@ -65,3 +65,29 @@ export const makeCallListener =
         throw error
       }
     }) as unknown as T
+
+/**
+ * Make a listener for a call
+ */
+export const makeProxyCallListener =
+<T extends (data: any, extra: ApiResolverOptions) => unknown>(
+  target: Target,
+  { key = MESSAGE_SOURCE_KEY }: { key?: string } = { key: MESSAGE_SOURCE_KEY }
+) =>
+    ((data: RestrictedParametersType<T>, extra: ApiResolverOptions): Promise<Awaited<ReturnType<T>>> => {
+      const { type, port } = extra
+      const transferables = getTransferableObjects(data)
+      target.postMessage(
+        {
+          source: key,
+          type,
+          data,
+          port
+        },
+        {
+          targetOrigin: '*',
+          transfer: [port, ...transferables as unknown as Transferable[] ?? []]
+        }
+      )
+      return undefined as unknown as Promise<Awaited<ReturnType<T>>>
+    }) as unknown as T
