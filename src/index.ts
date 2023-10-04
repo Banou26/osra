@@ -26,3 +26,4 @@ export * from './register'
 export * from './call'
 
 export * from './webextension'
+export * from './utils'
