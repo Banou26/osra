@@ -16,7 +16,9 @@ const makePortManager = ({ key = MESSAGE_SOURCE_KEY }: { key?: string }) => {
       }, 1000)
       chrome.runtime.onConnect.addListener((port) => {
         if (port.name === `${key}:${uuid}`) {
+          // @ts-ignore
           ports.set(uuid, port)
+          // @ts-ignore
           resolve(port)
           resolved = true
         }
@@ -27,6 +29,7 @@ const makePortManager = ({ key = MESSAGE_SOURCE_KEY }: { key?: string }) => {
     proxyPort: (messagePort: MessagePort) => {
       const uuid = self.crypto.randomUUID()
       const runtimePort = chrome.runtime.connect({ name: `${key}:${uuid}` })
+      // @ts-ignore
       ports.set(uuid, runtimePort)
 
       runtimePort.onDisconnect.addListener(() => {
@@ -72,6 +75,7 @@ const makePortManager = ({ key = MESSAGE_SOURCE_KEY }: { key?: string }) => {
       port2.start()
 
       const port = wrapPort(portManager, port2)
+      // @ts-ignore
       port.uuid = uuid
       return port
     }
@@ -159,10 +163,12 @@ export const wrapListenerExtensionTarget = ({
 
       chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         replaceProxied(portManager, message)
+          // @ts-ignore
           .then(proxiedMessage => listener({ data: proxiedMessage }))
       })
       chrome.runtime.onConnect.addListener((port) => {
         if (!port.name.startsWith(`${key}:`)) return
+        // @ts-ignore
         portManager.addPort(port.name.split(':')[1]!, port)
       })
     }
