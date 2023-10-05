@@ -51,6 +51,7 @@ export const registerListener = <T extends Record<PropertyKey, (data: any, extra
 
   return {
     listener,
+    unregister: () => target.removeEventListener('message', listener as EventListener),
     resolvers
   }
 }
