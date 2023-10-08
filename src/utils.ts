@@ -1,4 +1,4 @@
-import { TransferableObject } from './types'
+import type { ApiMessageData, Resolvers, Target, TransferableObject } from './types'
 
 export const isClonable = (value: any) =>
   globalThis.SharedArrayBuffer && value instanceof globalThis.SharedArrayBuffer ? true :
@@ -96,3 +96,20 @@ export const makeObjectProxiedFunctions = (value: any) =>
     )
   ) :
   value
+
+export const proxyMessage = ({ key, target }: { key: string, target: Target }, event: MessageEvent<ApiMessageData<Resolvers>>) => {
+  const { type, data, port } = event.data
+  const transferables = getTransferableObjects(data)
+  target.postMessage(
+    {
+      source: key,
+      type,
+      data,
+      port
+    },
+    {
+      targetOrigin: '*',
+      transfer: [port, ...transferables as unknown as Transferable[] ?? []]
+    }
+  )
+}
