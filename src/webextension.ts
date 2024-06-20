@@ -8,21 +8,21 @@ const makePortManager = ({ key = MESSAGE_SOURCE_KEY }: { key?: string }) => {
 
   const getPort = async (uuid: string): Promise<browser.Runtime.Port> =>
     ports.get(uuid) ?? new Promise((resolve, reject) => {
-      let resolved = false
-      setTimeout(() => {
-        if (!resolved) {
-          reject(new Error(`Osra getPort for "${uuid}" timed out`))
-        }
-      }, 1000)
-      chrome.runtime.onConnect.addListener((port) => {
+      const listener = (port) => {
         if (port.name === `${key}:${uuid}`) {
-          // @ts-ignore
           ports.set(uuid, port)
-          // @ts-ignore
           resolve(port)
-          resolved = true
+          clearTimeout(timeout)
+          chrome.runtime.onConnect.removeListener(listener)
         }
-      })})
+      }
+
+      const timeout = setTimeout(() => {
+        reject(new Error(`Osra getPort for "${uuid}" timed out`))
+        chrome.runtime.onConnect.removeListener(listener)
+      }, 1000)
+      chrome.runtime.onConnect.addListener(listener)
+    })
 
   const portManager = {
     addPort: (name: string, port: browser.Runtime.Port) => ports.set(name, port),
