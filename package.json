@@ -30,7 +30,13 @@
   "homepage": "https://github.com/Banou26/osra#readme",
   "devDependencies": {
     "@playwright/test": "^1.49.1",
+    "@types/chai": "^5.0.1",
+    "@types/chai-as-promised": "^8.0.1",
+    "chai": "^5.1.2",
+    "chai-as-promised": "^8.0.1",
     "concurrently": "^9.1.0",
+    "i": "^0.3.7",
+    "npm": "^11.0.0",
     "playwright": "^1.49.1",
     "typescript": "^5.7.2",
     "vite": "^6.0.4"

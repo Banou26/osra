@@ -3,7 +3,7 @@ import { test } from '@playwright/test'
 import tests from './_tests_'
 
 type TestObject = {
-  [key: string]: TestObject | (() => void)
+  [key: string]: TestObject | (() => any)
 }
 
 test.beforeEach(async ({ page }) => {
