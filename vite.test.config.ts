@@ -7,8 +7,8 @@ export default defineConfig({
     emptyOutDir: false,
     lib: {
       name: 'osra',
-      fileName: 'index',
-      entry: 'src/index.ts',
+      fileName: 'test',
+      entry: 'tests/_tests_.ts',
       formats: ['es']
     }
   }

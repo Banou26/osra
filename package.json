@@ -8,16 +8,15 @@
   "main": "build/index.js",
   "type": "module",
   "scripts": {
-    "type-check": "tsc",
-    "type-check-watch": "tsc --watch",
-    "build": "vite build && npm run type-check",
-    "build-watch": "esbuild --watch ./src/index.ts --format=esm --bundle --outfile=build/index.js",
-    "dev": "concurrently \"npm run build-watch\" \"npm run type-check-watch\"",
-    "copy-tests-html": "copyfiles -u 1 ./tests/*/index.html tests/build",
-    "build-tests": "npm run copy-tests-html && esbuild ./tests/call/iframe.ts ./tests/event-channel/iframe.ts --format=esm --bundle --outdir=tests/build",
-    "build-tests-watch": "npm run copy-tests-html && esbuild --watch ./tests/call/iframe.ts ./tests/event-channel/iframe.ts --format=esm --bundle --outdir=tests/build",
-    "test": "epk",
-    "test-watch": "epk -w"
+    "build": "vite build",
+    "build-watch": "vite build --watch",
+    "build-test": "vite build --config vite.test.config.ts",
+    "build-test-watch": "vite build --config vite.test.config.ts --watch",
+    "dev": "concurrently \"npm run build-watch\" \"npm run build-test-watch\" \"npm run test-watch\"",
+    "dev2": "concurrently \"npm run build-watch\" \"npm run build-test-watch\" \"npm run test-watch-headful\"",
+    "test": "npx playwright test",
+    "test-watch": "set PWTEST_WATCH=1 & npx playwright test",
+    "test-watch-headful": "npx playwright test --ui"
   },
   "repository": {
     "type": "git",
@@ -30,18 +29,10 @@
   },
   "homepage": "https://github.com/Banou26/osra#readme",
   "devDependencies": {
-    "@types/chai-as-promised": "^7.1.5",
-    "@types/chrome": "^0.0.237",
-    "@types/node": "^18.11.18",
-    "@types/webextension-polyfill": "^0.10.0",
-    "chai": "^4.3.6",
-    "chai-as-promised": "^7.1.1",
-    "concurrently": "^7.0.0",
-    "copyfiles": "^2.4.1",
-    "epk": "^0.16.0",
-    "mime": "^3.0.0",
-    "typescript": "^4.9.4",
-    "vite": "^4.0.4",
-    "webextension-polyfill": "^0.10.0"
+    "@playwright/test": "^1.49.1",
+    "concurrently": "^9.1.0",
+    "playwright": "^1.49.1",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.4"
   }
 }
