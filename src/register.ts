@@ -3,11 +3,10 @@ import type { ApiMessageData, ApiResolverOptions, Resolvers, Target, ValidateRes
 import { MESSAGE_SOURCE_KEY } from './shared'
 import { getTransferableObjects } from './utils'
 
-export const registerListener = <T extends Record<PropertyKey, (extra: ApiResolverOptions, data: any) => unknown>>({
+export const registerListener = <T extends Record<PropertyKey, (extra: ApiResolverOptions) => (data: any) => unknown>>({
   target,
   resolvers,
   filter,
-  map,
   key = MESSAGE_SOURCE_KEY,
   proxyTarget
 }: {
@@ -44,8 +43,7 @@ export const registerListener = <T extends Record<PropertyKey, (extra: ApiResolv
     const { type, data, port } = event.data
     const resolver = resolvers[type]
     if (!resolver) throw new Error(`Osra received a message of type "${String(type)}" but no resolver was found for type.`)
-    if (map) resolver(...map({ event, type, port }, data as Parameters<ValidateResolvers<T>[PropertyKey]>[0]))
-    else resolver({ event, type, port }, data as Parameters<ValidateResolvers<T>[PropertyKey]>[0])
+    else resolver({ event, type, port })(data)
   }
   target.addEventListener('message', listener as EventListener)
 
