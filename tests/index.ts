@@ -7,7 +7,7 @@ import { registerListener } from '../src/register'
 use(chaiAsPromised)
 
 export const test1 = async () => {
-  const listener = makeCallListener(async (extra, data: { foo: number }) => {
+  const listener = makeCallListener(async (data: { foo: number }) => {
     if (data.foo !== 1) {
       throw new Error('foo is not 1')
     }

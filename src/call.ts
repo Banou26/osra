@@ -47,12 +47,12 @@ export const call =
  * Make a listener for a call
  */
 export const makeCallListener =
-<T extends (extra: ApiResolverOptions, data: any) => unknown>(func: T) =>
+<T extends (data: any) => unknown>(func: T) =>
     (async (extra: ApiResolverOptions, data: RestrictedParametersType<T>): Promise<Awaited<ReturnType<T>>> => {
       const { port } = extra
-      const proxiedData = makeObjectProxiedFunctions(data) as Parameters<T>[0]
+      const proxiedData = makeObjectProxiedFunctions(data) as Parameters<T>[1]
       try {
-        const result = await func(extra, proxiedData)
+        const result = await func(proxiedData)
         const proxyData = proxyObjectFunctions(result)
         const transferables = getTransferableObjects(proxyData)
         port.postMessage({ result: proxyData }, { transfer: transferables as unknown as Transferable[] })
@@ -64,7 +64,7 @@ export const makeCallListener =
         port.close()
         throw error
       }
-    }) as unknown as T
+    }) as unknown as (extra: ApiResolverOptions, data: Parameters<T>[0]) => Awaited<ReturnType<T>>
 
 /**
  * Make a listener for a call
