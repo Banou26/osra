@@ -8,7 +8,7 @@ import { getTransferableObjects, makeObjectProxiedFunctions, proxyObjectFunction
  */
 export const call =
  <T2 extends Resolvers>(target: Target, { key = MESSAGE_SOURCE_KEY }: { key?: string } = { key: MESSAGE_SOURCE_KEY }) =>
-   <T3 extends keyof T2>(type: T3, data?: Parameters<ReturnType<T2[T3]>>[0]): Promise<Awaited<ReturnType<ReturnType<T2[T3]>>>> =>
+   <T3 extends keyof T2>(type: T3, ...data: Parameters<ReturnType<T2[T3]>>): Promise<Awaited<ReturnType<ReturnType<T2[T3]>>>> =>
     new Promise((resolve, reject) => {
       const { port1, port2 } = new MessageChannel()
 
@@ -47,13 +47,13 @@ export const call =
  * Make a listener for a call
  */
 export const makeCallListener =
-<T extends (data: any) => unknown>(func: T) =>
+<T extends (...data: any[]) => unknown>(func: T) =>
     ((extra: ApiResolverOptions) => 
-      async (data: RestrictedParametersType<(extra: ApiResolverOptions) => T>): Promise<Awaited<ReturnType<T>>> => {
+      async (...data: RestrictedParametersType<(extra: ApiResolverOptions) => T>[]): Promise<Awaited<ReturnType<T>>> => {
         const { port } = extra
-        const proxiedData = makeObjectProxiedFunctions(data) as Parameters<T>[1]
+        const proxiedData = makeObjectProxiedFunctions(data) as Parameters<T>
         try {
-          const result = await func(proxiedData)
+          const result = await func(...proxiedData)
           const proxyData = proxyObjectFunctions(result)
           const transferables = getTransferableObjects(proxyData)
           port.postMessage({ result: proxyData }, { transfer: transferables as unknown as Transferable[] })
@@ -65,4 +65,4 @@ export const makeCallListener =
           port.close()
           throw error
         }
-      }) as unknown as (extra: ApiResolverOptions) => (data: Parameters<T>[0]) => Awaited<ReturnType<T>>
+      }) as unknown as (extra: ApiResolverOptions) => (...data: Parameters<T>) => Awaited<ReturnType<T>>
