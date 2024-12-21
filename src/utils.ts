@@ -84,7 +84,7 @@ export const makeObjectProxiedFunctions = (value: any) =>
   isClonable(value) ? value :
   isTransferable(value) ? value :
   value && typeof value === 'object' && value[PROXY_FUNCTION_PROPERTY] ? makeProxiedFunction(value[PROXY_FUNCTION_PROPERTY]) :
-  Array.isArray(value) ? value.map(proxyObjectFunctions) :
+  Array.isArray(value) ? value.map(makeObjectProxiedFunctions) :
   value && typeof value === 'object' ? (
     Object.fromEntries(
       Object
