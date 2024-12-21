@@ -32,17 +32,17 @@ type NormalizeRecord<T> = T extends Record<any, any> ? { [K in keyof T]: Normali
  * +
  * saghen#6423 from friend discord https://discord.com/channels/790293936589504523/819301407215190026/1067635967801962587
  */
-export type RestrictedParametersType<T extends (data: any, extra: ApiResolverOptions) => unknown> =
-  NormalizeRecord<Parameters<T>[0]> extends Record<PropertyKey, StructuredCloneTransferableType>
+export type RestrictedParametersType<T extends (extra: ApiResolverOptions, data: any) => unknown> =
+  NormalizeRecord<Parameters<T>[1]> extends Record<PropertyKey, StructuredCloneTransferableType>
     ? T
     : never
 
-export type ValidateResolvers<T extends Record<PropertyKey, (data: any, extra: ApiResolverOptions) => unknown>> =
+export type ValidateResolvers<T extends Record<PropertyKey, (extra: ApiResolverOptions, data: any) => unknown>> =
   T extends { [K in keyof T]: RestrictedParametersType<T[K]> }
     ? T
     : never
 
-export type Resolvers = Record<PropertyKey, (data: any, extra: ApiResolverOptions) => unknown>
+export type Resolvers = Record<PropertyKey, (extra: ApiResolverOptions, data: any) => unknown>
 
 export type ApiResolverOptions<T2 extends Resolvers = Resolvers, T3 = {}> = T3 & {
   event: MessageEvent<any>

@@ -8,7 +8,7 @@ import { getTransferableObjects, makeObjectProxiedFunctions, proxyObjectFunction
  */
 export const call =
  <T2 extends Resolvers>(target: Target, { key = MESSAGE_SOURCE_KEY }: { key?: string } = { key: MESSAGE_SOURCE_KEY }) =>
-   <T3 extends keyof T2>(type: T3, data?: Parameters<T2[T3]>[0]): Promise<Awaited<ReturnType<T2[T3]>>> =>
+   <T3 extends keyof T2>(type: T3, data?: Parameters<T2[T3]>[1]): Promise<Awaited<ReturnType<T2[T3]>>> =>
     new Promise((resolve, reject) => {
       const { port1, port2 } = new MessageChannel()
 
@@ -47,12 +47,12 @@ export const call =
  * Make a listener for a call
  */
 export const makeCallListener =
-<T extends (data: any, extra: ApiResolverOptions) => unknown>(func: T) =>
-    (async (data: RestrictedParametersType<T>, extra: ApiResolverOptions): Promise<Awaited<ReturnType<T>>> => {
+<T extends (extra: ApiResolverOptions, data: any) => unknown>(func: T) =>
+    (async (extra: ApiResolverOptions, data: RestrictedParametersType<T>): Promise<Awaited<ReturnType<T>>> => {
       const { port } = extra
       const proxiedData = makeObjectProxiedFunctions(data) as Parameters<T>[0]
       try {
-        const result = await func(proxiedData, extra)
+        const result = await func(extra, proxiedData)
         const proxyData = proxyObjectFunctions(result)
         const transferables = getTransferableObjects(proxyData)
         port.postMessage({ result: proxyData }, { transfer: transferables as unknown as Transferable[] })
@@ -70,11 +70,11 @@ export const makeCallListener =
  * Make a listener for a call
  */
 export const makeProxyCallListener =
-<T extends (data: any, extra: ApiResolverOptions) => unknown>(
+<T extends (extra: ApiResolverOptions, data: any) => unknown>(
   target: Target,
   { key = MESSAGE_SOURCE_KEY }: { key?: string } = { key: MESSAGE_SOURCE_KEY }
 ) =>
-    ((data: RestrictedParametersType<T>, extra: ApiResolverOptions): Promise<Awaited<ReturnType<T>>> => {
+    ((extra: ApiResolverOptions, data: RestrictedParametersType<T>): Promise<Awaited<ReturnType<T>>> => {
       const { type, port } = extra
       const transferables = getTransferableObjects(data)
       target.postMessage(
