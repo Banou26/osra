@@ -24,7 +24,7 @@ export type Target = Window | ServiceWorker | Worker | MessagePort
 
 type SerializablePropertyKey = string | number
 
-export type Resolver = (...data: any[]) => unknown
+export type Resolver = (...data: any[]) => StructuredCloneTransferableType | Promise<StructuredCloneTransferableType>
 export type ResolverToValidatedResolver<T extends Resolver> = (extra: ApiResolverOptions) => (...data: Parameters<T>) => Awaited<ReturnType<T>>
 export type ValidatedResolver = (extra: ApiResolverOptions) => Resolver
 
