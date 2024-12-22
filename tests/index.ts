@@ -1,13 +1,12 @@
 import { use, expect } from 'chai'
 import chaiAsPromised from 'chai-as-promised'
 
-import { call, makeCallListener } from '../src/call'
 import { registerListener } from '../src/register'
 
 use(chaiAsPromised)
 
 export const baseArgsAndResponse = async () => {
-  const listener = makeCallListener(async (data: { foo: number }, bar: string) => {
+  const listener = async (data: { foo: number }, bar: string) => {
     if (data.foo !== 1) {
       throw new Error('foo is not 1')
     }
@@ -15,45 +14,61 @@ export const baseArgsAndResponse = async () => {
       throw new Error('bar is not bar')
     }
     return 1
-  })
+  }
 
-  const { resolvers } = registerListener({
+  const { call } = registerListener({
     target: window,
+    messageListener: window,
     resolvers: {
       test: listener
     }
   })
 
-  const callFunc = call<typeof resolvers>(window)
-
-  await expect(callFunc('test', { foo: 1 }, 'bar')).to.eventually.equal(1)
-  await expect(callFunc('test', { foo: 0 }, 'baz')).to.be.rejected
+  await expect(call('test', { foo: 1 }, 'bar')).to.eventually.equal(1)
+  await expect(call('test', { foo: 0 }, 'baz')).to.be.rejected
 }
 
 export const callback = async () => {
-  const listener = makeCallListener(() => () => 1)
+  const listener = () => () => 1
 
-  const { resolvers } = registerListener({
+  const { call } = registerListener({
     target: window,
+    messageListener: window,
     resolvers: {
       test: listener
     }
   })
 
-  const result = await call<typeof resolvers>(window)('test')
+  const result = await call('test')
   await expect(result()).to.eventually.equal(1)
 }
 
 export const callbackAsArg = async () => {
-  const listener = makeCallListener(async (callback: () => number) => callback())
+  const listener = async (callback: () => number) => callback()
 
-  const { resolvers } = registerListener({
+  const { call } = registerListener({
     target: window,
+    messageListener: window,
     resolvers: {
       test: listener
     }
   })
 
-  const result = await call<typeof resolvers>(window)('test', () => 1)
+  const result = await call('test', () => 1)
+  await expect(result).to.equal(1)
+}
+
+export const polyfilledMessageChannel = async () => {
+  const listener = async (callback: () => number) => callback()
+
+  const { call } = registerListener({
+    target: window,
+    messageListener: window,
+    resolvers: {
+      test: listener
+    }
+  })
+
+  const result = await call('test', () => 1)
   await expect(result).to.equal(1)
 }

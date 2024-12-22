@@ -1,4 +1,4 @@
-import type { Target, Resolvers, ApiResolverOptions, RestrictedParametersType } from './types'
+import type { Target, ApiResolverOptions, RestrictedParametersType, Resolvers, ValidatedResolvers } from './types'
 
 import { MESSAGE_SOURCE_KEY } from './shared'
 import { getTransferableObjects, makeObjectProxiedFunctions, proxyObjectFunctions } from './utils'
@@ -7,47 +7,47 @@ import { getTransferableObjects, makeObjectProxiedFunctions, proxyObjectFunction
  * Call a function with the provided arguments and get its return value back
  */
 export const call =
- <T2 extends Resolvers>(target: Target, { key = MESSAGE_SOURCE_KEY }: { key?: string } = { key: MESSAGE_SOURCE_KEY }) =>
-   <T3 extends keyof T2>(type: T3, ...data: Parameters<ReturnType<T2[T3]>>): Promise<Awaited<ReturnType<ReturnType<T2[T3]>>>> =>
-    new Promise((resolve, reject) => {
-      const { port1, port2 } = new MessageChannel()
+  <T2 extends ValidatedResolvers>(target: Target, { key = MESSAGE_SOURCE_KEY }: { key?: string } = { key: MESSAGE_SOURCE_KEY }) =>
+    <T3 extends keyof T2>(type: T3, ...data: Parameters<ReturnType<T2[T3]>>): Promise<Awaited<ReturnType<ReturnType<T2[T3]>>>> =>
+      new Promise((resolve, reject) => {
+        const { port1, port2 } = new MessageChannel()
 
-      port1.addEventListener(
-        'message',
-        ({ data }) => {
-          if (data.error) {
-            reject(data.error)
-          } else {
-            const proxiedData = makeObjectProxiedFunctions(data.result)
-            resolve(proxiedData)
+        port1.addEventListener(
+          'message',
+          ({ data }) => {
+            if (data.error) {
+              reject(data.error)
+            } else {
+              const proxiedData = makeObjectProxiedFunctions(data.result)
+              resolve(proxiedData)
+            }
+            port1.close()
+            port2.close()
+          },
+          { once: true }
+        )
+        port1.start()
+        const proxiedData = proxyObjectFunctions(data)
+        const transferables = getTransferableObjects(proxiedData)
+        target.postMessage(
+          {
+            source: key,
+            type,
+            data: proxiedData,
+            port: port2
+          },
+          {
+            targetOrigin: '*',
+            transfer: [port2, ...transferables as unknown as Transferable[] ?? []]
           }
-          port1.close()
-          port2.close()
-        },
-        { once: true }
-      )
-      port1.start()
-      const proxiedData = proxyObjectFunctions(data)
-      const transferables = getTransferableObjects(proxiedData)
-      target.postMessage(
-        {
-          source: key,
-          type,
-          data: proxiedData,
-          port: port2
-        },
-        {
-          targetOrigin: '*',
-          transfer: [port2, ...transferables as unknown as Transferable[] ?? []]
-        }
-      )
-    })
+        )
+      })
 
 /**
  * Make a listener for a call
  */
 export const makeCallListener =
-<T extends (...data: any[]) => unknown>(func: T) =>
+  <T extends (...data: any[]) => unknown>(func: T) =>
     ((extra: ApiResolverOptions) => 
       async (...data: RestrictedParametersType<(extra: ApiResolverOptions) => T>[]): Promise<Awaited<ReturnType<T>>> => {
         const { port } = extra
