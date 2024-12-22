@@ -1,4 +1,4 @@
-import type { Target, ApiResolverOptions, RestrictedParametersType, Resolvers, ValidatedResolvers } from './types'
+import type { Target, ApiResolverOptions, RestrictedParametersType, ValidatedResolvers, Resolver } from './types'
 
 import { MESSAGE_SOURCE_KEY } from './shared'
 import { getTransferableObjects, makeObjectProxiedFunctions, proxyObjectFunctions } from './utils'
@@ -47,7 +47,7 @@ export const call =
  * Make a listener for a call
  */
 export const makeCallListener =
-  <T extends (...data: any[]) => unknown>(func: T) =>
+  <T extends Resolver>(func: T) =>
     ((extra: ApiResolverOptions) => 
       async (...data: RestrictedParametersType<(extra: ApiResolverOptions) => T>[]): Promise<Awaited<ReturnType<T>>> => {
         const { port } = extra

@@ -8,7 +8,7 @@ import { call, makeCallListener } from './call'
 
 // }
 
-export const registerListener = <T extends Record<PropertyKey, (...data: any[]) => unknown>>({
+export const registerListener = <T extends Resolvers>({
   target,
   messageListener,
   resolvers,
