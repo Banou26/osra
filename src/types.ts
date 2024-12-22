@@ -22,6 +22,12 @@ export type StructuredCloneTransferableType =
 
 export type Target = Window | ServiceWorker | Worker | MessagePort
 
+type SerializablePropertyKey = string | number
+
+export type Resolver = (...data: any[]) => unknown
+export type ResolverToValidatedResolver<T extends Resolver> = (extra: ApiResolverOptions) => (...data: Parameters<T>) => Awaited<ReturnType<T>>
+export type ValidatedResolver = (extra: ApiResolverOptions) => Resolver
+
 /**
  * Solution by mkantor#7432
  * https://www.typescriptlang.org/play#code/C4TwDgpgBACghgJzgWwsCCDOBBBEBCcA5pgPIBmAysAgJYB2J29AJgHICuyARhpgDwAVKBAAe6VpigAKFnGBwAXFHoQAbhgCUUALwA+KB3oBregHsA7vQM6AUFBmz5SqACUIAYzMIW-GAjNIBFAAaQgQABooTBoGIigAHxUuXgQ9bX0VdS0RcQhJKGEAfkKoZVUNBFtbUEgoADU4ABtaOXR3TDMmyoFhMQkWKXcvHz8AoNDwqKcFcuyEDIMjU0trG3tS-vzBqABvKABtEKgGKGNws3JCgF1leCRUdCxcAmIyKljGHFZOHj4hI7XAwAXygJUEGzmlWqXnoMSgeHiOigQlyAyGnm8vn8gQwk0iMjaLgqOUyy3MVj0emkeE63T4ykaLTaEA6XR6QnSymEmV2GzwwA4CHohlYEHIDAgLCgcCk5NWMqkEOBMLMcOACIgUmRiOkfIc5DMZmUspA9A8hOcyn2huN0U+8WBiz2wIiG24iBNmDNFr1UFtUGB1v9RvKKQwgedu1d7rgAC8vT6ZPsPQhA8HU2G-mmnboDNHbE6gA
@@ -30,16 +36,27 @@ export type Target = Window | ServiceWorker | Worker | MessagePort
  * +
  * saghen#6423 from friend discord https://discord.com/channels/790293936589504523/819301407215190026/1067635967801962587
  */
-export type RestrictedParametersType<T extends (extra: ApiResolverOptions) => (...data: any[]) => unknown> =
+export type RestrictedParametersType<T extends ValidatedResolver> =
   Parameters<ReturnType<T>> extends Array<StructuredCloneTransferableType> ? T
   : never
 
-export type ValidateResolvers<T extends Record<PropertyKey, (extra: ApiResolverOptions) => (...data: any[]) => unknown>> =
+export type ValidatedResolversOrNever<T extends Record<SerializablePropertyKey, ValidatedResolver>> =
   T extends { [K in keyof T]: RestrictedParametersType<T[K]> }
     ? T
     : never
 
-export type Resolvers = Record<PropertyKey, (extra: ApiResolverOptions) => (...data: any[]) => unknown>
+export type RestrictParametersType<T extends Resolver> =
+  Parameters<T> extends Array<StructuredCloneTransferableType> ? T
+  : never
+
+export type ResolversOrNever<T extends Record<SerializablePropertyKey, Resolver>> =
+  T extends { [K in keyof T]: RestrictParametersType<T[K]> }
+    ? T
+    : never
+
+
+export type Resolvers = Record<SerializablePropertyKey, Resolver>
+export type ValidatedResolvers = Record<SerializablePropertyKey, ValidatedResolver>
 
 export type ApiResolverOptions<T2 extends Resolvers = Resolvers, T3 = {}> = T3 & {
   event: MessageEvent<any>

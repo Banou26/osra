@@ -1,55 +1,55 @@
-import type { ApiMessageData, ApiResolverOptions, Resolvers, Target, ValidateResolvers } from './types'
+import type { ApiMessageData, Resolvers, ResolverToValidatedResolver, Target, ResolversOrNever} from './types'
 
 import { MESSAGE_SOURCE_KEY } from './shared'
-import { getTransferableObjects } from './utils'
+import { call, makeCallListener } from './call'
 
-export const registerListener = <T extends Record<PropertyKey, (extra: ApiResolverOptions) => (...data: any[]) => unknown>>({
+// type PolyfilledMessageChannel = {
+//   id: string
+
+// }
+
+export const registerListener = <T extends Record<PropertyKey, (...data: any[]) => unknown>>({
   target,
+  messageListener,
   resolvers,
   filter,
   key = MESSAGE_SOURCE_KEY,
-  proxyTarget
 }: {
-  target: WindowEventHandlers | ServiceWorkerContainer | Worker | SharedWorker
-  resolvers: ValidateResolvers<T>
+  target: Target
+  messageListener: WindowEventHandlers | ServiceWorkerContainer | Worker | SharedWorker
+  resolvers: ResolversOrNever<T>
   filter?: (event: MessageEvent<any>) => boolean
-  map?: (...args: Parameters<Resolvers[string]>) => Parameters<Resolvers[string]>
-  key?: string,
-  proxyTarget?: Target
+  key?: string
 }) => {
+  const validatedResolvers =
+    Object
+      .fromEntries(
+        Object
+        .entries(resolvers)
+        .map(([key, value]) => [key, makeCallListener(value)])
+      ) as {  [K in keyof T]: ResolverToValidatedResolver<T[K]> }
+  type ValidatedResolvers = typeof validatedResolvers
+
+  // const channels = new Map<string, PolyfilledMessageChannel>()
+  // const registry = new FinalizationRegistry((value) => {
+  // })
+
   const listener = (event: MessageEvent<ApiMessageData<Resolvers>>) => {
     if (!event.data || typeof event.data !== 'object') return
     if (event.data?.source !== key) return
     if (filter && !filter(event)) return
 
-    if (proxyTarget) {
-      const { type, data, port } = event.data
-      const transferables = getTransferableObjects(data)
-      proxyTarget.postMessage(
-        {
-          source: key,
-          type,
-          data,
-          port
-        },
-        {
-          targetOrigin: '*',
-          transfer: [port, ...transferables as unknown as Transferable[] ?? []]
-        }
-      )
-      return
-    }
-
     const { type, data, port } = event.data
-    const resolver = resolvers[type]
+    const resolver = validatedResolvers[type]
     if (!resolver) throw new Error(`Osra received a message of type "${String(type)}" but no resolver was found for type.`)
     else resolver({ event, type, port })(...data)
   }
-  target.addEventListener('message', listener as EventListener)
+  messageListener.addEventListener('message', listener as EventListener)
 
   return {
+    call: call<ValidatedResolvers>(target, { key }),
     listener,
-    unregister: () => target.removeEventListener('message', listener as EventListener),
-    resolvers
+    unregister: () => messageListener.removeEventListener('message', listener as EventListener),
+    resolvers: validatedResolvers
   }
 }
