@@ -25,8 +25,8 @@ export type Target = Window | ServiceWorker | Worker | MessagePort
 type SerializablePropertyKey = string | number
 
 export type Resolver = (...data: any[]) => StructuredCloneTransferableType | Promise<StructuredCloneTransferableType>
-export type ResolverToValidatedResolver<T extends Resolver> = (extra: ApiResolverOptions) => (...data: Parameters<T>) => Awaited<ReturnType<T>>
-export type ValidatedResolver = (extra: ApiResolverOptions) => Resolver
+export type ResolverToValidatedResolver<T extends Resolver> = (extra: OsraMessage) => (...data: Parameters<T>) => Promise<Awaited<ReturnType<T>>>
+export type ValidatedResolver = (extra: OsraMessage) => Resolver
 
 /**
  * Solution by mkantor#7432
@@ -54,19 +54,19 @@ export type ResolversOrNever<T extends Record<SerializablePropertyKey, Resolver>
     ? T
     : never
 
-
 export type Resolvers = Record<SerializablePropertyKey, Resolver>
 export type ValidatedResolvers = Record<SerializablePropertyKey, ValidatedResolver>
 
-export type ApiResolverOptions<T2 extends Resolvers = Resolvers, T3 = {}> = T3 & {
-  event: MessageEvent<any>
-  type: keyof T2
-  port: MessagePort
+export type OsraMessageChannel = {
+  __osraMessageChannel__: true
+  id: number
+  type: string
+  data?: any
 }
 
-export type ApiMessageData<T2 extends Resolvers = Resolvers> = {
-  type: keyof T2
-  data: any
-  port: MessagePort
-  source: string
-}
+export type OsraMessage =
+  { source: string, port: OsraMessageChannel } & (
+    | { __type__: 'message', channelId?: number, type: string, data: any }
+    | { __type__: 'register-channel', id: number }
+    | { __type__: 'unregister-channel', id: number }
+  )
