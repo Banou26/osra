@@ -1,4 +1,4 @@
-import type { Target, ApiResolverOptions, RestrictedParametersType, ValidatedResolvers, Resolver } from './types'
+import type { Target, OsraMessage, RestrictedParametersType, ValidatedResolvers, Resolver } from './types'
 
 import { MESSAGE_SOURCE_KEY } from './shared'
 import { getTransferableObjects, makeObjectProxiedFunctions, proxyObjectFunctions } from './utils'
@@ -10,9 +10,9 @@ export const call =
   <T2 extends ValidatedResolvers>(target: Target, { key = MESSAGE_SOURCE_KEY }: { key?: string } = { key: MESSAGE_SOURCE_KEY }) =>
     <T3 extends keyof T2>(type: T3, ...data: Parameters<ReturnType<T2[T3]>>): Promise<Awaited<ReturnType<ReturnType<T2[T3]>>>> =>
       new Promise((resolve, reject) => {
-        const { port1, port2 } = new MessageChannel()
+        const { port1: localPort, port2: remotePort } = new MessageChannel()
 
-        port1.addEventListener(
+        localPort.addEventListener(
           'message',
           ({ data }) => {
             if (data.error) {
@@ -21,12 +21,12 @@ export const call =
               const proxiedData = makeObjectProxiedFunctions(data.result)
               resolve(proxiedData)
             }
-            port1.close()
-            port2.close()
+            localPort.close()
+            remotePort.close()
           },
           { once: true }
         )
-        port1.start()
+        localPort.start()
         const proxiedData = proxyObjectFunctions(data)
         const transferables = getTransferableObjects(proxiedData)
         target.postMessage(
@@ -34,11 +34,11 @@ export const call =
             source: key,
             type,
             data: proxiedData,
-            port: port2
+            port: remotePort
           },
           {
             targetOrigin: '*',
-            transfer: [port2, ...transferables as unknown as Transferable[] ?? []]
+            transfer: [remotePort, ...transferables as unknown as Transferable[] ?? []]
           }
         )
       })
@@ -48,8 +48,8 @@ export const call =
  */
 export const makeCallListener =
   <T extends Resolver>(func: T) =>
-    ((extra: ApiResolverOptions) => 
-      async (...data: RestrictedParametersType<(extra: ApiResolverOptions) => T>[]): Promise<Awaited<ReturnType<T>>> => {
+    ((extra: OsraMessage) => 
+      async (...data: RestrictedParametersType<(extra: OsraMessage) => T>[]): Promise<Awaited<ReturnType<T>>> => {
         const { port } = extra
         const proxiedData = makeObjectProxiedFunctions(data) as Parameters<T>
         try {
@@ -65,4 +65,4 @@ export const makeCallListener =
           port.close()
           throw error
         }
-      }) as unknown as (extra: ApiResolverOptions) => (...data: Parameters<T>) => Awaited<ReturnType<T>>
+      }) as (extra: OsraMessage) => (...data: Parameters<T>) => Promise<Awaited<ReturnType<T>>>
