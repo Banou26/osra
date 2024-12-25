@@ -1,7 +1,7 @@
-import type { Target, OsraMessage, RestrictedParametersType, ValidatedResolvers, Resolver } from './types'
+import type { Target, RestrictedParametersType, ValidatedResolvers, Resolver } from './types'
 
 import { MESSAGE_SOURCE_KEY } from './shared'
-import { getTransferableObjects, makeObjectProxiedFunctions, proxyObjectFunctions } from './utils'
+import { getTransferableObjects, makeObjectProxiedFunctions, proxyObjectFunctions, OsraMessage } from './utils'
 
 /**
  * Call a function with the provided arguments and get its return value back
