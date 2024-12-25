@@ -1,4 +1,10 @@
-import type { OsraMessage, Resolvers, StructuredCloneTransferableType, Target, TransferableObject } from './types'
+import type {
+  StructuredCloneTransferableType, TransferableObject, ProxiedErrorType,
+  ProxiedFunctionType, ProxiedMessagePortType, ProxiedPromiseType,
+  ProxiedType, StructuredCloneTransferableProxiableType,
+} from './types'
+
+import { OSRA_PROXY } from './types'
 
 export const isClonable = (value: any) =>
   globalThis.SharedArrayBuffer && value instanceof globalThis.SharedArrayBuffer ? true
@@ -26,220 +32,158 @@ export const getTransferableObjects = (value: any): TransferableObject[] => {
   return transferables
 }
 
-export const PROXY_FUNCTION_PROPERTY = '__proxyFunctionPort__'
-export const PROXY_MESSAGE_CHANNEL_PROPERTY = '__proxyMessageChannelPort__'
-export const OSRA_PROXIED = '__OSRA_PROXIED__'
+export type EnvCheck = {
+  uuid: string
+  supportsPorts: boolean
+  jsonOnly: boolean
+}
 
-export const makeProxyFunction = (func) => {
-  const { port1, port2 } = new MessageChannel()
-  port1.addEventListener('message', async (ev) => {
-    try {
-      const result = await func(...ev.data)
-      const proxiedResult = proxyObjectFunctions(result)
-      const transferables = getTransferableObjects(proxiedResult)
-      port1.postMessage({ result: proxiedResult }, { transfer: transferables as unknown as Transferable[] })
-    } catch (err) {
-      port1.postMessage({ error: err })
+export type Context = {
+  envCheck: EnvCheck
+  addIncomingProxiedMessagePort: (portId: string) => MessagePort
+  addOutgoingProxiedMessagePort: (port: MessagePort) => string
+  finalizationRegistry: FinalizationRegistry<number>
+}
+
+export const proxiedFunctionToFunction = <JsonOnly extends boolean>(proxiedFunction: ProxiedFunctionType<JsonOnly>, context: Context) => {
+  const portId = 'portId' in proxiedFunction ? proxiedFunction.portId : undefined
+  const port =
+    'port' in proxiedFunction ? proxiedFunction.port
+    : portId ? context.addIncomingProxiedMessagePort(portId)
+    : undefined
+  if (!port) throw new Error(`No ports received for proxied function`)
+
+  const func = (...args: StructuredCloneTransferableType[]) =>
+    new Promise((resolve, reject) => {
+      const { port1: returnValueLocalPort, port2: returnValueRemotePort } = new MessageChannel()
+      const functionContext = replaceOutgoingProxiedTypes([returnValueRemotePort, args], context)
+      const functionContextTransferables = getTransferableObjects(functionContext)
+      const listener = async (event: MessageEvent) => {
+        const result = await replaceIncomingProxiedTypes(event.data, context)
+        if (result instanceof Error) reject(result)
+        else resolve(result)
+        returnValueLocalPort.close()
+      }
+      returnValueLocalPort.addEventListener('message', listener, { once: true })
+      returnValueLocalPort.start()
+      port.postMessage(functionContext, { transfer: functionContextTransferables })
+    })
+
+  if (portId) {
+    context.finalizationRegistry.register(func, Number(portId.split('/')[1]))
+  }
+
+  return func
+}
+
+export const proxiedMessagePortToMessagePort = <JsonOnly extends boolean>(proxiedMessagePort: ProxiedMessagePortType<JsonOnly>, context: Context) => {
+  const port =
+    context.envCheck.supportsPorts && 'port' in proxiedMessagePort ? proxiedMessagePort.port
+    : 'portId' in proxiedMessagePort ? context.addIncomingProxiedMessagePort(proxiedMessagePort.portId)
+    : undefined
+  if (!port) throw new Error(`No ports received for proxied message port`)
+  return port
+}
+
+export const proxiedErrorToError = (proxiedError: ProxiedErrorType, context: Context) =>
+  new Error(proxiedError.message, { cause: proxiedError.stack })
+
+export const proxiedPromiseToPromise = <JsonOnly extends boolean>(proxiedPromise: ProxiedPromiseType<JsonOnly>, context: Context) =>
+  new Promise((resolve, reject) => {
+    const port =
+      'port' in proxiedPromise ? proxiedPromise.port
+      : 'portId' in proxiedPromise ? context.addIncomingProxiedMessagePort(proxiedPromise.portId)
+      : undefined
+    if (!port) throw new Error(`No ports received for proxied promise`)
+
+    const listener = async (event: MessageEvent) => {
+      const result = await replaceIncomingProxiedTypes(event.data, context)
+      if (result instanceof Error) reject(result)
+      else resolve(result)
+      port.close()
     }
-    // Keep the port open, the function might be called many times.
+    port.addEventListener('message', listener, { once: true })
+    port.start()
   })
-  port1.start()
-  return port2
-}
 
-export const proxyObjectFunctions = (value: any) =>
-  isClonable(value) ? value
-  : isTransferable(value) ? value
-  : typeof value === 'function' ? ({ [PROXY_FUNCTION_PROPERTY]: makeProxyFunction(value) })
-  : Array.isArray(value) ? value.map(proxyObjectFunctions)
-  : value && typeof value === 'object' ? (
-    Object.fromEntries(
-      Object
-        .entries(value)
-        .map(([key, value]) => [
-          key,
-          proxyObjectFunctions(value)
-        ])
-    )
-  )
-  : value
-
-// todo: implement reject
-export const makeProxiedFunction =
-  (port: MessagePort) =>
-    (...args) =>
-      new Promise((resolve, reject) => {
-        const proxiedArguments = proxyObjectFunctions(args)
-        const transferables = getTransferableObjects(proxiedArguments)
-        const listener = (ev) => {
-          if (ev.data.error) reject(ev.data.error)
-          else resolve(makeObjectProxiedFunctions(ev.data.result))
-          port.removeEventListener('message', listener)
-        }
-        port.addEventListener('message', listener)
-        port.start()
-        port.postMessage(proxiedArguments, { transfer: transferables as unknown as Transferable[] })
-      })
-
-export const makeObjectProxiedFunctions = (value: any) =>
-  isClonable(value) ? value
-  : isTransferable(value) ? value
-  : value && typeof value === 'object' && value[PROXY_FUNCTION_PROPERTY] ? makeProxiedFunction(value[PROXY_FUNCTION_PROPERTY])
-  : Array.isArray(value) ? value.map(makeObjectProxiedFunctions)
-  : value && typeof value === 'object' ? (
-    Object.fromEntries(
-      Object
-        .entries(value)
-        .map(([key, value]) => [
-          key,
-          makeObjectProxiedFunctions(value)
-        ])
-    )
-  )
-  : value
-
-export const makeProxyFunction = (func) => {
-  const { port1, port2 } = new MessageChannel()
-  port1.addEventListener('message', async (ev) => {
-    try {
-      const result = await func(...ev.data)
-      const proxiedResult = proxyObjectFunctions(result)
-      const transferables = getTransferableObjects(proxiedResult)
-      port1.postMessage({ result: proxiedResult }, { transfer: transferables as unknown as Transferable[] })
-    } catch (err) {
-      port1.postMessage({ error: err })
-    }
-    // Keep the port open, the function might be called many times.
-  })
-  port1.start()
-  return port2
-}
-
-// export const replaceOutgoingProxiedTypes = (value: any) =>
-//   isClonable(value) ? value
-//   : isTransferable(value) ? value
-//   : typeof value === 'function' ? ({ [PROXY_FUNCTION_PROPERTY]: makeProxyFunction(value) })
-//   : Array.isArray(value) ? value.map(proxyObjectFunctions)
-//   : value && typeof value === 'object' ? (
-//     Object.fromEntries(
-//       Object
-//         .entries(value)
-//         .map(([key, value]) => [
-//           key,
-//           proxyObjectFunctions(value)
-//         ])
-//     )
-//   )
-//   : value
-
-type ProxiedType =
-  {
-    type: Function,
-    name: 'function'
-  }
-  | {
-    type: MessagePort,
-    name: 'messagePort'
-  }
-  | {
-    type: Promise<any>,
-    name: 'promise'
-  }
-  | {
-    type: ReadableStream,
-    name: 'readableStream'
-  }
-
-export const getProxiedType = (value: any): ProxiedType => {
-  if (typeof value === 'function') return { type: value, name: 'function' }
-  if (value instanceof MessagePort) return { type: value, name: 'messagePort' }
-  if (value instanceof Promise) return { type: value, name: 'promise' }
-  if (value instanceof ReadableStream) return { type: value, name: 'readableStream' }
-  throw new Error(`Unknown proxied type: ${value}`)
-}
-
-
-
-export const replaceIncomingFunction =
-  ({ port, replaceFunction }: { port: OsraMessagePort, replaceFunction: (port: OsraMessagePort) => Function }) =>
-    (...args) =>
-      new Promise((resolve, reject) => {
-        const proxiedArguments = proxyObjectFunctions(args)
-        const transferables = getTransferableObjects(proxiedArguments)
-        const listener = (ev) => {
-          if (ev.data.error) reject(ev.data.error)
-          else resolve(replaceRecursive(ev.data.result))
-          port.removeEventListener('message', listener)
-        }
-        port.addEventListener('message', listener)
-        port.start()
-        port.postMessage(proxiedArguments, { transfer: transferables as unknown as Transferable[] })
-      })
-
-
-// export const makeProxiedFunction =
-//   (port: MessagePort) =>
-//     (...args) =>
-//       new Promise((resolve, reject) => {
-//         const proxiedArguments = proxyObjectFunctions(args)
-//         const transferables = getTransferableObjects(proxiedArguments)
-//         const listener = (ev) => {
-//           if (ev.data.error) reject(ev.data.error)
-//           else resolve(makeObjectProxiedFunctions(ev.data.result))
-//           port.removeEventListener('message', listener)
-//         }
-//         port.addEventListener('message', listener)
-//         port.start()
-//         port.postMessage(proxiedArguments, { transfer: transferables as unknown as Transferable[] })
-//       })
-
-export const replaceIncomingProxiedTypes = <T extends StructuredCloneTransferableType>(
-  value: T,
-  { finalizationRegistry }: { finalizationRegistry: FinalizationRegistry<string> }
-): T =>
+export const replaceIncomingProxiedTypes = (value: StructuredCloneTransferableType, context: Context): StructuredCloneTransferableProxiableType =>
   replaceRecursive(
     value,
     (value) => Boolean(
-      value && typeof value === 'object' && OSRA_PROXIED in value && value[OSRA_PROXIED]
+      value && typeof value === 'object' && OSRA_PROXY in value && value[OSRA_PROXY]
     ),
-    (port: OsraMessagePort) => {
-      if (port.type === 'function') {
-        const proxiedFunction = (...args: (StructuredCloneTransferableType)[]) =>
-          new Promise((resolve, reject) => {
-            const proxiedArgs = replaceIncomingProxiedTypes(args, { finalizationRegistry })
-
-          })
-
-        if (!(port instanceof MessagePort)) {
-          finalizationRegistry.register(proxiedFunction, (port as OsraMessagePort).channelPortId)
-        }
-
-        return proxiedFunction
+    (proxiedValue: ProxiedType<boolean>) => {
+      if (proxiedValue.type === 'function') {
+        return proxiedFunctionToFunction(proxiedValue, context)
+      } else if (proxiedValue.type === 'error') {
+        return proxiedErrorToError(proxiedValue, context)
+      } else if (proxiedValue.type === 'messagePort') {
+        return proxiedMessagePortToMessagePort(proxiedValue, context)
+      } else if (proxiedValue.type === 'promise') {
+        return proxiedPromiseToPromise(proxiedValue, context)
       }
       throw new Error(`Unknown incoming proxied type: ${value}`)
     })
 
-export const replaceOutgoingProxiedTypes = <T extends StructuredCloneTransferableType>(value: T) =>
+export const errorToProxiedError = (error: Error, _: Context) => ({
+  [OSRA_PROXY]: true,
+  type: 'error',
+  message: error.message,
+  stack: error.stack
+})
+
+export const messagePortToProxiedMessagePort = (port: MessagePort, context: Context) => ({
+  [OSRA_PROXY]: true,
+  type: 'messagePort',
+  ...context.envCheck.supportsPorts
+    ? { port }
+    : { portId: context.addOutgoingProxiedMessagePort(port) }
+})
+
+export const promiseToProxiedPromise = (promise: Promise<StructuredCloneTransferableType>, context: Context) => {
+  const { port1: localPort, port2: remotePort } = new MessageChannel()
+
+  const sendResult = (resultOrError: StructuredCloneTransferableType) => {
+    const proxiedResult = replaceOutgoingProxiedTypes(resultOrError, context)
+    const transferables = getTransferableObjects(proxiedResult)
+    localPort.postMessage({ result: proxiedResult }, { transfer: transferables })
+    localPort.close()
+  }
+
+  promise
+    .then(sendResult)
+    .catch(sendResult)
+
+  return replaceOutgoingProxiedTypes(remotePort, context)
+}
+
+export const functionToProxiedFunction = (func: Function, context: Context) => {
+  const { port1: localPort, port2: remotePort } = new MessageChannel()
+  localPort.addEventListener('message', async (ev: MessageEvent<[ProxiedType<boolean>, StructuredCloneTransferableType[]]>) => {
+    const [returnValuePort, args] = replaceIncomingProxiedTypes(ev.data, context) as [MessagePort, StructuredCloneTransferableType[]]
+    const result = func(...args)
+    const proxiedResult = replaceOutgoingProxiedTypes(result, context)
+    const transferables = getTransferableObjects(proxiedResult)
+    returnValuePort.postMessage({ result: proxiedResult }, { transfer: transferables })
+    returnValuePort.close()
+  })
+  localPort.start()
+  return replaceOutgoingProxiedTypes(remotePort, context)
+}
+
+export const replaceOutgoingProxiedTypes = <T extends StructuredCloneTransferableType>(value: T, context: Context) =>
   replaceRecursive(
     value,
     (value) => typeof value === 'function',
     (value) => {
       if (typeof value === 'function') {
-        const func = value as Function
-        const { port1, port2 } = makeOsraMessageChannel('', 'function')
-        port1.addEventListener('message', async (ev) => {
-          try {
-            const result = await func(...ev.data)
-            const proxiedResult = proxyObjectFunctions(result)
-            const transferables = getTransferableObjects(proxiedResult)
-            port1.postMessage({ result: proxiedResult }, { transfer: transferables as unknown as Transferable[] })
-          } catch (err) {
-            port1.postMessage({ error: err })
-          }
-          // Keep the port open, the function might be called many times.
-        })
-        port1.start()
-        return port2
+        return functionToProxiedFunction(value, context)
+      } else if (value instanceof Error) {
+        return errorToProxiedError(value, context)
+      } else if (value instanceof MessagePort) {
+        return messagePortToProxiedMessagePort(value, context)
+      } else if (value instanceof Promise) {
+        return promiseToProxiedPromise(value, context)
       }
       throw new Error(`Unknown outgoing proxied type: ${value}`)
     }
@@ -268,23 +212,6 @@ export const replaceRecursive = <
     )
   )
   : value
-
-export const proxyMessage = ({ key, target }: { key: string, target: Target }, event: MessageEvent<OsraMessage<Resolvers>>) => {
-  const { type, data, port } = event.data
-  const transferables = getTransferableObjects(data)
-  target.postMessage(
-    {
-      source: key,
-      type,
-      data,
-      port
-    },
-    {
-      targetOrigin: '*',
-      transfer: [port, ...transferables as unknown as Transferable[] ?? []]
-    }
-  )
-}
 
 export const makeNumberAllocator = () => {
   let highest = 0
@@ -331,36 +258,3 @@ export const makeAllocator = <T>({ numberAllocator }: { numberAllocator: NumberA
   }
 }
 type Allocator<T> = ReturnType<typeof makeAllocator<T>>
-
-type OsraMessageChannelAllocator = Allocator<() => any>
-
-export type SerializedOsraMessagePort = {
-  [OSRA_PROXIED]: true,
-  channelPortId: string,
-  type: string
-  data?: any
-}
-
-export type OsraMessagePort =
-  MessagePort
-  & SerializedOsraMessagePort
-  & { toJSON: () => SerializedOsraMessagePort }
-
-export const makeOsraMessageChannel = (channelPortId: string, type: string) => {
-  const { port1: _port1, port2: _port2 } = new MessageChannel()
-
-  const makeOsraMessagePort = (port: MessagePort) => {
-    const osraMessagePort = port as OsraMessagePort
-    osraMessagePort.channelPortId = channelPortId
-    osraMessagePort.toJSON = () => ({ [OSRA_PROXIED]: true, channelPortId, type })
-    return osraMessagePort
-  }
-
-  const port1 = makeOsraMessagePort(_port1)
-  const port2 = makeOsraMessagePort(_port2)
-
-  return {
-    port1,
-    port2
-  }
-}

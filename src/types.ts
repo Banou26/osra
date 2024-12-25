@@ -1,28 +1,55 @@
-export type TransferableObject =
-  SharedArrayBuffer | ArrayBuffer | MessagePort | ReadableStream | WritableStream |
-  TransformStream | /* AudioData | */ ImageBitmap /* | VideoFrame | OffscreenCanvas */
+export const OSRA_MESSAGE_PROPERTY = '__OSRA__' as const
+export const OSRA_MESSAGE_KEY = '__OSRA_DEFAULT_KEY__' as const
+export const OSRA_PROXY = '__OSRA_PROXY__' as const
 
-export type StructuredCloneObject = {
-  [key: string]: StructuredCloneType
-}
+export type JsonPropertyKey = string | number
+export type JsonCloneType = boolean | null | number | string | Array<JsonCloneType> | { [key: string]: JsonCloneType }
 
 export type StructuredCloneType =
-  void | boolean | null | undefined | number | BigInt | string | Date | RegExp | Blob | File | FileList | ArrayBuffer | ArrayBufferView |
-  ImageBitmap | ImageData | Array<StructuredCloneType> | StructuredCloneObject | Map<StructuredCloneType, StructuredCloneType> | Set<StructuredCloneType>
+  JsonCloneType | void | undefined | BigInt | Date | RegExp | Blob | File | FileList | ArrayBuffer | ArrayBufferView |
+  ImageBitmap | ImageData | Array<StructuredCloneType> | { [key: string]: StructuredCloneType } | Map<StructuredCloneType, StructuredCloneType> | Set<StructuredCloneType>
 
-export type StructuredCloneTransferableObject = {
-  [key: string]: StructuredCloneTransferableType
-}
-
-export type ProxiedType = (...args: StructuredCloneTransferableType[]) => StructuredCloneTransferableType | Promise<StructuredCloneTransferableType>
+export type TransferableObject =
+  SharedArrayBuffer | ArrayBuffer | MessagePort | ReadableStream | WritableStream |
+  TransformStream | ImageBitmap /* | AudioData | VideoFrame | OffscreenCanvas */
 
 export type StructuredCloneTransferableType =
-  StructuredCloneType | TransferableObject | Array<StructuredCloneTransferableType> | StructuredCloneTransferableObject |
-  Map<StructuredCloneTransferableType, StructuredCloneTransferableType> | Set<StructuredCloneTransferableType> | ProxiedType
+  StructuredCloneType | TransferableObject | { [key: string]: StructuredCloneTransferableType } |Array<StructuredCloneTransferableType> |
+  Map<StructuredCloneTransferableType, StructuredCloneTransferableType> | Set<StructuredCloneTransferableType>
 
-export type Target = Window | ServiceWorker | Worker | MessagePort
+export type ProxiableType =
+  Promise<StructuredCloneTransferableType> | Error | MessagePort | ReadableStream | 
+  ((...args: StructuredCloneTransferableType[]) => StructuredCloneTransferableType | Promise<StructuredCloneTransferableType>)
 
-type SerializablePropertyKey = string | number
+export type StructuredCloneTransferableProxiableType = ProxiableType | StructuredCloneTransferableType
+
+type PortOrJsonPort<JsonOnly extends boolean> = JsonOnly extends true ? { portId: string } : { port: MessagePort }
+type StructuredCloneDataOrJsonData<JsonOnly extends boolean> = JsonOnly extends true ? JsonCloneType : StructuredCloneType
+
+export type ProxiedFunctionType<JsonOnly extends boolean> = ({ type: 'function' } & PortOrJsonPort<JsonOnly>)
+export type ProxiedMessagePortType<JsonOnly extends boolean> = ({ type: 'messagePort' } & PortOrJsonPort<JsonOnly>)
+export type ProxiedPromiseType<JsonOnly extends boolean> = ({ type: 'promise' } & PortOrJsonPort<JsonOnly>)
+export type ProxiedReadableStreamType<JsonOnly extends boolean> = ({ type: 'readableStream' } & PortOrJsonPort<JsonOnly>)
+export type ProxiedErrorType = ({ type: 'error', message: string, stack?: string })
+
+export type ProxiedType<JsonOnly extends boolean> =
+  { [OSRA_PROXY]: true } & (
+    | ProxiedFunctionType<JsonOnly>
+    | ProxiedMessagePortType<JsonOnly>
+    | ProxiedPromiseType<JsonOnly>
+    | ProxiedReadableStreamType<JsonOnly>
+    | ProxiedErrorType
+  )
+export type OsraMessage =
+  { [OSRA_MESSAGE_PROPERTY]: true, key: string } & (
+    | { type: 'ready', envCheck: { buffer: ArrayBuffer, port: MessagePort } }
+    | { type: 'init', data: StructuredCloneTransferableType }
+    | { type: 'message', portId: string, data: any } // message not needed if transferring MessagePort is supported
+    | { type: 'port-closed', portId: string } // message not needed if transferring MessagePort is supported
+  )
+
+export type RemoteTarget = Window | ServiceWorker | Worker | MessagePort
+export type LocalTarget = WindowEventHandlers | ServiceWorkerContainer | Worker | SharedWorker
 
 export type Resolver = (...data: any[]) => StructuredCloneTransferableType | Promise<StructuredCloneTransferableType>
 export type ResolverToValidatedResolver<T extends Resolver> = (extra: OsraMessage) => (...data: Parameters<T>) => Promise<Awaited<ReturnType<T>>>
@@ -40,7 +67,7 @@ export type RestrictedParametersType<T extends ValidatedResolver> =
   Parameters<ReturnType<T>> extends Array<StructuredCloneTransferableType> ? T
   : never
 
-export type ValidatedResolversOrNever<T extends Record<SerializablePropertyKey, ValidatedResolver>> =
+export type ValidatedResolversOrNever<T extends Record<JsonPropertyKey, ValidatedResolver>> =
   T extends { [K in keyof T]: RestrictedParametersType<T[K]> }
     ? T
     : never
@@ -49,24 +76,10 @@ export type RestrictParametersType<T extends Resolver> =
   Parameters<T> extends Array<StructuredCloneTransferableType> ? T
   : never
 
-export type ResolversOrNever<T extends Record<SerializablePropertyKey, Resolver>> =
+export type ResolversOrNever<T extends Record<JsonPropertyKey, Resolver>> =
   T extends { [K in keyof T]: RestrictParametersType<T[K]> }
     ? T
     : never
 
-export type Resolvers = Record<SerializablePropertyKey, Resolver>
-export type ValidatedResolvers = Record<SerializablePropertyKey, ValidatedResolver>
-
-export type OsraMessageChannel = {
-  __osraMessageChannel__: true
-  id: number
-  type: string
-  data?: any
-}
-
-export type OsraMessage =
-  { source: string, port: OsraMessageChannel } & (
-    | { __type__: 'message', channelId?: number, type: string, data: any }
-    | { __type__: 'register-channel', id: number }
-    | { __type__: 'unregister-channel', id: number }
-  )
+export type Resolvers = Record<JsonPropertyKey, Resolver>
+export type ValidatedResolvers = Record<JsonPropertyKey, ValidatedResolver>
