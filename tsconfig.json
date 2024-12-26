@@ -15,5 +15,5 @@
     "noUncheckedIndexedAccess": true,
     "allowSyntheticDefaultImports": true
   },
-  "include": ["src/**/*", "tests/**/*"]
+  "include": ["src/**/*"]
 }

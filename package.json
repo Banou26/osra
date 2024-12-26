@@ -8,7 +8,7 @@
   "main": "build/index.js",
   "type": "module",
   "scripts": {
-    "build": "vite build",
+    "build": "vite build && tsc",
     "build-watch": "vite build --watch",
     "build-test": "vite build --config vite.test.config.ts",
     "build-test-watch": "vite build --config vite.test.config.ts --watch",
