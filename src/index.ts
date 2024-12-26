@@ -1,4 +1,4 @@
-import type { RemoteTarget, StructuredCloneTransferableType, LocalTarget, OsraMessage } from './types'
+import type { RemoteTarget, StructuredCloneTransferableType, LocalTarget, OsraMessage, StructuredCloneTransferableProxiableType } from './types'
 import type { Context, EnvCheck } from './utils'
 
 import { v4 as uuidv4 } from 'uuid'
@@ -8,8 +8,8 @@ import { getTransferableObjects, makeAllocator, makeNumberAllocator, replaceInco
 
 export * from './utils'
 
-export const expose = async <T extends StructuredCloneTransferableType, T2 extends StructuredCloneTransferableType>(
-  value: T,
+export const expose = async <T extends StructuredCloneTransferableProxiableType>(
+  value: StructuredCloneTransferableProxiableType,
   {
     remote: _remote,
     local: _local,
@@ -18,10 +18,10 @@ export const expose = async <T extends StructuredCloneTransferableType, T2 exten
   }: {
     remote: RemoteTarget | ((osraMessage: OsraMessage, transferables: Transferable[]) => void)
     local: LocalTarget | ((listener: (event: MessageEvent<OsraMessage>) => void) => void)
-    key: string,
-    origin: string
+    key?: string,
+    origin?: string
   }
-): Promise<T2> => {
+): Promise<T> => {
   const uuid = uuidv4()
 
   let envCheck: EnvCheck | undefined
