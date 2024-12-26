@@ -58,11 +58,14 @@ export const proxiedFunctionToFunction = <JsonOnly extends boolean>(proxiedFunct
       const { port1: returnValueLocalPort, port2: returnValueRemotePort } = new MessageChannel()
       const functionContext = replaceOutgoingProxiedTypes([returnValueRemotePort, args], context)
       const functionContextTransferables = getTransferableObjects(functionContext)
-      const listener = async (event: MessageEvent) => {
-        const result = await replaceIncomingProxiedTypes(event.data, context)
-        if (result instanceof Error) reject(result)
-        else resolve(result)
-        returnValueLocalPort.close()
+      const listener = (event: MessageEvent) => {
+        const result = replaceIncomingProxiedTypes(event.data, context)
+        if (!(result instanceof Promise)) throw new Error(`Proxied function did not return a promise`)
+
+        result
+          .then(resolve)
+          .catch(reject)
+          .finally(() => returnValueLocalPort.close())
       }
       returnValueLocalPort.addEventListener('message', listener, { once: true })
       returnValueLocalPort.start()
@@ -95,7 +98,6 @@ export const proxiedPromiseToPromise = <JsonOnly extends boolean>(proxiedPromise
       : 'portId' in proxiedPromise ? context.addIncomingProxiedMessagePort(proxiedPromise.portId)
       : undefined
     if (!port) throw new Error(`No ports received for proxied promise`)
-
     const listener = async (event: MessageEvent) => {
       const result = await replaceIncomingProxiedTypes(event.data, context)
       if (result instanceof Error) reject(result)
@@ -146,7 +148,7 @@ export const promiseToProxiedPromise = (promise: Promise<StructuredCloneTransfer
   const sendResult = (resultOrError: StructuredCloneTransferableType) => {
     const proxiedResult = replaceOutgoingProxiedTypes(resultOrError, context)
     const transferables = getTransferableObjects(proxiedResult)
-    localPort.postMessage({ result: proxiedResult }, { transfer: transferables })
+    localPort.postMessage(proxiedResult, { transfer: transferables })
     localPort.close()
   }
 
@@ -154,27 +156,35 @@ export const promiseToProxiedPromise = (promise: Promise<StructuredCloneTransfer
     .then(sendResult)
     .catch(sendResult)
 
-  return replaceOutgoingProxiedTypes(remotePort, context)
+  return {
+    [OSRA_PROXY]: true,
+    type: 'promise',
+    port: replaceOutgoingProxiedTypes(remotePort, context)
+  }
 }
 
 export const functionToProxiedFunction = (func: Function, context: Context) => {
   const { port1: localPort, port2: remotePort } = new MessageChannel()
   localPort.addEventListener('message', async (ev: MessageEvent<[ProxiedType<boolean>, StructuredCloneTransferableType[]]>) => {
     const [returnValuePort, args] = replaceIncomingProxiedTypes(ev.data, context) as [MessagePort, StructuredCloneTransferableType[]]
-    const result = func(...args)
+    const result = (async () => func(...args))()
     const proxiedResult = replaceOutgoingProxiedTypes(result, context)
     const transferables = getTransferableObjects(proxiedResult)
-    returnValuePort.postMessage({ result: proxiedResult }, { transfer: transferables })
+    returnValuePort.postMessage(proxiedResult, { transfer: transferables })
     returnValuePort.close()
   })
   localPort.start()
-  return replaceOutgoingProxiedTypes(remotePort, context)
+  return {
+    [OSRA_PROXY]: true,
+    type: 'function',
+    port: replaceOutgoingProxiedTypes(remotePort, context)
+  }
 }
 
-export const replaceOutgoingProxiedTypes = <T extends StructuredCloneTransferableType>(value: T, context: Context) =>
+export const replaceOutgoingProxiedTypes = <T extends StructuredCloneTransferableProxiableType>(value: T, context: Context) =>
   replaceRecursive(
     value,
-    (value) => typeof value === 'function',
+    (value) => typeof value === 'function' || value instanceof Error || value instanceof MessagePort || value instanceof Promise,
     (value) => {
       if (typeof value === 'function') {
         return functionToProxiedFunction(value, context)
@@ -190,7 +200,7 @@ export const replaceOutgoingProxiedTypes = <T extends StructuredCloneTransferabl
   )
 
 export const replaceRecursive = <
-  T extends StructuredCloneTransferableType,
+  T extends StructuredCloneTransferableProxiableType,
   T2 extends (value: any) => any
 >(
   value: T,

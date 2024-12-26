@@ -5,6 +5,7 @@ export default defineConfig({
     target: 'esnext',
     outDir: 'build',
     emptyOutDir: false,
+    sourcemap: true,
     lib: {
       name: 'osra',
       fileName: 'index',
