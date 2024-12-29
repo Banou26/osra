@@ -84,7 +84,7 @@ export const expose = async <T extends StructuredCloneTransferableProxiableType>
   }
 
   let resolveRemoteValues, rejectRemoteValues
-  const remoteValues = new Promise<T2>((res, rej) => {
+  const remoteValues = new Promise<T>((res, rej) => {
     resolveRemoteValues = res
     rejectRemoteValues = rej
   })
@@ -178,7 +178,7 @@ export const expose = async <T extends StructuredCloneTransferableProxiableType>
   if (typeof _local === 'function') {
     _local(listener)
   } else {
-    _local.addEventListener('message', listener as EventListener)
+    _local.addEventListener('message', listener as unknown as EventListener)
   }
 
   sendReady()
