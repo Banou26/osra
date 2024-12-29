@@ -35,9 +35,9 @@ export type TransferableObject =
   | ArrayBuffer
   | MessagePort
   | ReadableStream
-  /*
   | WritableStream
   | TransformStream
+  /*
   | ImageBitmap
   | AudioData
   | VideoFrame
