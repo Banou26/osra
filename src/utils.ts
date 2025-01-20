@@ -99,9 +99,14 @@ export const proxiedPromiseToPromise = <JsonOnly extends boolean>(proxiedPromise
       : undefined
     if (!port) throw new Error(`No ports received for proxied promise`)
     const listener = async (event: MessageEvent) => {
-      const result = await replaceIncomingProxiedTypes(event.data, context)
-      if (result instanceof Error) reject(result)
-      else resolve(result)
+      const data = event.data as { resolve: StructuredCloneTransferableType } | { reject: StructuredCloneTransferableType }
+      if ('resolve' in data) {
+        const result = await replaceIncomingProxiedTypes(data.resolve, context)
+        resolve(result)
+      } else {
+        const result = await replaceIncomingProxiedTypes(data.reject, context)
+        reject(result)
+      }
       port.close()
     }
     port.addEventListener('message', listener, { once: true })
@@ -153,8 +158,8 @@ export const promiseToProxiedPromise = (promise: Promise<StructuredCloneTransfer
   }
 
   promise
-    .then(sendResult)
-    .catch(sendResult)
+    .then(result => sendResult({ resolve: result }))
+    .catch(error => sendResult({ reject: error }))
 
   return {
     [OSRA_PROXY]: true,
