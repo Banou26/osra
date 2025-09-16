@@ -1,12 +1,15 @@
+import type { OsraMessage } from '../src/types'
+
 import { use, expect } from 'chai'
 import chaiAsPromised from 'chai-as-promised'
 
 import { expose } from '../src/index'
 
-export * as JSONTransport from './json-transport'
-
 use(chaiAsPromised)
 
+const jsonRemote = (osraMessage: OsraMessage, transferables: Transferable[]) => {
+  window.postMessage(JSON.stringify(osraMessage), '*', [])
+}
 export const baseArgsAndResponse = async () => {
   const value = {
     test: async (data: { foo: number }, bar: string) => {
@@ -19,9 +22,9 @@ export const baseArgsAndResponse = async () => {
       return 1
     }
   }
-  expose(value, { remote: window, local: window })
+  expose(value, { remote: jsonRemote, local: window })
 
-  const { test } = await expose<typeof value>({}, { remote: window, local: window })
+  const { test } = await expose<typeof value>({}, { remote: jsonRemote, local: window })
 
   await expect(test({ foo: 1 }, 'bar')).to.eventually.equal(1)
   await expect(test({ foo: 0 }, 'baz')).to.be.rejected
@@ -29,9 +32,9 @@ export const baseArgsAndResponse = async () => {
 
 export const callback = async () => {
   const value = { test: async () => async () => 1 }
-  expose(value, { remote: window, local: window })
+  expose(value, { remote: jsonRemote, local: window })
 
-  const { test } = await expose<typeof value>({}, { remote: window, local: window })
+  const { test } = await expose<typeof value>({}, { remote: jsonRemote, local: window })
 
   const result = await test()
   await expect(result()).to.eventually.equal(1)
@@ -39,9 +42,9 @@ export const callback = async () => {
 
 export const callbackAsArg = async () => {
   const value = { test: async (callback: () => number) => callback() }
-  expose(value, { remote: window, local: window })
+  expose(value, { remote: jsonRemote, local: window })
 
-  const { test } = await expose<typeof value>({}, { remote: window, local: window })
+  const { test } = await expose<typeof value>({}, { remote: jsonRemote, local: window })
 
   const result = await test(() => 1)
   expect(result).to.equal(1)
@@ -49,9 +52,9 @@ export const callbackAsArg = async () => {
 
 export const polyfilledMessageChannel = async () => {
   const value = { test: async (callback: () => number) => callback() }
-  expose(value, { remote: window, local: window })
+  expose(value, { remote: jsonRemote, local: window })
 
-  const { test } = await expose<typeof value>({}, { remote: window, local: window })
+  const { test } = await expose<typeof value>({}, { remote: jsonRemote, local: window })
 
   const result = await test(() => 1)
   expect(result).to.equal(1)
@@ -68,9 +71,9 @@ export const readableStreamTransfer = async () => {
         }
       })
   }
-  expose(value, { remote: window, local: window })
+  expose(value, { remote: jsonRemote, local: window })
 
-  const { test } = await expose<typeof value>({}, { remote: window, local: window })
+  const { test } = await expose<typeof value>({}, { remote: jsonRemote, local: window })
 
   const stream = await test()
   const values = [] as string[]
