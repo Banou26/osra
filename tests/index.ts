@@ -54,3 +54,28 @@ export const polyfilledMessageChannel = async () => {
   const result = await test(() => 1)
   await expect(result).to.equal(1)
 }
+
+export const readableStreamTransfer = async () => {
+  const value = {
+    test: async () =>
+      new ReadableStream<string>({
+        start(controller) {
+          controller.enqueue('hello')
+          controller.enqueue('world')
+          controller.close()
+        }
+      })
+  }
+  expose(value, { remote: window, local: window })
+
+  const { test } = await expose<typeof value>({}, { remote: window, local: window })
+
+  const stream = await test()
+  const values = [] as string[]
+  for await (const value of stream) {
+    values.push(value)
+  }
+
+  expect(values[0]).to.equal('hello')
+  expect(values[1]).to.equal('world')
+}
