@@ -1,8 +1,7 @@
 export const OSRA_MESSAGE_PROPERTY = '__OSRA__' as const
 export const OSRA_MESSAGE_KEY = '__OSRA_DEFAULT_KEY__' as const
-export const OSRA_PROXY = '__OSRA_PROXY__' as const
+export const OSRA_PROXIED = '__OSRA_PROXIED__' as const
 
-export type JsonPropertyKey = string | number
 export type JsonCloneType =
   | boolean
   | null
@@ -37,12 +36,6 @@ export type TransferableObject =
   | ReadableStream
   | WritableStream
   | TransformStream
-  /*
-  | ImageBitmap
-  | AudioData
-  | VideoFrame
-  | OffscreenCanvas
-  */
 
 export type StructuredCloneTransferableType =
   | StructuredCloneType
@@ -58,7 +51,6 @@ export type ProxiableType =
   | MessagePort
   | ReadableStream
   | ((...args: any[]) => Promise<StructuredCloneTransferableProxiableType>)
-  // | ((...args: StructuredCloneTransferableProxiableType[]) => StructuredCloneTransferableProxiableType)
   | { [key: string]: StructuredCloneTransferableProxiableType }
   | Array<StructuredCloneTransferableProxiableType>
   | Map<StructuredCloneTransferableProxiableType, StructuredCloneTransferableProxiableType>
@@ -76,7 +68,7 @@ export type ProxiedReadableStreamType<JsonOnly extends boolean> = ({ type: 'read
 export type ProxiedErrorType = ({ type: 'error', message: string, stack?: string })
 
 export type ProxiedType<JsonOnly extends boolean> =
-  { [OSRA_PROXY]: true } & (
+  { [OSRA_PROXIED]: true } & (
     | ProxiedFunctionType<JsonOnly>
     | ProxiedMessagePortType<JsonOnly>
     | ProxiedPromiseType<JsonOnly>
