@@ -13,7 +13,8 @@
     "strict": true,
     "strictNullChecks": true,
     "noUncheckedIndexedAccess": true,
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+    "types": ["@types/chrome", "@types/firefox-webext-browser"],
   },
   "include": ["src/**/*"]
 }
