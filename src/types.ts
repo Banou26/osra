@@ -77,6 +77,7 @@ export type ProxiedType<JsonOnly extends boolean> =
   )
 export type OsraMessage =
   { [OSRA_MESSAGE_PROPERTY]: true, key: string } & (
+    | { type: 'announce', portId: string }
     | { type: 'ready', envCheck: { buffer: ArrayBuffer, port: MessagePort } }
     | { type: 'init', data: StructuredCloneTransferableType }
     | { type: 'message', portId: string, data: any } // message not needed if transferring MessagePort is supported
@@ -84,4 +85,6 @@ export type OsraMessage =
   )
 
 export type RemoteTarget = Window | ServiceWorker | Worker | MessagePort
+export type RemoteTargetOrFunction = RemoteTarget | ((osraMessage: OsraMessage, transferables: Transferable[]) => void)
 export type LocalTarget = WindowEventHandlers | ServiceWorkerContainer | Worker | SharedWorker
+export type LocalTargetOrFunction = LocalTarget | ((listener: (event: OsraMessage) => void) => void)

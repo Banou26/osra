@@ -32,6 +32,8 @@
     "@playwright/test": "^1.49.1",
     "@types/chai": "^5.0.1",
     "@types/chai-as-promised": "^8.0.1",
+    "@types/chrome": "^0.1.12",
+    "@types/firefox-webext-browser": "^120.0.4",
     "chai": "^5.1.2",
     "chai-as-promised": "^8.0.1",
     "concurrently": "^9.1.0",
