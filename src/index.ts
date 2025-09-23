@@ -21,13 +21,17 @@ export const expose = async <T extends StructuredCloneTransferableProxiableType>
   value: StructuredCloneTransferableProxiableType,
   {
     local,
+    name,
     remote,
+    remoteName,
     key = OSRA_MESSAGE_KEY,
     origin = '*',
     unregisterSignal
   }: {
     local: LocalTargetOrFunction
+    name?: string
     remote?: RemoteTargetOrFunction
+    remoteName?: string
     key?: string
     origin?: string,
     unregisterSignal?: AbortSignal
@@ -40,5 +44,13 @@ export const expose = async <T extends StructuredCloneTransferableProxiableType>
 
   }
 
-  registerLocalTargetListeners({ listener, local, key, unregisterSignal })
+  registerLocalTargetListeners({
+    listener,
+    local,
+    remoteName,
+    key,
+    unregisterSignal
+  })
+
+  return undefined as unknown as T
 }

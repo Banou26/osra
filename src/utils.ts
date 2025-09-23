@@ -8,10 +8,11 @@ import type {
 import { OSRA_MESSAGE_KEY, OSRA_MESSAGE_PROPERTY } from './types'
 
 export const registerLocalTargetListeners = (
-  { listener, local, key = OSRA_MESSAGE_KEY, unregisterSignal }:
+  { listener, local, remoteName, key = OSRA_MESSAGE_KEY, unregisterSignal }:
   {
     listener: (message: OsraMessage) => Promise<void>
     local: LocalTargetOrFunction
+    remoteName?: string
     key?: string
     unregisterSignal?: AbortSignal
   }
@@ -21,6 +22,7 @@ export const registerLocalTargetListeners = (
   } else if (isWebExtensionOnMessage(local)) {
     const _listener = (message: any) => {
       if (!checkOsraMessageKey(message, key)) return
+      if (remoteName && message.name !== remoteName) return
       listener(message)
     }
     local.addListener(_listener)
@@ -32,6 +34,7 @@ export const registerLocalTargetListeners = (
   } else {
     const _listener = (event: MessageEvent<OsraMessage>) => {
       if (!checkOsraMessageKey(event.data, key)) return
+      if (remoteName && event.data.name !== remoteName) return
       listener(event.data)
     }
     local.addEventListener('message', _listener as unknown as EventListener)
@@ -48,9 +51,9 @@ export const replaceRecursive = <
   T2 extends (value: any) => any
 >(
   value: T,
-  shouldReplace: (value: Parameters<T2>[0]) => boolean,
+  shouldReplace: (value: unknown) => boolean,
   replaceFunction: T2
-) =>
+): T =>
   shouldReplace(value) ? replaceFunction(value)
   : Array.isArray(value) ? value.map(value => replaceRecursive(value, shouldReplace, replaceFunction))
   : value && typeof value === 'object' ? (
