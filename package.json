@@ -16,7 +16,8 @@
     "dev2": "concurrently \"npm run build-watch\" \"npm run build-test-watch\" \"npm run test-watch-headful\"",
     "test": "npx playwright test",
     "test-watch": "set PWTEST_WATCH=1 & npx playwright test",
-    "test-watch-headful": "npx playwright test --ui"
+    "test-watch-headful": "npx playwright test --ui",
+    "type-check": "tsc --noEmit"
   },
   "repository": {
     "type": "git",
@@ -40,7 +41,7 @@
     "i": "^0.3.7",
     "npm": "^11.0.0",
     "playwright": "^1.49.1",
-    "typescript": "^5.7.2",
+    "typescript": "^5.9.2",
     "vite": "^6.0.4"
   }
 }

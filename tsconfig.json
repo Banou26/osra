@@ -9,12 +9,12 @@
     "outDir": "./build",
     "sourceMap": true,
     "moduleResolution": "node",
-    "noImplicitAny": false,
+    "noImplicitAny": true,
     "strict": true,
     "strictNullChecks": true,
     "noUncheckedIndexedAccess": true,
     "allowSyntheticDefaultImports": true,
     "types": ["@types/chrome", "@types/firefox-webext-browser"],
-  },
-  "include": ["src/**/*"]
+    "skipLibCheck": true
+  }
 }

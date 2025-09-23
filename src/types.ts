@@ -76,8 +76,18 @@ export type ProxiedType<JsonOnly extends boolean> =
     | ProxiedErrorType
   )
 export type OsraMessage =
-  { [OSRA_MESSAGE_PROPERTY]: true, key: string } & (
-    | { type: 'announce', portId: string }
+  {
+    [OSRA_MESSAGE_PROPERTY]: true
+    key: string
+    name?: string
+  } & (
+    | {
+      type: 'announce'
+
+      localPortId: string
+      /** Only set when acknowledging a remote announcement */
+      remotePortId?: string
+    }
     | { type: 'ready', envCheck: { buffer: ArrayBuffer, port: MessagePort } }
     | { type: 'init', data: StructuredCloneTransferableType }
     | { type: 'message', portId: string, data: any } // message not needed if transferring MessagePort is supported
