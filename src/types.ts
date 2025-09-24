@@ -1,17 +1,17 @@
 export const OSRA_MESSAGE_PROPERTY = '__OSRA__' as const
 export const OSRA_MESSAGE_KEY = '__OSRA_DEFAULT_KEY__' as const
-export const OSRA_PROXIED = '__OSRA_PROXIED__' as const
+export const OSRA_PROXY = '__OSRA_PROXY__' as const
 
-export type JsonCloneType =
+export type JsonClone =
   | boolean
   | null
   | number
   | string
-  | { [key: string]: JsonCloneType }
-  | Array<JsonCloneType>
+  | { [key: string]: JsonClone }
+  | Array<JsonClone>
 
-export type StructuredCloneType =
-  | JsonCloneType
+export type StructuredClone =
+  | JsonClone
   | void
   | undefined
   | BigInt
@@ -24,10 +24,10 @@ export type StructuredCloneType =
   | ArrayBufferView
   | ImageBitmap
   | ImageData
-  | { [key: string]: StructuredCloneType }
-  | Array<StructuredCloneType>
-  | Map<StructuredCloneType, StructuredCloneType>
-  | Set<StructuredCloneType>
+  | { [key: string]: StructuredClone }
+  | Array<StructuredClone>
+  | Map<StructuredClone, StructuredClone>
+  | Set<StructuredClone>
 
 export type TransferableObject =
   | SharedArrayBuffer
@@ -37,43 +37,43 @@ export type TransferableObject =
   | WritableStream
   | TransformStream
 
-export type StructuredCloneTransferableType =
-  | StructuredCloneType
+export type StructuredCloneTransferable =
+  | StructuredClone
   | TransferableObject
-  | { [key: string]: StructuredCloneTransferableType }
-  | Array<StructuredCloneTransferableType>
-  | Map<StructuredCloneTransferableType, StructuredCloneTransferableType>
-  | Set<StructuredCloneTransferableType>
+  | { [key: string]: StructuredCloneTransferable }
+  | Array<StructuredCloneTransferable>
+  | Map<StructuredCloneTransferable, StructuredCloneTransferable>
+  | Set<StructuredCloneTransferable>
 
-export type ProxiableType =
-  | Promise<StructuredCloneTransferableProxiableType>
+export type Proxiable =
+  | Promise<StructuredCloneTransferableProxiable>
   | Error
   | MessagePort
   | ReadableStream
-  | ((...args: any[]) => Promise<StructuredCloneTransferableProxiableType>)
-  | { [key: string]: StructuredCloneTransferableProxiableType }
-  | Array<StructuredCloneTransferableProxiableType>
-  | Map<StructuredCloneTransferableProxiableType, StructuredCloneTransferableProxiableType>
-  | Set<StructuredCloneTransferableProxiableType>
+  | ((...args: any[]) => Promise<StructuredCloneTransferableProxiable>)
+  | { [key: string]: StructuredCloneTransferableProxiable }
+  | Array<StructuredCloneTransferableProxiable>
+  | Map<StructuredCloneTransferableProxiable, StructuredCloneTransferableProxiable>
+  | Set<StructuredCloneTransferableProxiable>
 
-export type StructuredCloneTransferableProxiableType = ProxiableType | StructuredCloneTransferableType
+export type StructuredCloneTransferableProxiable = Proxiable | StructuredCloneTransferable
 
 type PortOrJsonPort<JsonOnly extends boolean> = JsonOnly extends true ? { portId: string } : { port: MessagePort }
-type StructuredCloneDataOrJsonData<JsonOnly extends boolean> = JsonOnly extends true ? JsonCloneType : StructuredCloneType
+type StructuredCloneDataOrJsonData<JsonOnly extends boolean> = JsonOnly extends true ? JsonClone : StructuredClone
 
-export type ProxiedFunctionType<JsonOnly extends boolean> = ({ type: 'function' } & PortOrJsonPort<JsonOnly>)
-export type ProxiedMessagePortType<JsonOnly extends boolean> = ({ type: 'messagePort' } & PortOrJsonPort<JsonOnly>)
-export type ProxiedPromiseType<JsonOnly extends boolean> = ({ type: 'promise' } & PortOrJsonPort<JsonOnly>)
-export type ProxiedReadableStreamType<JsonOnly extends boolean> = ({ type: 'readableStream' } & PortOrJsonPort<JsonOnly>)
-export type ProxiedErrorType = ({ type: 'error', message: string, stack?: string })
+export type FunctionProxy<JsonOnly extends boolean> = ({ type: 'function' } & PortOrJsonPort<JsonOnly>)
+export type MessagePortProxy<JsonOnly extends boolean> = ({ type: 'messagePort' } & PortOrJsonPort<JsonOnly>)
+export type ProxyPromiseType<JsonOnly extends boolean> = ({ type: 'promise' } & PortOrJsonPort<JsonOnly>)
+export type ProxyReadableStreamType<JsonOnly extends boolean> = ({ type: 'readableStream' } & PortOrJsonPort<JsonOnly>)
+export type ProxyErrorType = ({ type: 'error', message: string, stack?: string })
 
-export type ProxiedType<JsonOnly extends boolean> =
-  { [OSRA_PROXIED]: true } & (
-    | ProxiedFunctionType<JsonOnly>
-    | ProxiedMessagePortType<JsonOnly>
-    | ProxiedPromiseType<JsonOnly>
-    | ProxiedReadableStreamType<JsonOnly>
-    | ProxiedErrorType
+export type Proxy<JsonOnly extends boolean> =
+  { [OSRA_PROXY]: true } & (
+    | FunctionProxy<JsonOnly>
+    | MessagePortProxy<JsonOnly>
+    | ProxyPromiseType<JsonOnly>
+    | ProxyReadableStreamType<JsonOnly>
+    | ProxyErrorType
   )
 export type OsraMessage =
   {
@@ -89,7 +89,7 @@ export type OsraMessage =
       remotePortId?: string
     }
     | { type: 'ready', envCheck: { buffer: ArrayBuffer, port: MessagePort } }
-    | { type: 'init', data: StructuredCloneTransferableType }
+    | { type: 'init', data: StructuredCloneTransferable }
     | { type: 'message', portId: string, data: any } // message not needed if transferring MessagePort is supported
     | { type: 'port-closed', portId: string } // message not needed if transferring MessagePort is supported
   )

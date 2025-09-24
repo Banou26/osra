@@ -1,4 +1,4 @@
-import type { RemoteTarget, LocalTarget, OsraMessage, StructuredCloneTransferableProxiableType, LocalTargetOrFunction, RemoteTargetOrFunction } from './types'
+import type { RemoteTarget, LocalTarget, OsraMessage, StructuredCloneTransferableProxiable, LocalTargetOrFunction, RemoteTargetOrFunction } from './types'
 
 import { OSRA_MESSAGE_KEY, OSRA_MESSAGE_PROPERTY } from './types'
 import { checkOsraMessageKey, isWebExtensionOnMessage, registerLocalTargetListeners } from './utils'
@@ -17,8 +17,8 @@ import { checkOsraMessageKey, isWebExtensionOnMessage, registerLocalTargetListen
  *
  * Capable of utilizing transferable objects for efficient data transfer in supported environments.
  */
-export const expose = async <T extends StructuredCloneTransferableProxiableType>(
-  value: StructuredCloneTransferableProxiableType,
+export const expose = async <T extends StructuredCloneTransferableProxiable>(
+  value: StructuredCloneTransferableProxiable,
   {
     local,
     name,
