@@ -1,8 +1,25 @@
-import type { RemoteTarget, LocalTarget, OsraMessage, StructuredCloneTransferableProxiable, LocalTargetOrFunction, RemoteTargetOrFunction } from './types'
+import type {
+  OsraMessage,
+  StructuredCloneTransferableProxiable,
+  LocalTargetOrFunction,
+  RemoteTargetOrFunction
+} from './types'
+import type { Capabilities, Context } from './utils'
 
-import { OSRA_MESSAGE_KEY, OSRA_MESSAGE_PROPERTY } from './types'
-import { checkOsraMessageKey, isWebExtensionOnMessage, registerLocalTargetListeners } from './utils'
+import { OSRA_MESSAGE_KEY } from './types'
+import {
+  probeCapabilities,
+  registerLocalTargetListeners,
+  makeNewContext
+} from './utils'
 
+const startConnection = ({ capabilities, context }: { capabilities: Capabilities, context: Context }) => {
+  const { uuid, remoteUuid, messagePort } = context
+
+  messagePort.addEventListener('message', (event: MessageEvent<OsraMessage>) => {
+
+  })
+}
 
 /**
  * Starts listening for messages on the local target(window, worker, ect...)
@@ -26,7 +43,8 @@ export const expose = async <T extends StructuredCloneTransferableProxiable>(
     remoteName,
     key = OSRA_MESSAGE_KEY,
     origin = '*',
-    unregisterSignal
+    unregisterSignal,
+    capabilities: _capabilities
   }: {
     local: LocalTargetOrFunction
     name?: string
@@ -34,14 +52,28 @@ export const expose = async <T extends StructuredCloneTransferableProxiable>(
     remoteName?: string
     key?: string
     origin?: string,
-    unregisterSignal?: AbortSignal
+    unregisterSignal?: AbortSignal,
+    capabilities?: Capabilities
   }
 ): Promise<T> => {
-  const uuid = globalThis.crypto.randomUUID()
-  const remotes = new Map<string, any>()
+  const capabilities = _capabilities ?? await probeCapabilities()
+  const contexts = new Map<string, Context>()
+
+  const initialUuid =
+    remote
+      ? globalThis.crypto.randomUUID() as string
+      : undefined
+
+  const unregister = (remoteUuid: string) => {
+    contexts.delete(remoteUuid)
+  }
 
   const listener = async (message: OsraMessage) => {
-
+    const { uuid: remoteUuid } = message
+    const foundContext = contexts.get(remoteUuid)
+    const context = foundContext ?? makeNewContext({ remoteUuid, capabilities })
+    if (!foundContext) contexts.set(remoteUuid, context)
+    context._rootMessagePort.postMessage(message)
   }
 
   registerLocalTargetListeners({
@@ -51,6 +83,18 @@ export const expose = async <T extends StructuredCloneTransferableProxiable>(
     key,
     unregisterSignal
   })
+
+  if (remote) {
+    remote.postMessage(
+      JSON.stringify({
+        [OSRA_MESSAGE_KEY]: true,
+        key,
+        name,
+        type: 'announce',
+        uuid: initialUuid,
+      })
+    )
+  }
 
   return undefined as unknown as T
 }

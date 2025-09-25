@@ -1,3 +1,5 @@
+import { WebExtRuntime } from "./utils"
+
 export const OSRA_MESSAGE_PROPERTY = '__OSRA__' as const
 export const OSRA_MESSAGE_KEY = '__OSRA_DEFAULT_KEY__' as const
 export const OSRA_PROXY = '__OSRA_PROXY__' as const
@@ -58,16 +60,16 @@ export type Proxiable =
 
 export type StructuredCloneTransferableProxiable = Proxiable | StructuredCloneTransferable
 
-type PortOrJsonPort<JsonOnly extends boolean> = JsonOnly extends true ? { portId: string } : { port: MessagePort }
+type PortOrJsonPort<JsonOnly extends boolean = boolean> = JsonOnly extends true ? { portId: string } : { port: MessagePort }
 type StructuredCloneDataOrJsonData<JsonOnly extends boolean> = JsonOnly extends true ? JsonClone : StructuredClone
 
-export type FunctionProxy<JsonOnly extends boolean> = ({ type: 'function' } & PortOrJsonPort<JsonOnly>)
-export type MessagePortProxy<JsonOnly extends boolean> = ({ type: 'messagePort' } & PortOrJsonPort<JsonOnly>)
-export type ProxyPromiseType<JsonOnly extends boolean> = ({ type: 'promise' } & PortOrJsonPort<JsonOnly>)
-export type ProxyReadableStreamType<JsonOnly extends boolean> = ({ type: 'readableStream' } & PortOrJsonPort<JsonOnly>)
+export type FunctionProxy<JsonOnly extends boolean = boolean> = ({ type: 'function' } & PortOrJsonPort<JsonOnly>)
+export type MessagePortProxy<JsonOnly extends boolean = boolean> = ({ type: 'messagePort' } & PortOrJsonPort<JsonOnly>)
+export type ProxyPromiseType<JsonOnly extends boolean = boolean> = ({ type: 'promise' } & PortOrJsonPort<JsonOnly>)
+export type ProxyReadableStreamType<JsonOnly extends boolean = boolean> = ({ type: 'readableStream' } & PortOrJsonPort<JsonOnly>)
 export type ProxyErrorType = ({ type: 'error', message: string, stack?: string })
 
-export type Proxy<JsonOnly extends boolean> =
+export type Proxy<JsonOnly extends boolean = boolean> =
   { [OSRA_PROXY]: true } & (
     | FunctionProxy<JsonOnly>
     | MessagePortProxy<JsonOnly>
@@ -79,22 +81,27 @@ export type OsraMessage =
   {
     [OSRA_MESSAGE_PROPERTY]: true
     key: string
+    uuid: string
     name?: string
   } & (
     | {
       type: 'announce'
 
-      localPortId: string
+      uuid: string
       /** Only set when acknowledging a remote announcement */
-      remotePortId?: string
+      remoteUuid?: string
     }
-    | { type: 'ready', envCheck: { buffer: ArrayBuffer, port: MessagePort } }
+    | {
+      /** uuid already taken, try announcing with another one */
+      type: 'reject-uuid-taken'
+      remoteUuid: string
+    }
     | { type: 'init', data: StructuredCloneTransferable }
     | { type: 'message', portId: string, data: any } // message not needed if transferring MessagePort is supported
     | { type: 'port-closed', portId: string } // message not needed if transferring MessagePort is supported
   )
 
-export type RemoteTarget = Window | ServiceWorker | Worker | MessagePort
+export type RemoteTarget = Window | ServiceWorker | Worker | MessagePort | WebExtRuntime
 export type RemoteTargetOrFunction = RemoteTarget | ((osraMessage: OsraMessage, transferables: Transferable[]) => void)
-export type LocalTarget = WindowEventHandlers | ServiceWorkerContainer | Worker | SharedWorker
+export type LocalTarget = WindowEventHandlers | ServiceWorkerContainer | Worker | SharedWorker | WebExtRuntime
 export type LocalTargetOrFunction = LocalTarget | ((listener: (event: OsraMessage) => void) => void)
