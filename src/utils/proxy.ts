@@ -1,4 +1,4 @@
-import type { Context } from '..'
+import type { Context } from './context'
 import type {
   StructuredCloneTransferableProxiable,
   MessagePortProxy,
