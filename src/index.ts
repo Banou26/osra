@@ -23,12 +23,17 @@ const startConnection = ({ capabilities, context }: { capabilities: Capabilities
 }
 
 /**
- * Starts listening for messages on the local target(window, worker, ect...)
- * - Service mode is a 1-many connection between the local target and many remote targets.
- *   - Mostly used around many to many communication channels like BroadcastChannel, SharedWorker, WebExtensions, etc...
+ * If local is defined without a remote, starts listening for messages on the local target(window, worker, ect...)
+ * - Service mode is a many-1 connection between our local listener and many remotes.
+ *   - Mostly used with many to many communication channels like BroadcastChannel, SharedWorker, WebExtensions, etc...
  *   - Can pass initial values to remote contexts, useful for passing configs around.
+ *   - Service mode can also handle stateless messages sent by broadcasts.
+ * Otherwise, if local is not defined, stateless broadcast mode is used.
+ * - Stateless broadcast is a 1-many message passing mechanism.
+ *   - It is necessary for one off messages to many remotes where remotes can't respond.
+ *   - One use case would be a websocket room where the owner can send messages to all members.
  *
- * If a remote is passed, it will switch from service mode to pairing mode.
+ * If the local and remote parameters are set, it will switch to pairing mode.
  * - Pairing mode establishes a 1-1 connection between the local and remote target.
  *    - Allows for passing initial values between the contexts easily.
  *    - Is especially useful for defining exports at the top level using TLA(top level await)
