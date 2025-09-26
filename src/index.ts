@@ -65,26 +65,54 @@ export const expose = async <T extends StructuredCloneTransferableProxiable>(
   const capabilities = _capabilities ?? await probeCapabilities()
   const contexts = new Map<string, Context>()
 
-  const initialUuid =
-    remote
-      ? globalThis.crypto.randomUUID() as string
-      : undefined
+  let initialUuid = globalThis.crypto.randomUUID() as string
 
   const listener = async (message: OsraMessage) => {
     const { uuid: remoteUuid } = message
-    const foundContext = contexts.get(remoteUuid)
-    const context =
-      foundContext
-      ?? makeNewContext({
+    if (message.type === 'announce') {
+      if (contexts.has(remoteUuid)) {
+        console.warn(`Context already exists for remoteUuid: ${remoteUuid}, connection rejected.`)
+        if (remote) {
+          postOsraMessage(
+            remote,
+            {
+              [OSRA_MESSAGE_PROPERTY]: true,
+              key,
+              uuid: initialUuid,
+              type: 'reject-uuid-taken',
+              remoteUuid
+            }
+          )
+        }
+        return
+      }
+      const context = makeNewContext({
         remoteUuid,
         capabilities,
         unregisterContext: () => contexts.delete(remoteUuid)
       })
-    if (!foundContext) {
       contexts.set(remoteUuid, context)
       startConnection({ capabilities, context })
+    } else if (message.type === 'message') {
+      const context = contexts.get(remoteUuid)
+      if (!context) {
+        console.error(`Context not found for remoteUuid: ${remoteUuid}`)
+        return
+      }
+      context._rootMessagePort.postMessage(message)
+    } else if (remote && message.type === 'reject-uuid-taken' && message.remoteUuid === initialUuid) {
+      initialUuid = globalThis.crypto.randomUUID() as string
+      postOsraMessage(
+        remote,
+        {
+          [OSRA_MESSAGE_PROPERTY]: true,
+          key,
+          name,
+          type: 'announce',
+          uuid: initialUuid,
+        }
+      )
     }
-    context._rootMessagePort.postMessage(message)
   }
 
   registerLocalTargetListeners({
@@ -95,7 +123,7 @@ export const expose = async <T extends StructuredCloneTransferableProxiable>(
     unregisterSignal
   })
 
-  if (remote && initialUuid) {
+  if (remote) {
     postOsraMessage(
       remote,
       {
