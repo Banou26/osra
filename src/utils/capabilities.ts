@@ -43,42 +43,45 @@ export type WebExtSender = NonNullable<WebExtPort['sender']>
 export const getWebExtensionGlobal = () => globalThis.browser ?? globalThis.chrome
 export const getWebExtensionRuntime = () => getWebExtensionGlobal().runtime
 
-export const isWebExtensionOnConnect = (object: any): object is WebExtOnConnect =>
+export const isWebExtensionOnConnect = (value: any): value is WebExtOnConnect =>
   Boolean(
-    (object as WebExtOnConnect)
-    && (object as WebExtOnConnect).addListener
-    && (object as WebExtOnConnect).hasListener
-    && (object as WebExtOnConnect).removeListener
+    (value as WebExtOnConnect)
+    && (value as WebExtOnConnect).addListener
+    && (value as WebExtOnConnect).hasListener
+    && (value as WebExtOnConnect).removeListener
   )
 
-export const isWindow = (object: any): object is Window => {
+export const isWindow = (value: any): value is Window => {
   return Boolean(
-    (object as Window)
-    && object.document
-    && object.location
-    && object.navigator
-    && object.screen
-    && object.history
+    (value as Window)
+    && value.document
+    && value.location
+    && value.navigator
+    && value.screen
+    && value.history
   )
 }
 
-export const isWebExtensionPort = (object: any): object is WebExtPort => {
+export const isWebExtensionPort = (value: any): value is WebExtPort => {
   return Boolean(
-    (object as WebExtOnConnect)
-    && object.name
-    && object.disconnect
-    && object.postMessage
-    //** Only present on Port created through runtime.connect(), so we force using connections */
-    && object.sender
-    && object.onMessage
-    && object.onDisconnect
+    (value as WebExtOnConnect)
+    && value.name
+    && value.disconnect
+    && value.postMessage
+    /**
+     * Only present on Port created through runtime.connect(),
+     * so we force using connections
+    */
+    && value.sender
+    && value.onMessage
+    && value.onDisconnect
   )
 }
 
-export const isWebExtensionRuntime = (object: any): object is WebExtRuntime => {
+export const isWebExtensionRuntime = (value: any): value is WebExtRuntime => {
   const runtime = getWebExtensionRuntime()
   return Boolean(
-    (object as WebExtOnConnect)
+    (value as WebExtOnConnect)
     && isWebExtensionOnConnect(runtime.onConnect)
     && runtime.id
   )
