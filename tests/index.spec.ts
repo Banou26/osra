@@ -33,6 +33,7 @@ test.beforeEach(async ({ page }) => {
   // })
   // page.on('pageerror', err => console.log(err))
   await page.goto('http://localhost:3000')
+  await new Promise(resolve => setTimeout(resolve, 250))
   await page.addScriptTag({ path: './build/test.js', type: 'module' })
 })
 

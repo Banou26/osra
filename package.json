@@ -22,7 +22,10 @@
     "print-coverage": "npx nyc report",
     "clean-coverage": "rimraf .nyc_output coverage",
     "type-check": "tsc --noEmit",
-    "start-server": "http-server -p 3000"
+    "start-server": "http-server -p 3000",
+    "linux-run-playwright": "docker run -it --name playwright -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix:rw --network=host --ipc=host --shm-size=2gb --rm mcr.microsoft.com/playwright:v1.55.1-noble npx npx -y playwright@1.55.1 run-server --port 8010 --host 0.0.0.0",
+    "linux-test": "PW_TEST_CONNECT_WS_ENDPOINT=ws://127.0.0.1:8010/ npx playwright test -c playwright.linux.config.ts",
+    "linux-test-watch-headful": "nodemon --watch build --exec \"PW_TEST_CONNECT_WS_ENDPOINT=ws://127.0.0.1:8010/ npx playwright test -c playwright.linux.config.ts\""
   },
   "repository": {
     "type": "git",
@@ -36,7 +39,7 @@
   "homepage": "https://github.com/Banou26/osra#readme",
   "devDependencies": {
     "@istanbuljs/nyc-config-typescript": "^1.0.2",
-    "@playwright/test": "^1.49.1",
+    "@playwright/test": "1.55",
     "@types/chai": "^5.0.1",
     "@types/chai-as-promised": "^8.0.1",
     "@types/chrome": "^0.1.12",
@@ -47,7 +50,7 @@
     "http-server": "^14.1.1",
     "nodemon": "^3.1.10",
     "nyc": "^17.1.0",
-    "playwright": "^1.49.1",
+    "playwright": "1.55",
     "typescript": "^5.9.2",
     "typescript-event-target": "^1.1.1",
     "vite": "^6.0.4",
