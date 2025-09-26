@@ -1,7 +1,7 @@
 import type { OsraMessage, LocalTargetOrFunction, RemoteTargetOrFunction } from '../types'
 
 import { OSRA_MESSAGE_KEY, OSRA_MESSAGE_PROPERTY } from '../types'
-import { isWebExtensionPort, isWebExtensionRuntime, isWindow } from './capabilities'
+import { isWebExtensionPort, isWebExtensionRuntime, isWindow, WebExtPort, WebExtSender } from './capabilities'
 
 export const isOsraMessage = (message: any): message is OsraMessage =>
   Boolean(
@@ -26,29 +26,33 @@ export const registerLocalTargetListeners = (
 ) => {
   if (typeof local === 'function') {
     local(listener)
-  } else if (isWebExtensionPort(local)) {
-    const _listener = (message: any) => {
-      if (!checkOsraMessageKey(message, key)) return
-      if (remoteName && message.name !== remoteName) return
-      listener(message)
+  } else if (isWebExtensionPort(local) || isWebExtensionRuntime(local)) {
+    const listenOnWebExtensionPort = (port: WebExtPort) => {
+      const _listener = (message: object) => {
+        if (!checkOsraMessageKey(message, key)) return
+        if (remoteName && message.name !== remoteName) return
+        listener(message)
+      }
+      port.onMessage.addListener(_listener)
+      if (unregisterSignal) {
+        unregisterSignal.addEventListener('abort', () =>
+          port.onMessage.removeListener(_listener)
+        )
+      }
     }
-    local.onMessage.addListener(_listener)
-    if (unregisterSignal) {
-      unregisterSignal.addEventListener('abort', () =>
-        local.onMessage.removeListener(_listener)
-      )
-    }
-  } else if (isWebExtensionRuntime(local)) {
-    const _listener = (message: any) => {
-      if (!checkOsraMessageKey(message, key)) return
-      if (remoteName && message.name !== remoteName) return
-      listener(message)
-    }
-    local.onConnect.addListener(_listener)
-    if (unregisterSignal) {
-      unregisterSignal.addEventListener('abort', () =>
-        local.onConnect.removeListener(_listener)
-      )
+
+    if (isWebExtensionRuntime(local)) {
+      const _listener = (port: WebExtPort) => {
+        listenOnWebExtensionPort(port)
+      }
+      local.onConnect.addListener(_listener)
+      if (unregisterSignal) {
+        unregisterSignal.addEventListener('abort', () =>
+          local.onConnect.removeListener(_listener)
+        )
+      }
+    } else {
+      listenOnWebExtensionPort(local)
     }
   } else {
     const _listener = (event: MessageEvent<OsraMessage>) => {

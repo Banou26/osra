@@ -36,7 +36,9 @@ export const getTransferableObjects = (value: any): TransferableObject[] => {
 
 export type WebExtRuntime = typeof browser.runtime
 export type WebExtOnConnect = WebExtRuntime['onConnect']
+export type WebExtOnMessage = WebExtRuntime['onMessage']
 export type WebExtPort = ReturnType<WebExtRuntime['connect']>
+export type WebExtSender = NonNullable<WebExtPort['sender']>
 
 export const getWebExtensionGlobal = () => globalThis.browser ?? globalThis.chrome
 export const getWebExtensionRuntime = () => getWebExtensionGlobal().runtime

@@ -7,6 +7,7 @@ export type Context = {
   capabilities: Capabilities
   messagePort: MessagePort
   _rootMessagePort: MessagePort
+  unregisterContext: () => void
   localMessagePortProxys: Map<MessagePort, number>
   remoteMessagePortProxys: Map<number, MessagePort>
   localFunctions: WeakMap<Function, number>
@@ -14,8 +15,8 @@ export type Context = {
 }
 
 export const makeNewContext = (
-  { uuid, remoteUuid, capabilities }:
-  { uuid?: string, remoteUuid: string, capabilities: Capabilities }
+  { uuid, remoteUuid, capabilities, unregisterContext }:
+  { uuid?: string, remoteUuid: string, capabilities: Capabilities, unregisterContext: () => void }
 ) => {
   const { port1, port2 } = new MessageChannel()
 
@@ -25,6 +26,7 @@ export const makeNewContext = (
     capabilities,
     messagePort: port1,
     _rootMessagePort: port2,
+    unregisterContext,
     localMessagePortProxys: new Map<MessagePort, number>(),
     remoteMessagePortProxys: new Map<number, MessagePort>(),
     localFunctions: new WeakMap<Function, number>(),

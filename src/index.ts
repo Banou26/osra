@@ -6,11 +6,12 @@ import type {
 } from './types'
 import type { Capabilities, Context } from './utils'
 
-import { OSRA_MESSAGE_KEY } from './types'
+import { OSRA_MESSAGE_KEY, OSRA_MESSAGE_PROPERTY } from './types'
 import {
   probeCapabilities,
   registerLocalTargetListeners,
-  makeNewContext
+  makeNewContext,
+  postOsraMessage
 } from './utils'
 
 const startConnection = ({ capabilities, context }: { capabilities: Capabilities, context: Context }) => {
@@ -64,15 +65,20 @@ export const expose = async <T extends StructuredCloneTransferableProxiable>(
       ? globalThis.crypto.randomUUID() as string
       : undefined
 
-  const unregister = (remoteUuid: string) => {
-    contexts.delete(remoteUuid)
-  }
-
   const listener = async (message: OsraMessage) => {
     const { uuid: remoteUuid } = message
     const foundContext = contexts.get(remoteUuid)
-    const context = foundContext ?? makeNewContext({ remoteUuid, capabilities })
-    if (!foundContext) contexts.set(remoteUuid, context)
+    const context =
+      foundContext
+      ?? makeNewContext({
+        remoteUuid,
+        capabilities,
+        unregisterContext: () => contexts.delete(remoteUuid)
+      })
+    if (!foundContext) {
+      contexts.set(remoteUuid, context)
+      startConnection({ capabilities, context })
+    }
     context._rootMessagePort.postMessage(message)
   }
 
@@ -84,15 +90,16 @@ export const expose = async <T extends StructuredCloneTransferableProxiable>(
     unregisterSignal
   })
 
-  if (remote) {
-    remote.postMessage(
-      JSON.stringify({
-        [OSRA_MESSAGE_KEY]: true,
+  if (remote && initialUuid) {
+    postOsraMessage(
+      remote,
+      {
+        [OSRA_MESSAGE_PROPERTY]: true,
         key,
         name,
         type: 'announce',
         uuid: initialUuid,
-      })
+      }
     )
   }
 
