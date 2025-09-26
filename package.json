@@ -17,7 +17,9 @@
     "test": "npx playwright test",
     "test-watch": "set PWTEST_WATCH=1 & npx playwright test",
     "test-watch-headful": "npx playwright test --ui",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "linux-run-playwright": "docker run --name playwright -p 8010:8010 --rm --init -it mcr.microsoft.com/playwright:v1.55.1-noble /bin/sh -c \"cd /home/pwuser && npx -y playwright@1.55.1 run-server --port 8010 --host 0.0.0.0\"",
+    "linux-test": "PW_TEST_CONNECT_WS_ENDPOINT=ws://127.0.0.1:8010/ npx playwright test"
   },
   "repository": {
     "type": "git",
