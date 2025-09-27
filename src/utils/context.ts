@@ -1,10 +1,10 @@
 import type { OsraMessage } from '../types'
-import type { Capabilities } from './capabilities'
+import type { PlatformCapabilities } from './capabilities'
 
 export type Context = {
   uuid: string
   remoteUuid: string
-  capabilities: Capabilities
+  capabilities: PlatformCapabilities
   messagePort: MessagePort
   _rootMessagePort: MessagePort
   unregisterContext: () => void
@@ -16,7 +16,7 @@ export type Context = {
 
 export const makeNewContext = (
   { uuid, remoteUuid, capabilities, unregisterContext }:
-  { uuid?: string, remoteUuid: string, capabilities: Capabilities, unregisterContext: () => void }
+  { uuid?: string, remoteUuid: string, capabilities: PlatformCapabilities, unregisterContext: () => void }
 ) => {
   const { port1, port2 } = new MessageChannel()
 

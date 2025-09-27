@@ -1,19 +1,20 @@
-import { WebExtPort, WebExtRuntime } from "./utils"
+import { WebExtOnConnect, WebExtOnMessage, WebExtPort, WebExtRuntime } from "./utils"
 
-export const OSRA_MESSAGE_PROPERTY = '__OSRA__' as const
-export const OSRA_MESSAGE_KEY = '__OSRA_DEFAULT_KEY__' as const
-export const OSRA_PROXY = '__OSRA_PROXY__' as const
+export const OSRA_KEY = '__OSRA_KEY__' as const
+export const OSRA_DEFAULT_KEY = '__OSRA_DEFAULT_KEY__' as const
+export const OSRA_REVIVABLE = '__OSRA_REVIVABLE__' as const
 
-export type JsonClone =
+export type Jsonable =
   | boolean
   | null
   | number
   | string
-  | { [key: string]: JsonClone }
-  | Array<JsonClone>
+  | { [key: string]: Jsonable }
+  | Array<Jsonable>
 
-export type StructuredClone =
-  | JsonClone
+export type Structurable =
+  | Jsonable
+  /** not really structureable but here for convenience */
   | void
   | undefined
   | BigInt
@@ -26,12 +27,12 @@ export type StructuredClone =
   | ArrayBufferView
   | ImageBitmap
   | ImageData
-  | { [key: string]: StructuredClone }
-  | Array<StructuredClone>
-  | Map<StructuredClone, StructuredClone>
-  | Set<StructuredClone>
+  | { [key: string]: Structurable }
+  | Array<Structurable>
+  | Map<Structurable, Structurable>
+  | Set<Structurable>
 
-export type TransferableObject =
+export type Transferable =
   | SharedArrayBuffer
   | ArrayBuffer
   | MessagePort
@@ -39,69 +40,78 @@ export type TransferableObject =
   | WritableStream
   | TransformStream
 
-export type StructuredCloneTransferable =
-  | StructuredClone
-  | TransferableObject
-  | { [key: string]: StructuredCloneTransferable }
-  | Array<StructuredCloneTransferable>
-  | Map<StructuredCloneTransferable, StructuredCloneTransferable>
-  | Set<StructuredCloneTransferable>
-
-export type Proxiable =
-  | Promise<StructuredCloneTransferableProxiable>
-  | Error
+export type Revivable =
+  | Promise<Messageable>
   | MessagePort
   | ReadableStream
-  | ((...args: any[]) => Promise<StructuredCloneTransferableProxiable>)
-  | { [key: string]: StructuredCloneTransferableProxiable }
-  | Array<StructuredCloneTransferableProxiable>
-  | Map<StructuredCloneTransferableProxiable, StructuredCloneTransferableProxiable>
-  | Set<StructuredCloneTransferableProxiable>
+  | Date
+  | Error
+  | ((...args: Messageable[]) => Promise<Messageable>)
 
-export type StructuredCloneTransferableProxiable = Proxiable | StructuredCloneTransferable
+export type Messageable =
+  | Structurable
+  | Transferable
+  | Revivable
+  | { [key: string]: Messageable }
+  | Array<Messageable>
+  | Map<Messageable, Messageable>
+  | Set<Messageable>
 
-type PortOrJsonPort<JsonOnly extends boolean = boolean> = JsonOnly extends true ? { portId: string } : { port: MessagePort }
-type StructuredCloneDataOrJsonData<JsonOnly extends boolean> = JsonOnly extends true ? JsonClone : StructuredClone
+export type Proxy =
+  { [OSRA_REVIVABLE]: true }
 
-export type FunctionProxy<JsonOnly extends boolean = boolean> = ({ type: 'function' } & PortOrJsonPort<JsonOnly>)
-export type MessagePortProxy<JsonOnly extends boolean = boolean> = ({ type: 'messagePort' } & PortOrJsonPort<JsonOnly>)
-export type ProxyPromiseType<JsonOnly extends boolean = boolean> = ({ type: 'promise' } & PortOrJsonPort<JsonOnly>)
-export type ProxyReadableStreamType<JsonOnly extends boolean = boolean> = ({ type: 'readableStream' } & PortOrJsonPort<JsonOnly>)
-export type ProxyErrorType = ({ type: 'error', message: string, stack?: string })
+export type MessageBase = {
+  [OSRA_KEY]: string
+  uuid: string
+  name?: string
+}
 
-export type Proxy<JsonOnly extends boolean = boolean> =
-  { [OSRA_PROXY]: true } & (
-    | FunctionProxy<JsonOnly>
-    | MessagePortProxy<JsonOnly>
-    | ProxyPromiseType<JsonOnly>
-    | ProxyReadableStreamType<JsonOnly>
-    | ProxyErrorType
-  )
-export type OsraMessage =
-  {
-    [OSRA_MESSAGE_PROPERTY]: true
-    key: string
-    uuid: string
-    name?: string
-  } & (
-    | {
-      type: 'announce'
+export type MessageVariant =
+  | {
+    type: 'announce'
+    /** Only set when acknowledging a remote announcement */
+    remoteUuid?: string
+  }
+  | {
+    /** uuid already taken, try announcing with another one */
+    type: 'reject-uuid-taken'
+    remoteUuid: string
+  }
+  | {
+    type: 'init'
+    data: Messageable
+    remoteUuid: string
+  }
+  /** message not needed if transferring MessagePort is supported */
+  | {
+    type: 'message'
+    portId: string
+    data: Messageable
+    remoteUuid: string
+  }
+  /** message not needed if transferring MessagePort is supported */
+  | {
+    type: 'port-closed'
+    portId: string
+  }
 
-      uuid: string
-      /** Only set when acknowledging a remote announcement */
-      remoteUuid?: string
-    }
-    | {
-      /** uuid already taken, try announcing with another one */
-      type: 'reject-uuid-taken'
-      remoteUuid: string
-    }
-    | { type: 'init', data: StructuredCloneTransferable }
-    | { type: 'message', portId: string, data: any } // message not needed if transferring MessagePort is supported
-    | { type: 'port-closed', portId: string } // message not needed if transferring MessagePort is supported
-  )
+export type Message = MessageBase & MessageVariant
 
-export type RemoteTarget = Window | ServiceWorker | Worker | MessagePort | WebExtPort
-export type RemoteTargetOrFunction = RemoteTarget | ((osraMessage: OsraMessage, transferables?: Transferable[]) => void)
-export type LocalTarget = WindowEventHandlers | ServiceWorkerContainer | Worker | SharedWorker | WebExtRuntime | WebExtPort
-export type LocalTargetOrFunction = LocalTarget | ((listener: (event: OsraMessage) => void) => void)
+export type CustomTransport = {
+  receive: ((listener: (event: Message) => void) => void),
+  emit: ((message: Message, transferables?: Transferable[]) => void)
+}
+
+export type Transport =
+  | Window
+  | ServiceWorker
+  | Worker
+  | SharedWorker
+  | MessagePort
+  | WebSocket
+  | WebExtPort
+  | WebExtOnConnect
+  | WebExtOnMessage
+  | CustomTransport
+  | Pick<CustomTransport, 'receive'>
+  | Pick<CustomTransport, 'emit'>
