@@ -1,6 +1,6 @@
 import { TransferableObject } from "../types"
 
-export type Capabilities = {
+export type PlatformCapabilities = {
   jsonOnly: boolean
   messagePort: boolean
   arrayBuffer: boolean
@@ -12,7 +12,7 @@ export const isClonable = (value: any) =>
   globalThis.SharedArrayBuffer && value instanceof globalThis.SharedArrayBuffer ? true
   : false
 
-export const isTransferable = (value: any) =>
+export const isTransferable = (value: any): value is TransferableObject =>
   globalThis.ArrayBuffer && value instanceof globalThis.ArrayBuffer ? true
   : globalThis.MessagePort && value instanceof globalThis.MessagePort ? true
   : globalThis.ReadableStream && value instanceof globalThis.ReadableStream ? true
@@ -87,7 +87,7 @@ export const isWebExtensionRuntime = (value: any): value is WebExtRuntime => {
   )
 }
 
-const probeCapabilityUtil = <T>(value: T, transfer = false): Promise<T> => {
+const probePlatformCapabilityUtil = <T>(value: T, transfer = false): Promise<T> => {
   const tranferables = transfer ? getTransferableObjects(value) : []
   const { port1, port2 } = new MessageChannel()
   const result = new Promise<T>(resolve =>
@@ -101,19 +101,19 @@ const probeCapabilityUtil = <T>(value: T, transfer = false): Promise<T> => {
 
 const probeMessagePortTransfer = async () => {
   const { port1 } = new MessageChannel()
-  const port = await probeCapabilityUtil(port1, true)
+  const port = await probePlatformCapabilityUtil(port1, true)
   return port instanceof MessagePort
 }
 
 const probeArrayBufferClone = async () => {
   const buffer = new ArrayBuffer(1)
-  const arrayBuffer = await probeCapabilityUtil(buffer)
+  const arrayBuffer = await probePlatformCapabilityUtil(buffer)
   return arrayBuffer instanceof ArrayBuffer
 }
 
 const probeArrayBufferTransfer = async () => {
   const buffer = new ArrayBuffer(1)
-  const arrayBuffer = await probeCapabilityUtil(buffer, true)
+  const arrayBuffer = await probePlatformCapabilityUtil(buffer, true)
   return arrayBuffer instanceof ArrayBuffer
 }
 
@@ -124,11 +124,11 @@ const probeTransferableStream = async () => {
       controller.close()
     }
   })
-  const transferableStream = await probeCapabilityUtil(stream)
+  const transferableStream = await probePlatformCapabilityUtil(stream)
   return transferableStream instanceof ReadableStream
 }
 
-export const probeCapabilities = async (): Promise<Capabilities> => {
+export const probePlatformCapabilities = async (): Promise<PlatformCapabilities> => {
   const [
     messagePort,
     arrayBuffer,

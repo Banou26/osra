@@ -1,98 +1,102 @@
 import type {
-  OsraMessage,
+  Message,
   StructuredCloneTransferableProxiable,
-  LocalTargetOrFunction,
-  RemoteTargetOrFunction
+  MessageVariant,
+  Transport
 } from './types'
-import type { Capabilities, Context } from './utils'
+import type { PlatformCapabilities, Context } from './utils'
 
-import { OSRA_MESSAGE_KEY, OSRA_MESSAGE_PROPERTY } from './types'
+import { DEFAULT_KEY, OSRA_KEY } from './types'
 import {
-  probeCapabilities,
+  probePlatformCapabilities,
   registerLocalTargetListeners,
   makeNewContext,
-  postOsraMessage
+  postOsraMessage,
+  getTransferableObjects
 } from './utils'
 
-const startConnection = ({ capabilities, context }: { capabilities: Capabilities, context: Context }) => {
+const startConnection = ({ platformCapabilities, context }: { platformCapabilities: PlatformCapabilities, context: Context }) => {
   const { uuid, remoteUuid, messagePort } = context
 
-  messagePort.addEventListener('message', (event: MessageEvent<OsraMessage>) => {
+  messagePort.addEventListener('message', (event: MessageEvent<Message>) => {
 
   })
 }
 
 /**
- * If local is defined without a remote, starts listening for messages on the local target(window, worker, ect...)
- * - Service mode is a many-1 connection between our local listener and many remotes.
- *   - Mostly used with many to many communication channels like BroadcastChannel, SharedWorker, WebExtensions, etc...
- *   - Can pass initial values to remote contexts, useful for passing configs around.
- *   - Service mode can also handle stateless messages sent by broadcasts.
- * Otherwise, if local is not defined, stateless broadcast mode is used.
- * - Stateless broadcast is a 1-many message passing mechanism.
- *   - It is necessary for one off messages to many remotes where remotes can't respond.
- *   - One use case would be a websocket room where the owner can send messages to all members.
+ * Communication modes:
+ * - Service mode
+ * - Broadcast mode
+ * - Pair mode
  *
- * If the local and remote parameters are set, it will switch to pairing mode.
- * - Pairing mode establishes a 1-1 connection between the local and remote target.
- *    - Allows for passing initial values between the contexts easily.
- *    - Is especially useful for defining exports at the top level using TLA(top level await)
+ * Transport modes:
+ * - Jsonable mode
+ * - Messageable mode
  *
- * Capable of utilizing transferable objects for efficient data transfer in supported environments.
+ * Protocol mode:
+ * - Stateful mode
+ * - Stateless mode
  */
 export const expose = async <T extends StructuredCloneTransferableProxiable>(
   value: StructuredCloneTransferableProxiable,
   {
-    local,
+    transport,
     name,
-    remote,
     remoteName,
-    key = OSRA_MESSAGE_KEY,
+    key = DEFAULT_KEY,
     origin = '*',
     unregisterSignal,
-    capabilities: _capabilities
+    platformCapabilities: _platformCapabilities
   }: {
-    local: LocalTargetOrFunction
+    transport: Transport
+    stateless?: boolean
     name?: string
-    remote?: RemoteTargetOrFunction
     remoteName?: string
     key?: string
-    origin?: string,
-    unregisterSignal?: AbortSignal,
-    capabilities?: Capabilities
+    origin?: string
+    unregisterSignal?: AbortSignal
+    platformCapabilities?: PlatformCapabilities
   }
 ): Promise<T> => {
-  const capabilities = _capabilities ?? await probeCapabilities()
+  const platformCapabilities = _platformCapabilities ?? await probePlatformCapabilities()
   const contexts = new Map<string, Context>()
 
   let initialUuid = globalThis.crypto.randomUUID() as string
 
-  const listener = async (message: OsraMessage) => {
+  const sendMessage = (message: MessageVariant) => {
+    if (!remote) throw new Error('No remote target provided')
+    const transferables = getTransferableObjects(message)
+    postOsraMessage(
+      remote,
+      {
+        [OSRA_KEY]: true,
+        key,
+        name,
+        uuid: initialUuid,
+        ...message
+      },
+      origin,
+      transferables
+    )
+  }
+
+  const listener = async (message: Message) => {
     const { uuid: remoteUuid } = message
     if (message.type === 'announce') {
       if (contexts.has(remoteUuid)) {
-        console.warn(`Context already exists for remoteUuid: ${remoteUuid}, connection rejected.`)
-        if (remote) {
-          postOsraMessage(
-            remote,
-            {
-              [OSRA_MESSAGE_PROPERTY]: true,
-              key,
-              uuid: initialUuid,
-              type: 'reject-uuid-taken',
-              remoteUuid
-            }
-          )
-        }
+        sendMessage({
+          type: 'reject-uuid-taken',
+          remoteUuid
+        })
         return
       }
       const context = makeNewContext({
         remoteUuid,
-        capabilities,
+        platformCapabilities,
         unregisterContext: () => contexts.delete(remoteUuid)
       })
       contexts.set(remoteUuid, context)
-      startConnection({ capabilities, context })
+      startConnection({ platformCapabilities, context })
     } else if (message.type === 'message') {
       const context = contexts.get(remoteUuid)
       if (!context) {
@@ -102,16 +106,7 @@ export const expose = async <T extends StructuredCloneTransferableProxiable>(
       context._rootMessagePort.postMessage(message)
     } else if (remote && message.type === 'reject-uuid-taken' && message.remoteUuid === initialUuid) {
       initialUuid = globalThis.crypto.randomUUID() as string
-      postOsraMessage(
-        remote,
-        {
-          [OSRA_MESSAGE_PROPERTY]: true,
-          key,
-          name,
-          type: 'announce',
-          uuid: initialUuid,
-        }
-      )
+      sendMessage({ type: 'announce' })
     }
   }
 
@@ -124,16 +119,7 @@ export const expose = async <T extends StructuredCloneTransferableProxiable>(
   })
 
   if (remote) {
-    postOsraMessage(
-      remote,
-      {
-        [OSRA_MESSAGE_PROPERTY]: true,
-        key,
-        name,
-        type: 'announce',
-        uuid: initialUuid,
-      }
-    )
+    sendMessage({ type: 'announce' })
   }
 
   return undefined as unknown as T
