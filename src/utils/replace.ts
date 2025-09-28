@@ -1,12 +1,12 @@
-import type { StructuredCloneTransferableProxiable } from '../types'
+import type { Messageable } from '../types'
 
 export const replaceRecursive = <
-  T extends StructuredCloneTransferableProxiable
+  T extends Messageable
 >(
   value: T,
-  replace: (value: StructuredCloneTransferableProxiable) => StructuredCloneTransferableProxiable,
+  replace: (value: Messageable) => Messageable,
   replaceLast: boolean = false
-): StructuredCloneTransferableProxiable => {
+): Messageable => {
   const replacedValue =
     replaceLast
       ? value
@@ -18,7 +18,7 @@ export const replaceRecursive = <
       Object.fromEntries(
         Object
           .entries(replacedValue)
-          .map(([key, value]: [string, StructuredCloneTransferableProxiable]) => [
+          .map(([key, value]: [string, Messageable]) => [
             key,
             replaceRecursive(value, replace, replaceLast)
           ])

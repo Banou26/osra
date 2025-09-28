@@ -1,4 +1,4 @@
-import type { WebExtOnConnect, WebExtOnMessage, WebExtPort, WebExtRuntime } from './utils/type-guards'
+import type { WebExtOnConnect, WebExtOnMessage, WebExtPort, WebExtRuntime, WebExtSender } from './utils/type-guards'
 
 export const OSRA_KEY = '__OSRA_KEY__' as const
 export const OSRA_DEFAULT_KEY = '__OSRA_DEFAULT_KEY__' as const
@@ -32,13 +32,13 @@ export type Structurable =
   | Map<Structurable, Structurable>
   | Set<Structurable>
 
-export type Transferable =
-  | SharedArrayBuffer
-  | ArrayBuffer
-  | MessagePort
-  | ReadableStream
-  | WritableStream
-  | TransformStream
+// export type Transferable =
+//   | SharedArrayBuffer
+//   | ArrayBuffer
+//   | MessagePort
+//   | ReadableStream
+//   | WritableStream
+//   | TransformStream
 
 export type Revivable =
   | Promise<Messageable>
@@ -97,10 +97,20 @@ export type MessageVariant<JsonOnly extends boolean = false> =
 
 export type Message<JsonOnly extends boolean = false> = MessageBase & MessageVariant<JsonOnly>
 
-export type CustomTransport = {
-  receive: ReceivePlatformTransport | ((listener: (event: Message) => void) => void),
-  emit: EmitPlatformTransport | ((message: Message, transferables?: Transferable[]) => void)
+export type MessageContext = {
+  port?: MessagePort | WebExtPort
+  sender?: WebExtSender
+  receiveTransport?: ReceivePlatformTransport
+  source?: MessageEventSource | null
 }
+
+export type CustomTransport =
+  | {
+    receive: ReceivePlatformTransport | ((listener: (event: Message, messageContext: MessageContext) => void) => void)
+    emit: EmitPlatformTransport | ((message: Message, transferables?: Transferable[]) => void)
+  }
+  | { receive: ReceivePlatformTransport | ((listener: (event: Message, messageContext: MessageContext) => void) => void) }
+  | { emit: EmitPlatformTransport | ((message: Message, transferables?: Transferable[]) => void) }
 
 export type EmitJsonPlatformTransport =
   | WebSocket
@@ -136,8 +146,9 @@ export type PlatformTransport =
   | EmitPlatformTransport
   | ReceivePlatformTransport
 
+export type EmitTransport = EmitPlatformTransport & Extract<CustomTransport, { emit: any }>
+export type ReceiveTransport = ReceivePlatformTransport & Extract<CustomTransport, { receive: any }>
+
 export type Transport =
   | PlatformTransport
   | CustomTransport
-  | Pick<CustomTransport, 'receive'>
-  | Pick<CustomTransport, 'emit'>

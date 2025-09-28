@@ -34,19 +34,6 @@ export const isTransferable = (value: any): value is Transferable =>
   : globalThis.ImageBitmap && value instanceof globalThis.ImageBitmap ? true
   : false
 
-export const getTransferableObjects = (value: any): Transferable[] => {
-  const transferables: Transferable[] = []
-  const recurse = (value: any): any =>
-    isClonable(value) ? undefined
-    : isTransferable(value) ? transferables.push(value)
-    : Array.isArray(value) ? value.map(recurse)
-    : value && typeof value === 'object' ? Object.values(value).map(recurse)
-    : undefined
-
-  recurse(value)
-  return transferables
-}
-
 export type WebExtRuntime = typeof browser.runtime
 export const isWebExtensionRuntime = (value: any): value is WebExtRuntime => {
   const runtime = getWebExtensionRuntime()
@@ -78,6 +65,8 @@ export const isWebExtensionPort = (value: any, connectPort: boolean = false): va
     )
   )
 }
+
+export type WebExtSender = NonNullable<WebExtPort['sender']>
 
 export type WebExtOnConnect = WebExtRuntime['onConnect']
 export const isWebExtensionOnConnect = (value: any): value is WebExtOnConnect =>
@@ -111,60 +100,64 @@ export const isWindow = (value: any): value is Window => {
   )
 }
 
-export type IsTransportEmitJsonOnly<T extends Transport> = T extends EmitJsonPlatformTransport ? true : false
-export const isTransportEmitJsonOnly = (value: any): value is EmitJsonPlatformTransport =>
+export type IsEmitJsonOnlyTransport<T extends Transport> = T extends EmitJsonPlatformTransport ? true : false
+export const isEmitJsonOnlyTransport = (value: any): value is EmitJsonPlatformTransport =>
      isWebSocket(value)
   || isWebExtensionPort(value)
 
-export type IsTransportReceiveJsonOnly<T extends Transport> = T extends ReceiveJsonPlatformTransport ? true : false
-export const isTransportReceiveJsonOnly = (value: any): value is ReceiveJsonPlatformTransport =>
+export type IsReceiveJsonOnlyTransport<T extends Transport> = T extends ReceiveJsonPlatformTransport ? true : false
+export const isReceiveJsonOnlyTransport = (value: any): value is ReceiveJsonPlatformTransport =>
      isWebSocket(value)
   || isWebExtensionPort(value)
   || isWebExtensionOnConnect(value)
   || isWebExtensionOnMessage(value)
 
-export type IsTransportJsonOnly<T extends Transport> = T extends JsonPlatformTransport ? true : false
-export const isTransportJsonOnly = (value: any): value is JsonPlatformTransport =>
-     isTransportEmitJsonOnly(value)
-  || isTransportReceiveJsonOnly(value)
+export type IsJsonOnlyTransport<T extends Transport> = T extends JsonPlatformTransport ? true : false
+export const isJsonOnlyTransport = (value: any): value is JsonPlatformTransport =>
+     isEmitJsonOnlyTransport(value)
+  || isReceiveJsonOnlyTransport(value)
 
-export type IsTransportEmitOnly<T extends Transport> = T extends EmitPlatformTransport ? true : false
-export const isTransportEmitOnly = (value: any): value is EmitPlatformTransport =>
-    isTransportEmitJsonOnly(value)
+export type IsEmitTransport<T extends Transport> = T extends EmitPlatformTransport ? true : false
+export const isEmitTransport = (value: any): value is EmitPlatformTransport =>
+    isEmitJsonOnlyTransport(value)
   || isWindow(value)
   || isServiceWorkerContainer(value)
   || isWorker(value)
   || isSharedWorker(value)
   || isMessagePort(value)
 
-export type IsTransportReceiveOnly<T extends Transport> = T extends ReceivePlatformTransport ? true : false
-export const isTransportReceiveOnly = (value: any): value is ReceivePlatformTransport =>
-    isTransportReceiveJsonOnly(value)
+export type IsReceiveTransport<T extends Transport> = T extends ReceivePlatformTransport ? true : false
+export const isReceiveTransport = (value: any): value is ReceivePlatformTransport =>
+    isReceiveJsonOnlyTransport(value)
   || isWindow(value)
   || isServiceWorkerContainer(value)
   || isWorker(value)
   || isSharedWorker(value)
   || isMessagePort(value)
 
-export type IsTransportCustom<T extends Transport> = T extends CustomTransport ? true : false
-export const isTransportCustom = (value: any): value is CustomTransport =>
+export type IsCustomTransport<T extends Transport> = T extends CustomTransport ? true : false
+export const isCustomTransport = (value: any): value is CustomTransport =>
   Boolean(
     value
     && typeof value === 'object'
-    && (value as CustomTransport).emit
     && (
-      isTransportEmitOnly((value as CustomTransport).emit)
-      || typeof (value as CustomTransport).emit === 'function'
+      'emit' in value
+      && (
+        isEmitTransport(value.emit)
+        || typeof value.emit === 'function'
+      )
     )
-    && (value as CustomTransport).receive
     && (
-      isTransportReceiveOnly((value as CustomTransport).receive)
-      || typeof (value as CustomTransport).receive === 'function'
+      'receive' in value
+      && (
+        isReceiveTransport(value.receive)
+        || typeof value.receive === 'function'
+      )
     )
   )
 
 export const isTransport = (value: any): value is Transport =>
-     isTransportJsonOnly(value)
-  || isTransportEmitOnly(value)
-  || isTransportReceiveOnly(value)
-  || isTransportCustom(value)
+     isJsonOnlyTransport(value)
+  || isEmitTransport(value)
+  || isReceiveTransport(value)
+  || isCustomTransport(value)
