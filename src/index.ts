@@ -1,27 +1,22 @@
 import type {
   Message,
+  MessageContext,
   MessageVariant,
   Messageable,
   Transport
 } from './types'
-import type { PlatformCapabilities, Context } from './utils'
+import type { PlatformCapabilities, ConnectionContext, Connection } from './utils'
 
 import { OSRA_DEFAULT_KEY, OSRA_KEY } from './types'
 import {
   probePlatformCapabilities,
   registerOsraMessageListener,
-  makeNewContext,
   sendOsraMessage,
-  getTransferableObjects
+  getTransferableObjects,
+  startConnection,
+  isReceiveTransport,
+  isEmitTransport
 } from './utils'
-
-const startConnection = ({ platformCapabilities, context }: { platformCapabilities: PlatformCapabilities, context: Context }) => {
-  const { uuid, remoteUuid, messagePort } = context
-
-  messagePort.addEventListener('message', (event: MessageEvent<Message>) => {
-
-  })
-}
 
 /**
  * Communication modes:
@@ -37,7 +32,7 @@ const startConnection = ({ platformCapabilities, context }: { platformCapabiliti
  * - Stateful mode
  * - Stateless mode
  */
-export const expose = async <JsonOnly extends boolean, T extends Messageable>(
+export const expose = async <T extends Messageable>(
   value: Messageable,
   {
     transport,
@@ -59,7 +54,7 @@ export const expose = async <JsonOnly extends boolean, T extends Messageable>(
   }
 ): Promise<T> => {
   const platformCapabilities = _platformCapabilities ?? await probePlatformCapabilities()
-  const contexts = new Map<string, Context>()
+  const connections = new Map<string, Connection>()
 
   let initialUuid = globalThis.crypto.randomUUID() as string
 
@@ -68,8 +63,7 @@ export const expose = async <JsonOnly extends boolean, T extends Messageable>(
     sendOsraMessage(
       transport,
       {
-        [OSRA_KEY]: true,
-        key,
+        [OSRA_KEY]: key,
         name,
         uuid: initialUuid,
         ...message
@@ -79,45 +73,46 @@ export const expose = async <JsonOnly extends boolean, T extends Messageable>(
     )
   }
 
-  const listener = async (message: Message) => {
+  const listener = async (message: Message, messageContext: MessageContext) => {
     const { uuid: remoteUuid } = message
     if (message.type === 'announce') {
-      if (contexts.has(remoteUuid)) {
+      if (connections.has(remoteUuid)) {
         sendMessage({
           type: 'reject-uuid-taken',
           remoteUuid
         })
         return
       }
-      const context = makeNewContext({
+      const connection = startConnection({
         remoteUuid,
         platformCapabilities,
-        unregisterContext: () => contexts.delete(remoteUuid)
+        unregisterContext: () => connections.delete(remoteUuid)
       })
-      contexts.set(remoteUuid, context)
-      startConnection({ platformCapabilities, context })
+      connections.set(remoteUuid, connection)
     } else if (message.type === 'message') {
-      const context = contexts.get(remoteUuid)
-      if (!context) {
+      const connection = connections.get(remoteUuid)
+      if (!connection) {
         console.error(`Context not found for remoteUuid: ${remoteUuid}`)
         return
       }
-      context._rootMessagePort.postMessage(message)
+      connection._rootMessagePort.postMessage(message)
     } else if (remote && message.type === 'reject-uuid-taken' && message.remoteUuid === initialUuid) {
       initialUuid = globalThis.crypto.randomUUID() as string
       sendMessage({ type: 'announce' })
     }
   }
 
-  registerOsraMessageListener({
-    listener,
-    local,
-    remoteName,
-    key,
-    unregisterSignal
-  })
+  if (isReceiveTransport(transport)) {
+    registerOsraMessageListener({
+      listener,
+      transport,
+      remoteName,
+      key,
+      unregisterSignal
+    })
+  }
 
-  if (remote) {
+  if (isEmitTransport(transport)) {
     sendMessage({ type: 'announce' })
   }
 

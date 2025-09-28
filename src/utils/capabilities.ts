@@ -1,6 +1,4 @@
-import type { Transferable } from '../types'
-
-import { getTransferableObjects } from './platform'
+import { getTransferableObjects } from './messaging'
 
 export type PlatformCapabilities = {
   jsonOnly: boolean

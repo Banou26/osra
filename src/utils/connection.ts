@@ -1,9 +1,10 @@
+import type { Message } from '../types'
 import type { PlatformCapabilities } from './capabilities'
 
-export type Context = {
+export type ConnectionContext = {
   uuid: string
   remoteUuid: string
-  capabilities: PlatformCapabilities
+  platformCapabilities: PlatformCapabilities
   messagePort: MessagePort
   _rootMessagePort: MessagePort
   unregisterContext: () => void
@@ -13,16 +14,16 @@ export type Context = {
   remoteFunctions: Map<number, Function>
 }
 
-export const makeNewContext = (
-  { uuid, remoteUuid, capabilities, unregisterContext }:
-  { uuid?: string, remoteUuid: string, capabilities: PlatformCapabilities, unregisterContext: () => void }
+export const makeNewConnectionContext = (
+  { uuid, remoteUuid, platformCapabilities, unregisterContext }:
+  { uuid?: string, remoteUuid: string, platformCapabilities: PlatformCapabilities, unregisterContext: () => void }
 ) => {
   const { port1, port2 } = new MessageChannel()
 
   return ({
     uuid: uuid ?? globalThis.crypto.randomUUID() as string,
     remoteUuid,
-    capabilities,
+    platformCapabilities,
     messagePort: port1,
     _rootMessagePort: port2,
     unregisterContext,
@@ -30,5 +31,19 @@ export const makeNewContext = (
     remoteMessagePortProxys: new Map<number, MessagePort>(),
     localFunctions: new WeakMap<Function, number>(),
     remoteFunctions: new Map<number, Function>()
-  }) satisfies Context
+  }) satisfies ConnectionContext
 }
+
+
+export const startConnection = (
+  { platformCapabilities, context }:
+  { platformCapabilities: PlatformCapabilities, context: ConnectionContext }
+) => {
+  const { uuid, remoteUuid, messagePort } = context
+
+  messagePort.addEventListener('message', (event: MessageEvent<Message>) => {
+
+  })
+}
+
+export type Connection = ReturnType<typeof startConnection>
