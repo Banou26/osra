@@ -2,13 +2,13 @@ import type { Context } from './context'
 import type {
   StructuredCloneTransferableProxiable,
   MessagePortProxy,
-  Proxy,
+  Revivable,
   FunctionProxy
 } from '../types'
 
 import { OSRA_PROXY } from '../types'
 
-const isProxy = (value: StructuredCloneTransferableProxiable): value is Proxy =>
+const isProxy = (value: StructuredCloneTransferableProxiable): value is Revivable =>
   Boolean(
     value
     && typeof value === 'object'

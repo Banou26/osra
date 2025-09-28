@@ -1,4 +1,6 @@
-import { TransferableObject } from "../types"
+import type { Transferable } from '../types'
+
+import { getTransferableObjects } from './platform'
 
 export type PlatformCapabilities = {
   jsonOnly: boolean
@@ -6,85 +8,6 @@ export type PlatformCapabilities = {
   arrayBuffer: boolean
   transferable: boolean
   transferableStream: boolean
-}
-
-export const isClonable = (value: any) =>
-  globalThis.SharedArrayBuffer && value instanceof globalThis.SharedArrayBuffer ? true
-  : false
-
-export const isTransferable = (value: any): value is TransferableObject =>
-  globalThis.ArrayBuffer && value instanceof globalThis.ArrayBuffer ? true
-  : globalThis.MessagePort && value instanceof globalThis.MessagePort ? true
-  : globalThis.ReadableStream && value instanceof globalThis.ReadableStream ? true
-  : globalThis.WritableStream && value instanceof globalThis.WritableStream ? true
-  : globalThis.TransformStream && value instanceof globalThis.TransformStream ? true
-  : globalThis.ImageBitmap && value instanceof globalThis.ImageBitmap ? true
-  : false
-
-export const getTransferableObjects = (value: any): TransferableObject[] => {
-  const transferables: TransferableObject[] = []
-  const recurse = (value: any): any =>
-    isClonable(value) ? undefined
-    : isTransferable(value) ? transferables.push(value)
-    : Array.isArray(value) ? value.map(recurse)
-    : value && typeof value === 'object' ? Object.values(value).map(recurse)
-    : undefined
-
-  recurse(value)
-  return transferables
-}
-
-export type WebExtRuntime = typeof browser.runtime
-export type WebExtOnConnect = WebExtRuntime['onConnect']
-export type WebExtOnMessage = WebExtRuntime['onMessage']
-export type WebExtPort = ReturnType<WebExtRuntime['connect']>
-export type WebExtSender = NonNullable<WebExtPort['sender']>
-
-export const getWebExtensionGlobal = () => globalThis.browser ?? globalThis.chrome
-export const getWebExtensionRuntime = () => getWebExtensionGlobal().runtime
-
-export const isWebExtensionOnConnect = (value: any): value is WebExtOnConnect =>
-  Boolean(
-    (value as WebExtOnConnect)
-    && (value as WebExtOnConnect).addListener
-    && (value as WebExtOnConnect).hasListener
-    && (value as WebExtOnConnect).removeListener
-  )
-
-export const isWindow = (value: any): value is Window => {
-  return Boolean(
-    (value as Window)
-    && value.document
-    && value.location
-    && value.navigator
-    && value.screen
-    && value.history
-  )
-}
-
-export const isWebExtensionPort = (value: any): value is WebExtPort => {
-  return Boolean(
-    (value as WebExtOnConnect)
-    && value.name
-    && value.disconnect
-    && value.postMessage
-    /**
-     * Only present on Port created through runtime.connect(),
-     * so we force using connections
-    */
-    && value.sender
-    && value.onMessage
-    && value.onDisconnect
-  )
-}
-
-export const isWebExtensionRuntime = (value: any): value is WebExtRuntime => {
-  const runtime = getWebExtensionRuntime()
-  return Boolean(
-    (value as WebExtOnConnect)
-    && isWebExtensionOnConnect(runtime.onConnect)
-    && runtime.id
-  )
 }
 
 const probePlatformCapabilityUtil = <T>(value: T, transfer = false): Promise<T> => {

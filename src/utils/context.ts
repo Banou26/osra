@@ -1,4 +1,3 @@
-import type { OsraMessage } from '../types'
 import type { PlatformCapabilities } from './capabilities'
 
 export type Context = {
