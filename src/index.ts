@@ -1,17 +1,17 @@
 import type {
   Message,
-  StructuredCloneTransferableProxiable,
   MessageVariant,
+  Messageable,
   Transport
 } from './types'
 import type { PlatformCapabilities, Context } from './utils'
 
-import { DEFAULT_KEY, OSRA_KEY } from './types'
+import { OSRA_DEFAULT_KEY, OSRA_KEY } from './types'
 import {
   probePlatformCapabilities,
-  registerLocalTargetListeners,
+  registerOsraMessageListener,
   makeNewContext,
-  postOsraMessage,
+  sendOsraMessage,
   getTransferableObjects
 } from './utils'
 
@@ -37,13 +37,13 @@ const startConnection = ({ platformCapabilities, context }: { platformCapabiliti
  * - Stateful mode
  * - Stateless mode
  */
-export const expose = async <T extends StructuredCloneTransferableProxiable>(
-  value: StructuredCloneTransferableProxiable,
+export const expose = async <JsonOnly extends boolean, T extends Messageable>(
+  value: Messageable,
   {
     transport,
     name,
     remoteName,
-    key = DEFAULT_KEY,
+    key = OSRA_DEFAULT_KEY,
     origin = '*',
     unregisterSignal,
     platformCapabilities: _platformCapabilities
@@ -64,10 +64,9 @@ export const expose = async <T extends StructuredCloneTransferableProxiable>(
   let initialUuid = globalThis.crypto.randomUUID() as string
 
   const sendMessage = (message: MessageVariant) => {
-    if (!remote) throw new Error('No remote target provided')
     const transferables = getTransferableObjects(message)
-    postOsraMessage(
-      remote,
+    sendOsraMessage(
+      transport,
       {
         [OSRA_KEY]: true,
         key,
@@ -110,7 +109,7 @@ export const expose = async <T extends StructuredCloneTransferableProxiable>(
     }
   }
 
-  registerLocalTargetListeners({
+  registerOsraMessageListener({
     listener,
     local,
     remoteName,

@@ -1,24 +1,20 @@
-import type { OsraMessage, LocalTargetOrFunction, RemoteTargetOrFunction } from '../types'
+import type { Message, LocalTargetOrFunction as Transport, RemoteTargetOrFunction, Transport } from '../types'
 
-import { OSRA_MESSAGE_KEY, OSRA_MESSAGE_PROPERTY } from '../types'
-import { isWebExtensionPort, isWebExtensionRuntime, isWindow, WebExtPort, WebExtSender } from './capabilities'
+import { OSRA_KEY } from '../types'
+import { isOsraMessage } from './type-guards'
 
-export const isOsraMessage = (message: any): message is OsraMessage =>
-  Boolean(
-    (message)
-    && (message as OsraMessage)[OSRA_MESSAGE_PROPERTY]
-    && (message as OsraMessage).key
-  )
+export const getWebExtensionGlobal = () => globalThis.browser ?? globalThis.chrome
+export const getWebExtensionRuntime = () => getWebExtensionGlobal().runtime
 
-export const checkOsraMessageKey = (message: any, key: string): message is OsraMessage =>
+export const checkOsraMessageKey = (message: any, key: string): message is Message =>
   isOsraMessage(message)
-  && message.key === key
+  && message[OSRA_KEY] === key
 
-export const registerLocalTargetListeners = (
-  { listener, local, remoteName, key = OSRA_MESSAGE_KEY, unregisterSignal }:
+export const registerOsraMessageListener = (
+  { listener, local, remoteName, key = OSRA_KEY, unregisterSignal }:
   {
-    listener: (message: OsraMessage) => Promise<void>
-    local: LocalTargetOrFunction
+    listener: (message: Message) => Promise<void>
+    local: Transport
     remoteName?: string
     key?: string
     unregisterSignal?: AbortSignal
@@ -55,7 +51,7 @@ export const registerLocalTargetListeners = (
       listenOnWebExtensionPort(local)
     }
   } else {
-    const _listener = (event: MessageEvent<OsraMessage>) => {
+    const _listener = (event: MessageEvent<Message>) => {
       if (!checkOsraMessageKey(event.data, key)) return
       if (remoteName && event.data.name !== remoteName) return
       listener(event.data)
@@ -69,9 +65,9 @@ export const registerLocalTargetListeners = (
   }
 }
 
-export const postOsraMessage = (
-  target: RemoteTargetOrFunction,
-  message: OsraMessage,
+export const sendOsraMessage = (
+  transport: Transport,
+  message: Message,
   origin = '*',
   transferables: Transferable[] = []
 ) => {

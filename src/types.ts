@@ -1,4 +1,4 @@
-import { WebExtOnConnect, WebExtOnMessage, WebExtPort, WebExtRuntime } from "./utils"
+import type { WebExtOnConnect, WebExtOnMessage, WebExtPort, WebExtRuntime } from './utils/type-guards'
 
 export const OSRA_KEY = '__OSRA_KEY__' as const
 export const OSRA_DEFAULT_KEY = '__OSRA_DEFAULT_KEY__' as const
@@ -66,7 +66,7 @@ export type MessageBase = {
   name?: string
 }
 
-export type MessageVariant =
+export type MessageVariant<JsonOnly extends boolean = false> =
   | {
     type: 'announce'
     /** Only set when acknowledging a remote announcement */
@@ -79,14 +79,14 @@ export type MessageVariant =
   }
   | {
     type: 'init'
-    data: Messageable
+    data: JsonOnly extends true ? Jsonable : Messageable
     remoteUuid: string
   }
   /** message not needed if transferring MessagePort is supported */
   | {
     type: 'message'
     portId: string
-    data: Messageable
+    data: JsonOnly extends true ? Jsonable : Messageable
     remoteUuid: string
   }
   /** message not needed if transferring MessagePort is supported */
@@ -95,23 +95,49 @@ export type MessageVariant =
     portId: string
   }
 
-export type Message = MessageBase & MessageVariant
+export type Message<JsonOnly extends boolean = false> = MessageBase & MessageVariant<JsonOnly>
 
 export type CustomTransport = {
-  receive: ((listener: (event: Message) => void) => void),
-  emit: ((message: Message, transferables?: Transferable[]) => void)
+  receive: ReceivePlatformTransport | ((listener: (event: Message) => void) => void),
+  emit: EmitPlatformTransport | ((message: Message, transferables?: Transferable[]) => void)
 }
 
-export type Transport =
+export type EmitJsonPlatformTransport =
+  | WebSocket
+  | WebExtPort
+
+export type ReceiveJsonPlatformTransport =
+  | WebSocket
+  | WebExtPort
+  | WebExtOnConnect
+  | WebExtOnMessage
+
+export type JsonPlatformTransport =
+  | EmitJsonPlatformTransport
+  | ReceiveJsonPlatformTransport
+
+export type EmitPlatformTransport =
+  | EmitJsonPlatformTransport
   | Window
   | ServiceWorker
   | Worker
   | SharedWorker
   | MessagePort
-  | WebSocket
-  | WebExtPort
-  | WebExtOnConnect
-  | WebExtOnMessage
+
+export type ReceivePlatformTransport =
+  | ReceiveJsonPlatformTransport
+  | Window
+  | ServiceWorker
+  | Worker
+  | SharedWorker
+  | MessagePort
+
+export type PlatformTransport =
+  | EmitPlatformTransport
+  | ReceivePlatformTransport
+
+export type Transport =
+  | PlatformTransport
   | CustomTransport
   | Pick<CustomTransport, 'receive'>
   | Pick<CustomTransport, 'emit'>
