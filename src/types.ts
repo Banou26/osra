@@ -94,7 +94,8 @@ export type MessageVariant<JsonOnly extends boolean = false> =
   /** message not needed if transferring MessagePort is supported */
   | {
     type: 'message'
-    remoteUuid: Uuid
+    /** Only set in bidirectional mode */
+    remoteUuid?: Uuid
     data: JsonOnly extends true ? Jsonable : Capable
     portId: string
   }

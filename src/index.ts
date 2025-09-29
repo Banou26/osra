@@ -6,19 +6,18 @@ import type {
   Capable,
   Transport
 } from './types'
-import type { PlatformCapabilities, Connection } from './utils'
+import type { PlatformCapabilities, BidirectionalConnection } from './utils'
 
 import { OSRA_DEFAULT_KEY, OSRA_KEY } from './types'
 import {
   probePlatformCapabilities,
   registerOsraMessageListener,
   sendOsraMessage,
-  getTransferableObjects,
-  startConnection,
+  startBidirectionalConnection,
   isReceiveTransport,
   isEmitTransport,
-  assertEmitTransport,
-  getTransferBoxes
+  getTransferBoxes,
+  startUnidirectionalEmittingConnection
 } from './utils'
 
 /**
@@ -51,7 +50,7 @@ export const expose = async <T extends Capable>(
   }
 ): Promise<T> => {
   const platformCapabilities = _platformCapabilities ?? await probePlatformCapabilities()
-  const connections = new Map<string, Connection>()
+  const connections = new Map<string, BidirectionalConnection>()
 
   let uuid = globalThis.crypto.randomUUID()
 
@@ -90,7 +89,7 @@ export const expose = async <T extends Capable>(
         )
         return
       }
-      const connection = startConnection({
+      const connection = startBidirectionalConnection({
         uuid,
         remoteUuid: message.uuid,
         platformCapabilities,
@@ -131,5 +130,17 @@ export const expose = async <T extends Capable>(
     sendMessage(transport, { type: 'announce' })
   }
 
-  return undefined as unknown as T
+  // Unidirectional emitting mode
+  if (isEmitTransport(transport) && !isReceiveTransport(transport)) {
+    const { proxy } = startUnidirectionalEmittingConnection<T>({
+      value,
+      uuid,
+      platformCapabilities,
+      send: (message: MessageVariant) => sendMessage(transport, message),
+      close: () => connections.delete(uuid)
+    })
+    return proxy
+  }
+
+  return  undefined as unknown as T
 }
