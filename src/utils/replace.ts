@@ -1,12 +1,12 @@
-import type { Messageable } from '../types'
+import type { Capable } from '../types'
 
 export const replaceRecursive = <
-  T extends Messageable
+  T extends Capable
 >(
   value: T,
-  replace: (value: Messageable) => Messageable,
+  replace: (value: Capable) => Capable,
   replaceLast: boolean = false
-): Messageable => {
+): Capable => {
   const replacedValue =
     replaceLast
       ? value
@@ -18,7 +18,7 @@ export const replaceRecursive = <
       Object.fromEntries(
         Object
           .entries(replacedValue)
-          .map(([key, value]: [string, Messageable]) => [
+          .map(([key, value]: [string, Capable]) => [
             key,
             replaceRecursive(value, replace, replaceLast)
           ])
