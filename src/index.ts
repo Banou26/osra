@@ -17,7 +17,8 @@ import {
   startConnection,
   isReceiveTransport,
   isEmitTransport,
-  assertEmitTransport
+  assertEmitTransport,
+  getTransferBoxes
 } from './utils'
 
 /**
@@ -55,7 +56,7 @@ export const expose = async <T extends Capable>(
   let uuid = globalThis.crypto.randomUUID()
 
   const sendMessage = (transport: EmitTransport, message: MessageVariant) => {
-    const transferables = getTransferableObjects(message)
+    const transferables = getTransferBoxes(message).map(box => box.value)
     sendOsraMessage(
       transport,
       {

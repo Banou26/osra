@@ -3,6 +3,7 @@ import type { WebExtOnConnect, WebExtOnMessage, WebExtPort, WebExtRuntime, WebEx
 export const OSRA_KEY = '__OSRA_KEY__' as const
 export const OSRA_DEFAULT_KEY = '__OSRA_DEFAULT_KEY__' as const
 export const OSRA_REVIVABLE = '__OSRA_REVIVABLE__' as const
+export const OSRA_BOX = '__OSRA_BOX__' as const
 
 export type Uuid = `${string}-${string}-${string}-${string}-${string}`
 
@@ -42,6 +43,11 @@ export type Structurable =
 //   | WritableStream
 //   | TransformStream
 
+export type TransferBox<T extends Transferable = Transferable> = {
+  [OSRA_BOX]: 'transfer'
+  value: T
+}
+
 export type Revivable =
   | Promise<Capable>
   | MessagePort
@@ -52,6 +58,7 @@ export type Revivable =
 
 export type Capable =
   | Structurable
+  | TransferBox
   | Transferable
   | Revivable
   | { [key: string]: Capable }
