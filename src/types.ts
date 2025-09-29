@@ -4,6 +4,8 @@ export const OSRA_KEY = '__OSRA_KEY__' as const
 export const OSRA_DEFAULT_KEY = '__OSRA_DEFAULT_KEY__' as const
 export const OSRA_REVIVABLE = '__OSRA_REVIVABLE__' as const
 
+export type Uuid = `${string}-${string}-${string}-${string}-${string}`
+
 export type Jsonable =
   | boolean
   | null
@@ -41,28 +43,28 @@ export type Structurable =
 //   | TransformStream
 
 export type Revivable =
-  | Promise<Messageable>
+  | Promise<Capable>
   | MessagePort
   | ReadableStream
   | Date
   | Error
-  | ((...args: Messageable[]) => Promise<Messageable>)
+  | ((...args: Capable[]) => Promise<Capable>)
 
-export type Messageable =
+export type Capable =
   | Structurable
   | Transferable
   | Revivable
-  | { [key: string]: Messageable }
-  | Array<Messageable>
-  | Map<Messageable, Messageable>
-  | Set<Messageable>
+  | { [key: string]: Capable }
+  | Array<Capable>
+  | Map<Capable, Capable>
+  | Set<Capable>
 
 export type Proxy =
   { [OSRA_REVIVABLE]: true }
 
 export type MessageBase = {
   [OSRA_KEY]: string
-  uuid: string
+  uuid: Uuid
   name?: string
 }
 
@@ -70,29 +72,34 @@ export type MessageVariant<JsonOnly extends boolean = false> =
   | {
     type: 'announce'
     /** Only set when acknowledging a remote announcement */
-    remoteUuid?: string
+    remoteUuid?: Uuid
   }
   | {
     /** uuid already taken, try announcing with another one */
     type: 'reject-uuid-taken'
-    remoteUuid: string
+    remoteUuid: Uuid
   }
   | {
     type: 'init'
-    data: JsonOnly extends true ? Jsonable : Messageable
-    remoteUuid: string
+    remoteUuid: Uuid
+    data: JsonOnly extends true ? Jsonable : Capable
   }
   /** message not needed if transferring MessagePort is supported */
   | {
     type: 'message'
+    remoteUuid: Uuid
+    data: JsonOnly extends true ? Jsonable : Capable
     portId: string
-    data: JsonOnly extends true ? Jsonable : Messageable
-    remoteUuid: string
   }
   /** message not needed if transferring MessagePort is supported */
   | {
-    type: 'port-closed'
-    portId: string
+    type: 'close'
+    remoteUuid: Uuid
+    /**
+     * Set when closing a revivable message port
+     * If unset, we are closing the entire connection
+     */
+    portId?: string
   }
 
 export type Message<JsonOnly extends boolean = false> = MessageBase & MessageVariant<JsonOnly>

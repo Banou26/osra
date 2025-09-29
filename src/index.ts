@@ -3,7 +3,7 @@ import type {
   Message,
   MessageContext,
   MessageVariant,
-  Messageable,
+  Capable,
   Transport
 } from './types'
 import type { PlatformCapabilities, Connection } from './utils'
@@ -21,21 +21,16 @@ import {
 } from './utils'
 
 /**
- * Communication modes:
- * - Service mode
- * - Broadcast mode
- * - Pair mode
+ * Protocol mode:
+ * - Bidirectional mode
+ * - Unidirectional mode
  *
  * Transport modes:
+ * - Capable mode
  * - Jsonable mode
- * - Messageable mode
- *
- * Protocol mode:
- * - Stateful mode
- * - Stateless mode
  */
-export const expose = async <T extends Messageable>(
-  value: Messageable,
+export const expose = async <T extends Capable>(
+  value: Capable,
   {
     transport,
     name,
@@ -46,7 +41,6 @@ export const expose = async <T extends Messageable>(
     platformCapabilities: _platformCapabilities
   }: {
     transport: Transport
-    stateless?: boolean
     name?: string
     remoteName?: string
     key?: string
@@ -58,7 +52,7 @@ export const expose = async <T extends Messageable>(
   const platformCapabilities = _platformCapabilities ?? await probePlatformCapabilities()
   const connections = new Map<string, Connection>()
 
-  let initialUuid = globalThis.crypto.randomUUID() as string
+  let uuid = globalThis.crypto.randomUUID()
 
   const sendMessage = (transport: EmitTransport, message: MessageVariant) => {
     const transferables = getTransferableObjects(message)
@@ -67,7 +61,7 @@ export const expose = async <T extends Messageable>(
       {
         [OSRA_KEY]: key,
         name,
-        uuid: initialUuid,
+        uuid,
         ...message
       },
       origin,
@@ -76,35 +70,49 @@ export const expose = async <T extends Messageable>(
   }
 
   const listener = async (message: Message, messageContext: MessageContext) => {
-    const { uuid: remoteUuid } = message
+    // Unidirectional mode
+    if (!isEmitTransport(transport)) {
+      // Handle non bidirectional based messages here
+      throw new Error('Unidirectional mode not implemented')
+    }
+    // Bidirectional mode
     if (message.type === 'announce') {
-      if (connections.has(remoteUuid)) {
-        assertEmitTransport(transport)
+      if (!message.remoteUuid) {
+        sendMessage(transport, { type: 'announce', remoteUuid: message.uuid })
+        return
+      }
+      if (message.remoteUuid !== uuid) return
+      if (connections.has(message.uuid)) {
         sendMessage(
           transport,
-          { type: 'reject-uuid-taken', remoteUuid }
+          { type: 'reject-uuid-taken', remoteUuid: message.uuid }
         )
         return
       }
       const connection = startConnection({
-        uuid: initialUuid,
-        remoteUuid,
+        uuid,
+        remoteUuid: message.uuid,
         platformCapabilities,
-        close: () => void connections.delete(remoteUuid)
+        send:
+          isEmitTransport(transport)
+            ? (message: MessageVariant) => sendMessage(transport, message)
+            : undefined,
+        close: () => void connections.delete(message.uuid)
       })
-      connections.set(remoteUuid, connection)
-    } else if (message.type === 'message') {
-      const connection = connections.get(remoteUuid)
+      connections.set(message.uuid, connection)
+    } else if (message.type === 'reject-uuid-taken') {
+      if (message.remoteUuid !== uuid) return
+      uuid = globalThis.crypto.randomUUID()
+      sendMessage(transport, { type: 'announce' })
+    } else {
+      if (message.remoteUuid !== uuid) return
+      const connection = connections.get(message.uuid)
       // We just drop the message if the remote uuid hasn't announced itself
       if (!connection) {
-        console.error(`Connection not found for remoteUuid: ${remoteUuid}`)
+        console.error(`Connection not found for remoteUuid: ${message.uuid}`)
         return
       }
       connection.receiveMessage(message, messageContext)
-    } else if (message.type === 'reject-uuid-taken' && message.remoteUuid === initialUuid) {
-      initialUuid = globalThis.crypto.randomUUID() as string
-      assertEmitTransport(transport)
-      sendMessage(transport, { type: 'announce' })
     }
   }
 
