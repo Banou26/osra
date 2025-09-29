@@ -1,13 +1,12 @@
 import type {
-    CustomEmitTransport,
-    CustomReceiveTransport,
+  CustomEmitTransport, CustomReceiveTransport,
   CustomTransport, EmitJsonPlatformTransport,
-  EmitPlatformTransport, EmitTransport, JsonPlatformTransport,
+  EmitTransport, JsonPlatformTransport,
   Message, ReceiveJsonPlatformTransport,
-  ReceivePlatformTransport, ReceiveTransport, Transport
+  ReceiveTransport, TransferBox, Transport
 } from '../types'
 
-import { OSRA_KEY } from '../types'
+import { OSRA_BOX, OSRA_KEY } from '../types'
 import { getWebExtensionRuntime } from './platform'
 
 export const isWebSocket = (value: any) => value instanceof WebSocket
@@ -35,6 +34,13 @@ export const isTransferable = (value: any): value is Transferable =>
   : globalThis.TransformStream && value instanceof globalThis.TransformStream ? true
   : globalThis.ImageBitmap && value instanceof globalThis.ImageBitmap ? true
   : false
+
+export const isTransferBox = (value: any): value is TransferBox<any> =>
+  Boolean(
+    value
+    && typeof value === 'object'
+    && (value as TransferBox<Transferable>)[OSRA_BOX] === 'transfer'
+  )
 
 export type WebExtRuntime = typeof browser.runtime
 export const isWebExtensionRuntime = (value: any): value is WebExtRuntime => {
