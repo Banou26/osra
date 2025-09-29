@@ -112,6 +112,9 @@ export type CustomTransport =
   | { receive: ReceivePlatformTransport | ((listener: (event: Message, messageContext: MessageContext) => void) => void) }
   | { emit: EmitPlatformTransport | ((message: Message, transferables?: Transferable[]) => void) }
 
+export type CustomEmitTransport = Extract<CustomTransport, { emit: any }>
+export type CustomReceiveTransport = Extract<CustomTransport, { receive: any }>
+
 export type EmitJsonPlatformTransport =
   | WebSocket
   | WebExtPort
