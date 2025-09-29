@@ -1,8 +1,10 @@
 import type {
+    CustomEmitTransport,
+    CustomReceiveTransport,
   CustomTransport, EmitJsonPlatformTransport,
-  EmitPlatformTransport, JsonPlatformTransport,
+  EmitPlatformTransport, EmitTransport, JsonPlatformTransport,
   Message, ReceiveJsonPlatformTransport,
-  ReceivePlatformTransport, Transport
+  ReceivePlatformTransport, ReceiveTransport, Transport
 } from '../types'
 
 import { OSRA_KEY } from '../types'
@@ -117,26 +119,36 @@ export const isJsonOnlyTransport = (value: any): value is JsonPlatformTransport 
      isEmitJsonOnlyTransport(value)
   || isReceiveJsonOnlyTransport(value)
 
-export type IsEmitTransport<T extends Transport> = T extends EmitPlatformTransport ? true : false
-export const isEmitTransport = (value: any): value is EmitPlatformTransport =>
+export type IsEmitTransport<T extends Transport> = T extends EmitTransport ? true : false
+export const isEmitTransport = (value: any): value is EmitTransport =>
     isEmitJsonOnlyTransport(value)
   || isWindow(value)
   || isServiceWorkerContainer(value)
   || isWorker(value)
   || isSharedWorker(value)
   || isMessagePort(value)
+  || isCustomEmitTransport(value)
 
-export type IsReceiveTransport<T extends Transport> = T extends ReceivePlatformTransport ? true : false
-export const isReceiveTransport = (value: any): value is ReceivePlatformTransport =>
+export function assertEmitTransport (transport: Transport): asserts transport is EmitTransport {
+  if (!isEmitTransport(transport)) throw new Error('Transport is not emitable')
+}
+
+
+export type IsReceiveTransport<T extends Transport> = T extends ReceiveTransport ? true : false
+export const isReceiveTransport = (value: any): value is ReceiveTransport =>
     isReceiveJsonOnlyTransport(value)
   || isWindow(value)
   || isServiceWorkerContainer(value)
   || isWorker(value)
   || isSharedWorker(value)
   || isMessagePort(value)
+  || isCustomReceiveTransport(value)
 
-export type IsCustomTransport<T extends Transport> = T extends CustomTransport ? true : false
-export const isCustomTransport = (value: any): value is CustomTransport =>
+export function assertReceiveTransport (transport: Transport): asserts transport is ReceiveTransport {
+  if (!isReceiveTransport(transport)) throw new Error('Transport is not receiveable')
+}
+
+export const isCustomEmitTransport = (value: any): value is CustomEmitTransport =>
   Boolean(
     value
     && typeof value === 'object'
@@ -147,6 +159,12 @@ export const isCustomTransport = (value: any): value is CustomTransport =>
         || typeof value.emit === 'function'
       )
     )
+  )
+
+export const isCustomReceiveTransport = (value: any): value is CustomReceiveTransport =>
+  Boolean(
+    value
+    && typeof value === 'object'
     && (
       'receive' in value
       && (
@@ -155,6 +173,11 @@ export const isCustomTransport = (value: any): value is CustomTransport =>
       )
     )
   )
+
+export type IsCustomTransport<T extends Transport> = T extends CustomTransport ? true : false
+export const isCustomTransport = (value: any): value is CustomTransport =>
+    isCustomEmitTransport(value)
+  || isCustomReceiveTransport(value)
 
 export const isTransport = (value: any): value is Transport =>
      isJsonOnlyTransport(value)

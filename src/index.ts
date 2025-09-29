@@ -1,11 +1,12 @@
 import type {
+  EmitTransport,
   Message,
   MessageContext,
   MessageVariant,
   Messageable,
   Transport
 } from './types'
-import type { PlatformCapabilities, ConnectionContext, Connection } from './utils'
+import type { PlatformCapabilities, Connection } from './utils'
 
 import { OSRA_DEFAULT_KEY, OSRA_KEY } from './types'
 import {
@@ -15,7 +16,8 @@ import {
   getTransferableObjects,
   startConnection,
   isReceiveTransport,
-  isEmitTransport
+  isEmitTransport,
+  assertEmitTransport
 } from './utils'
 
 /**
@@ -58,7 +60,7 @@ export const expose = async <T extends Messageable>(
 
   let initialUuid = globalThis.crypto.randomUUID() as string
 
-  const sendMessage = (message: MessageVariant) => {
+  const sendMessage = (transport: EmitTransport, message: MessageVariant) => {
     const transferables = getTransferableObjects(message)
     sendOsraMessage(
       transport,
@@ -77,28 +79,32 @@ export const expose = async <T extends Messageable>(
     const { uuid: remoteUuid } = message
     if (message.type === 'announce') {
       if (connections.has(remoteUuid)) {
-        sendMessage({
-          type: 'reject-uuid-taken',
-          remoteUuid
-        })
+        assertEmitTransport(transport)
+        sendMessage(
+          transport,
+          { type: 'reject-uuid-taken', remoteUuid }
+        )
         return
       }
       const connection = startConnection({
+        uuid: initialUuid,
         remoteUuid,
         platformCapabilities,
-        unregisterContext: () => connections.delete(remoteUuid)
+        close: () => void connections.delete(remoteUuid)
       })
       connections.set(remoteUuid, connection)
     } else if (message.type === 'message') {
       const connection = connections.get(remoteUuid)
+      // We just drop the message if the remote uuid hasn't announced itself
       if (!connection) {
-        console.error(`Context not found for remoteUuid: ${remoteUuid}`)
+        console.error(`Connection not found for remoteUuid: ${remoteUuid}`)
         return
       }
-      connection._rootMessagePort.postMessage(message)
-    } else if (remote && message.type === 'reject-uuid-taken' && message.remoteUuid === initialUuid) {
+      connection.receiveMessage(message, messageContext)
+    } else if (message.type === 'reject-uuid-taken' && message.remoteUuid === initialUuid) {
       initialUuid = globalThis.crypto.randomUUID() as string
-      sendMessage({ type: 'announce' })
+      assertEmitTransport(transport)
+      sendMessage(transport, { type: 'announce' })
     }
   }
 
@@ -113,7 +119,7 @@ export const expose = async <T extends Messageable>(
   }
 
   if (isEmitTransport(transport)) {
-    sendMessage({ type: 'announce' })
+    sendMessage(transport, { type: 'announce' })
   }
 
   return undefined as unknown as T
