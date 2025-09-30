@@ -169,6 +169,11 @@ export type MessageContext = {
   source?: MessageEventSource | null
 }
 
+export type MessageWithContext = {
+  message: Message
+  context: MessageContext
+}
+
 export type CustomTransport =
   | {
     receive: ReceivePlatformTransport | ((listener: (event: Message, messageContext: MessageContext) => void) => void)

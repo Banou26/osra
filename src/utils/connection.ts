@@ -1,5 +1,7 @@
-import type { Capable, ConnectionMessage, Message, MessageContext, MessageVariant, Uuid } from '../types'
+import type { Capable, ConnectionMessage, Message, MessageContext, MessageVariant, MessageWithContext, Revivable, RevivableVariantType, Uuid } from '../types'
 import type { PlatformCapabilities } from './capabilities'
+import { boxAllRevivables } from './messaging'
+import { revivableToType } from './type-guards'
 
 export type ConnectionContext =
   | { type: 'bidirectional', messagePort: MessagePort, connection: BidirectionalConnection }
@@ -27,8 +29,8 @@ export const startBidirectionalConnection = (
     initResolve = resolve
   })
 
-  receiveMessagePort.addEventListener('message', (event: MessageEvent<{ message: ConnectionMessage, messageContext: MessageContext }>) => {
-    const { message, messageContext } = event.data
+  receiveMessagePort.addEventListener('message', (event: MessageEvent<MessageWithContext>) => {
+    const { message, context } = event.data
     if (message.type === 'init') {
       initResolve(message)
       return
@@ -38,7 +40,30 @@ export const startBidirectionalConnection = (
   send({
     type: 'init',
     remoteUuid,
-    data: value
+    data:
+      boxAllRevivables(
+        value,
+        (value: Revivable) => {
+          const type = revivableToType(value)
+
+          if (type === 'messagePort') {
+            const messagePort = value as MessagePort
+            messagePort.addEventListener('message', (event: MessageEvent<MessageWithContext>) => {
+              const { message, context } = event.data
+              send({
+                type: 'message',
+                remoteUuid,
+                data: message,
+                context
+              })
+            })
+          }
+
+          return {
+            type
+          }
+        }
+      )
   })
 
   return {

@@ -17,7 +17,8 @@ import {
   isReceiveTransport,
   isEmitTransport,
   getTransferBoxes,
-  startUnidirectionalEmittingConnection
+  startUnidirectionalEmittingConnection,
+  getTransferableObjects
 } from './utils'
 
 /**
@@ -39,7 +40,7 @@ export const expose = async <T extends Capable>(
     origin = '*',
     unregisterSignal,
     platformCapabilities: _platformCapabilities,
-    boxAllTransferables,
+    transferAll,
   }: {
     transport: Transport
     name?: string
@@ -48,7 +49,7 @@ export const expose = async <T extends Capable>(
     origin?: string
     unregisterSignal?: AbortSignal
     platformCapabilities?: PlatformCapabilities
-    boxAllTransferables?: boolean
+    transferAll?: boolean
   }
 ): Promise<T> => {
   const platformCapabilities = _platformCapabilities ?? await probePlatformCapabilities()
@@ -77,10 +78,10 @@ export const expose = async <T extends Capable>(
   }
 
   const listener = async (message: Message, messageContext: MessageContext) => {
-    // Unidirectional mode
+    // Unidirectional receiving mode
     if (!isEmitTransport(transport)) {
       // Handle non bidirectional based messages here
-      throw new Error('Unidirectional mode not implemented')
+      throw new Error('Unidirectional receiving mode not implemented')
     }
     // Bidirectional mode
     if (message.type === 'announce') {
@@ -128,7 +129,9 @@ export const expose = async <T extends Capable>(
         return
       }
       if (connection.type !== 'unidirectional-emitting') {
-        connection.messagePort.postMessage()
+        const messageWithContext = { message, context: messageContext }
+        const transferables = getTransferableObjects(messageWithContext)
+        connection.messagePort.postMessage(messageWithContext, transferables)
       }
     }
   }
