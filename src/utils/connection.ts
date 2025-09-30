@@ -10,7 +10,7 @@ export type BidirectionalConnectionContext = ConnectionContext & { type: 'bidire
 export type UnidirectionalEmittingConnectionContext = ConnectionContext & { type: 'unidirectional-emitting' }
 export type UnidirectionalReceivingConnectionContext = ConnectionContext & { type: 'unidirectional-receiving' }
 
-export const startBidirectionalConnection = async (
+export const startBidirectionalConnection = (
   { value, uuid, remoteUuid, platformCapabilities, receiveMessagePort, send, close }:
   {
     value: Capable
@@ -22,11 +22,9 @@ export const startBidirectionalConnection = async (
     close: () => void
   }
 ) => {
-  let initResolve: ((message: ConnectionMessage) => void)
-  let initReject: ((reason?: any) => void)
-  const initMessage = new Promise<ConnectionMessage>((resolve, reject) => {
+  let initResolve: ((message: ConnectionMessage & { type: 'init' }) => void)
+  const initMessage = new Promise<ConnectionMessage & { type: 'init' }>((resolve, reject) => {
     initResolve = resolve
-    initReject = reject
   })
 
   receiveMessagePort.addEventListener('message', (event: MessageEvent<{ message: ConnectionMessage, messageContext: MessageContext }>) => {
@@ -44,7 +42,7 @@ export const startBidirectionalConnection = async (
   })
 
   return {
-    remoteValue: await initMessage
+    remoteValue: initMessage.then(initMessage => initMessage.data)
   }
 }
 
