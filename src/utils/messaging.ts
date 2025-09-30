@@ -1,6 +1,7 @@
-import type { TransferBox } from '../types'
+import type { Capable, TransferBox } from '../types'
 
 import { OSRA_BOX } from '../types'
+import { replaceRecursive } from './replace'
 import { isClonable, isTransferable, isTransferBox } from './type-guards'
 
 export const getTransferableObjects = (value: any): Transferable[] => {
@@ -33,3 +34,12 @@ export const transfer = <T extends Transferable>(value: T) => ({
   [OSRA_BOX]: 'transfer',
   value
 }) as TransferBox<T>
+
+export const boxAllTransferables = <T extends Capable>(value: T) =>
+  replaceRecursive(
+    value,
+    (value: any) =>
+      isTransferable(value)
+        ? transfer(value)
+        : value
+  )

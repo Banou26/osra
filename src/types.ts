@@ -75,7 +75,7 @@ export type MessageBase = {
   name?: string
 }
 
-export type MessageVariant<JsonOnly extends boolean = false> =
+export type ProtocolMessage =
   | {
     type: 'announce'
     /** Only set when acknowledging a remote announcement */
@@ -87,6 +87,12 @@ export type MessageVariant<JsonOnly extends boolean = false> =
     remoteUuid: Uuid
   }
   | {
+    type: 'close'
+    remoteUuid: Uuid
+  }
+
+export type BidirectionalConnectionMessage<JsonOnly extends boolean = false> =
+  | {
     type: 'init'
     remoteUuid: Uuid
     data: JsonOnly extends true ? Jsonable : Capable
@@ -94,8 +100,7 @@ export type MessageVariant<JsonOnly extends boolean = false> =
   /** message not needed if transferring MessagePort is supported */
   | {
     type: 'message'
-    /** Only set in bidirectional mode */
-    remoteUuid?: Uuid
+    remoteUuid: Uuid
     data: JsonOnly extends true ? Jsonable : Capable
     portId: string
   }
@@ -103,12 +108,23 @@ export type MessageVariant<JsonOnly extends boolean = false> =
   | {
     type: 'close'
     remoteUuid: Uuid
-    /**
-     * Set when closing a revivable message port
-     * If unset, we are closing the entire connection
-     */
-    portId?: string
+    portId: string
   }
+
+export type UnidirectionalConnectionMessage<JsonOnly extends boolean = false> = {
+  type: 'message'
+  remoteUuid: Uuid
+  data: JsonOnly extends true ? Jsonable : Capable
+  portId: string
+}
+
+export type ConnectionMessage<JsonOnly extends boolean = false> =
+  | BidirectionalConnectionMessage<JsonOnly>
+  | UnidirectionalConnectionMessage<JsonOnly>
+
+export type MessageVariant<JsonOnly extends boolean = false> =
+  | ProtocolMessage
+  | ConnectionMessage<JsonOnly>
 
 export type Message<JsonOnly extends boolean = false> = MessageBase & MessageVariant<JsonOnly>
 

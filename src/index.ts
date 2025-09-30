@@ -6,7 +6,7 @@ import type {
   Capable,
   Transport
 } from './types'
-import type { PlatformCapabilities, BidirectionalConnection } from './utils'
+import type { PlatformCapabilities, ConnectionContext, BidirectionalConnectionContext } from './utils'
 
 import { OSRA_DEFAULT_KEY, OSRA_KEY } from './types'
 import {
@@ -38,7 +38,8 @@ export const expose = async <T extends Capable>(
     key = OSRA_DEFAULT_KEY,
     origin = '*',
     unregisterSignal,
-    platformCapabilities: _platformCapabilities
+    platformCapabilities: _platformCapabilities,
+    boxAllTransferables,
   }: {
     transport: Transport
     name?: string
@@ -47,10 +48,11 @@ export const expose = async <T extends Capable>(
     origin?: string
     unregisterSignal?: AbortSignal
     platformCapabilities?: PlatformCapabilities
+    boxAllTransferables?: boolean
   }
 ): Promise<T> => {
   const platformCapabilities = _platformCapabilities ?? await probePlatformCapabilities()
-  const connections = new Map<string, BidirectionalConnection>()
+  const connections = new Map<string, ConnectionContext>()
 
   let uuid = globalThis.crypto.randomUUID()
 
@@ -89,17 +91,22 @@ export const expose = async <T extends Capable>(
         )
         return
       }
-      const connection = startBidirectionalConnection({
-        uuid,
-        remoteUuid: message.uuid,
-        platformCapabilities,
-        send:
-          isEmitTransport(transport)
-            ? (message: MessageVariant) => sendMessage(transport, message)
-            : undefined,
-        close: () => void connections.delete(message.uuid)
-      })
-      connections.set(message.uuid, connection)
+      const { port1, port2 } = new MessageChannel()
+      const connectionContext = {
+        type: 'bidirectional',
+        messagePort: port1,
+        connection:
+          startBidirectionalConnection({
+            value,
+            uuid,
+            remoteUuid: message.uuid,
+            platformCapabilities,
+            receiveMessagePort: port2,
+            send: (message: MessageVariant) => sendMessage(transport, message),
+            close: () => void connections.delete(message.uuid)
+          })
+      } satisfies BidirectionalConnectionContext
+      connections.set(message.uuid, connectionContext)
     } else if (message.type === 'reject-uuid-taken') {
       if (message.remoteUuid !== uuid) return
       uuid = globalThis.crypto.randomUUID()
@@ -112,7 +119,9 @@ export const expose = async <T extends Capable>(
         console.error(`Connection not found for remoteUuid: ${message.uuid}`)
         return
       }
-      connection.receiveMessage(message, messageContext)
+      if (connection.type !== 'unidirectional-emitting') {
+        connection.messagePort.postMessage()
+      }
     }
   }
 

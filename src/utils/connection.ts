@@ -1,20 +1,49 @@
-import type { Capable, Message, MessageContext } from '../types'
+import type { Capable, ConnectionMessage, Message, MessageContext, MessageVariant, Uuid } from '../types'
 import type { PlatformCapabilities } from './capabilities'
 
+export type ConnectionContext =
+  | { type: 'bidirectional', messagePort: MessagePort, connection: BidirectionalConnection }
+  | { type: 'unidirectional-emitting', connection: UnidirectionalEmittingConnection }
+  | { type: 'unidirectional-receiving', messagePort: MessagePort, connection: UnidirectionalReceivingConnection }
+
+export type BidirectionalConnectionContext = ConnectionContext & { type: 'bidirectional' }
+export type UnidirectionalEmittingConnectionContext = ConnectionContext & { type: 'unidirectional-emitting' }
+export type UnidirectionalReceivingConnectionContext = ConnectionContext & { type: 'unidirectional-receiving' }
+
 export const startBidirectionalConnection = (
-  { uuid, remoteUuid, platformCapabilities, send, close }:
+  { value, uuid, remoteUuid, platformCapabilities, receiveMessagePort, send, close }:
   {
-    uuid: string
-    remoteUuid?: string
+    value: Capable
+    uuid: Uuid
+    remoteUuid: Uuid
     platformCapabilities: PlatformCapabilities
-    send?: (message: Message) => void
+    receiveMessagePort: MessagePort
+    send: (message: ConnectionMessage) => void
     close: () => void
   }
 ) => {
-  return {
-    receiveMessage: (message: Message, messageContext: MessageContext) => {
+
+  let initResolve: ((message: Message) => void) | undefined
+  let initReject: ((reason?: any) => void) | undefined
+  const initMessage = new Promise<Message>((resolve, reject) => {
+    initResolve = resolve
+    initReject = reject
+  })
+  receiveMessagePort.addEventListener('message', (event: MessageEvent<{ message: ConnectionMessage, messageContext: MessageContext }>) => {
+    const { message, messageContext } = event.data
+    if (message.type === 'init') {
+      initResolve(message)
+      return
     }
-  }
+  })
+
+  send({
+    type: 'init',
+    remoteUuid,
+    data: value
+  })
+
+  return
 }
 
 export type BidirectionalConnection = ReturnType<typeof startBidirectionalConnection>
@@ -23,7 +52,7 @@ export const startUnidirectionalEmittingConnection = <T extends Capable>(
   { value, uuid, platformCapabilities, send, close }:
   {
     value: Capable
-    uuid: string
+    uuid: Uuid
     platformCapabilities: PlatformCapabilities
     send: (message: Message) => void
     close: () => void
@@ -48,14 +77,14 @@ export type UnidirectionalEmittingConnection = ReturnType<typeof startUnidirecti
 export const startUnidirectionalReceivingConnection = (
   { uuid, remoteUuid, platformCapabilities, close }:
   {
-    uuid: string
-    remoteUuid?: string
+    uuid: Uuid
+    remoteUuid?: Uuid
     platformCapabilities: PlatformCapabilities
     close: () => void
   }
 ) => {
   return {
-    receiveMessage: (message: Message, messageContext: MessageContext) => {
+    receiveMessage: (message: MessageVariant, messageContext: MessageContext) => {
     }
   }
 }
