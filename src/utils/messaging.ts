@@ -1,8 +1,8 @@
-import type { Capable, Jsonable, Revivable, RevivableVariant, ReviveBox, TransferBox } from '../types'
+import type { Capable, Jsonable, Revivable, RevivableVariant, RevivableVariantType, ReviveBox, TransferBox } from '../types'
 
 import { OSRA_BOX } from '../types'
 import { replaceRecursive } from './replace'
-import { isClonable, isTransferable, isTransferBox, revivableToType } from './type-guards'
+import { isClonable, isRevivable, isTransferable, isTransferBox, revivableToType } from './type-guards'
 
 export const getTransferableObjects = (value: any): Transferable[] => {
   const transferables: Transferable[] = []
@@ -44,11 +44,20 @@ export const boxAllTransferables = <T extends Capable>(value: T) =>
         : value
   )
 
-export const boxRevivable = (value: Revivable, func: () => RevivableVariant) => {
+export const boxAllRevivables = <T extends Capable>(value: T, func: (value: Revivable) => RevivableVariant) =>
+  replaceRecursive(
+    value,
+    (value: any) =>
+      isRevivable(value)
+        ? boxRevivable(value, func)
+        : value
+  )
+
+export const boxRevivable = (value: Revivable, func: (value: Revivable) => RevivableVariant) => {
   const trap = (hint?: 'number' | 'string' | 'default') => {
     const box = {
       [OSRA_BOX]: 'revivable',
-      ...func()
+      ...func(value)
     } satisfies ReviveBox
 
     return (
