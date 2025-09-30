@@ -6,7 +6,7 @@ import type {
   Capable,
   Transport
 } from './types'
-import type { PlatformCapabilities, ConnectionContext, BidirectionalConnectionContext } from './utils'
+import type { PlatformCapabilities, ConnectionContext, BidirectionalConnectionContext, BidirectionalConnection } from './utils'
 
 import { OSRA_DEFAULT_KEY, OSRA_KEY } from './types'
 import {
@@ -53,6 +53,11 @@ export const expose = async <T extends Capable>(
 ): Promise<T> => {
   const platformCapabilities = _platformCapabilities ?? await probePlatformCapabilities()
   const connections = new Map<string, ConnectionContext>()
+
+  let resolveRemoteValue: (connection: T) => void
+  const remoteValuePromise = new Promise<T>((resolve) => {
+    resolveRemoteValue = resolve
+  })
 
   let uuid = globalThis.crypto.randomUUID()
 
@@ -107,6 +112,9 @@ export const expose = async <T extends Capable>(
           })
       } satisfies BidirectionalConnectionContext
       connections.set(message.uuid, connectionContext)
+      connectionContext.connection.remoteValue.then((remoteValue) =>
+        resolveRemoteValue(remoteValue as T)
+      )
     } else if (message.type === 'reject-uuid-taken') {
       if (message.remoteUuid !== uuid) return
       uuid = globalThis.crypto.randomUUID()
@@ -151,5 +159,5 @@ export const expose = async <T extends Capable>(
     return proxy
   }
 
-  return  undefined as unknown as T
+  return remoteValuePromise
 }
