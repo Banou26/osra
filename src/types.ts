@@ -35,22 +35,54 @@ export type Structurable =
   | Map<Structurable, Structurable>
   | Set<Structurable>
 
-// export type Transferable =
-//   | SharedArrayBuffer
-//   | ArrayBuffer
-//   | MessagePort
-//   | ReadableStream
-//   | WritableStream
-//   | TransformStream
-
 export type TransferBox<T extends Transferable = Transferable> = {
-  [OSRA_BOX]: 'transfer'
+  [OSRA_BOX]: 'transferable'
   value: T
 }
 
+export type ReviveBoxBase = { [OSRA_BOX]: 'revivable' }
+
+export type RevivableMessagePort = {
+  type: 'messagePort'
+  messageId: string
+}
+
+export type RevivablePromise = {
+  type: 'promise'
+  port: RevivableMessagePort
+}
+
+export type RevivableReadableStream = {
+  type: 'readableStream'
+  port: RevivableMessagePort
+}
+
+export type RevivableDate = {
+  type: 'date'
+  ISOString: string
+}
+
+export type RevivableError = {
+  type: 'error'
+  stack: string
+}
+
+export type RevivableVariant =
+  | RevivableMessagePort
+  | RevivablePromise
+  | RevivableReadableStream
+  | RevivableDate
+  | RevivableError
+
+export type RevivableVariantType = RevivableVariant['type']
+
+export type RevivableBox =
+  | ReviveBoxBase
+  & RevivableVariant
+
 export type Revivable =
-  | Promise<Capable>
   | MessagePort
+  | Promise<Capable>
   | ReadableStream
   | Date
   | Error
@@ -126,7 +158,9 @@ export type MessageVariant<JsonOnly extends boolean = false> =
   | ProtocolMessage
   | ConnectionMessage<JsonOnly>
 
-export type Message<JsonOnly extends boolean = false> = MessageBase & MessageVariant<JsonOnly>
+export type Message<JsonOnly extends boolean = false> =
+  | MessageBase
+  & MessageVariant<JsonOnly>
 
 export type MessageContext = {
   port?: MessagePort | WebExtPort
