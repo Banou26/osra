@@ -3,7 +3,7 @@ import type {
   CustomTransport, EmitJsonPlatformTransport,
   EmitTransport, JsonPlatformTransport,
   Message, ReceiveJsonPlatformTransport,
-  ReceiveTransport, TransferBox, Transport
+  ReceiveTransport, Revivable, RevivableVariantType, TransferBox, Transport
 } from '../types'
 
 import { OSRA_BOX, OSRA_KEY } from '../types'
@@ -14,6 +14,11 @@ export const isServiceWorkerContainer = (value: any) => value instanceof Service
 export const isWorker = (value: any) => value instanceof Worker
 export const isSharedWorker = (value: any) => value instanceof SharedWorker
 export const isMessagePort = (value: any) => value instanceof MessagePort
+export const isPromise = (value: any) => value instanceof Promise
+export const isReadableStream = (value: any) => value instanceof ReadableStream
+export const isDate = (value: any) => value instanceof Date
+export const isError = (value: any) => value instanceof Error
+export const isFunction = (value: any) => typeof value === 'function'
 
 export const isOsraMessage = (value: any): value is Message =>
   Boolean(
@@ -39,7 +44,7 @@ export const isTransferBox = (value: any): value is TransferBox<any> =>
   Boolean(
     value
     && typeof value === 'object'
-    && (value as TransferBox<Transferable>)[OSRA_BOX] === 'transfer'
+    && (value as TransferBox<Transferable>)[OSRA_BOX] === 'transferable'
   )
 
 export type WebExtRuntime = typeof browser.runtime
@@ -190,3 +195,19 @@ export const isTransport = (value: any): value is Transport =>
   || isEmitTransport(value)
   || isReceiveTransport(value)
   || isCustomTransport(value)
+
+export const isRevivable = (value: any): value is Revivable =>
+  isMessagePort(value)
+  || isPromise(value)
+  || isReadableStream(value)
+  || isDate(value)
+  || isError(value)
+
+export const revivableToType = (value: Revivable): RevivableVariantType => {
+  if (isMessagePort(value)) return 'messagePort'
+  if (isPromise(value)) return 'promise'
+  if (isReadableStream(value)) return 'readableStream'
+  if (isDate(value)) return 'date'
+  if (isError(value)) return 'error'
+  throw new Error('Unknown revivable type')
+}

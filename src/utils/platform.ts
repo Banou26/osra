@@ -96,8 +96,7 @@ export const sendOsraMessage = (
     } else if (isWindow(emitTransport)) {
       emitTransport.postMessage(message, origin, transferables)
     } else if (isWebSocket(emitTransport)) {
-      // Message needs to be stringified before sending
-      emitTransport.send(message)
+      emitTransport.send(JSON.stringify(message))
     } else if (isSharedWorker(emitTransport)) {
       emitTransport.port.postMessage(message, transferables)
     } else {

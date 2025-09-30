@@ -1,8 +1,8 @@
-import type { Capable, TransferBox } from '../types'
+import type { Capable, Jsonable, Revivable, RevivableVariant, ReviveBox, TransferBox } from '../types'
 
 import { OSRA_BOX } from '../types'
 import { replaceRecursive } from './replace'
-import { isClonable, isTransferable, isTransferBox } from './type-guards'
+import { isClonable, isTransferable, isTransferBox, revivableToType } from './type-guards'
 
 export const getTransferableObjects = (value: any): Transferable[] => {
   const transferables: Transferable[] = []
@@ -31,7 +31,7 @@ export const getTransferBoxes = (value: any): TransferBox<Transferable>[] => {
 
 /** This box tells the protocol that the value should be copied instead of transfered */
 export const transfer = <T extends Transferable>(value: T) => ({
-  [OSRA_BOX]: 'transfer',
+  [OSRA_BOX]: 'transferable',
   value
 }) as TransferBox<T>
 
@@ -43,3 +43,27 @@ export const boxAllTransferables = <T extends Capable>(value: T) =>
         ? transfer(value)
         : value
   )
+
+export const boxRevivable = (value: Revivable, func: () => RevivableVariant) => {
+  const trap = (hint?: 'number' | 'string' | 'default') => {
+    const box = {
+      [OSRA_BOX]: 'revivable',
+      ...func()
+    } satisfies ReviveBox
+
+    return (
+      hint === 'string'
+        ? JSON.stringify(box)
+        : box
+    )
+  }
+  return {
+    [OSRA_BOX]: 'revivable',
+    type: revivableToType(value),
+    value,
+    [Symbol.toPrimitive]: trap,
+    valueOf: trap,
+    toString: trap,
+    toJSON: () => trap('string')
+  }
+}
