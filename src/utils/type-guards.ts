@@ -218,6 +218,12 @@ export const isRevivableFunctionBox = (value: any): value is RevivableBox & { ty
 export const isRevivableReadableStreamBox = (value: any): value is RevivableBox & { type: 'readableStream' } =>
   isRevivableBox(value) && value.type === 'readableStream'
 
+export const isRevivableErrorBox = (value: any): value is RevivableBox & { type: 'error' } =>
+  isRevivableBox(value) && value.type === 'error'
+
+export const isRevivableDateBox = (value: any): value is RevivableBox & { type: 'date' } =>
+  isRevivableBox(value) && value.type === 'date'
+
 export const revivableBoxToType = (value: RevivableBox) => value.type
 
 export const revivableToType = (value: Revivable) => {

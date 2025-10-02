@@ -39,8 +39,14 @@ export type TransferBox<T extends Transferable = Transferable> = {
   value: T
 }
 
-export type ReviveBoxBase = {
+export type ReviveBoxBase<T extends RevivableVariant['type'] = RevivableVariant['type']> = {
   [OSRA_BOX]: 'revivable'
+  type: T
+  value: RevivableVariantTypeToRevivableVariant<T>
+  [Symbol.toPrimitive]?: Function
+  valueOf?: Function
+  toString?: Function
+  toJSON?: Function
 }
 
 export type RevivableMessagePort = {
@@ -84,6 +90,15 @@ export type RevivableVariant =
 
 export type RevivableVariantType = RevivableVariant['type']
 
+export type RevivableVariantTypeToRevivableVariant<T extends RevivableVariantType> =
+  T extends 'messagePort' ? MessagePort :
+  T extends 'promise' ? Promise<any> :
+  T extends 'function' ? Function :
+  T extends 'readableStream' ? ReadableStream :
+  T extends 'date' ? Date :
+  T extends 'error' ? Error :
+  never
+
 export type RevivableBox =
   | ReviveBoxBase
   & RevivableVariant
@@ -96,6 +111,15 @@ export type Revivable =
   | Error
   | ((...args: Capable[]) => Promise<Capable>)
 
+export type RevivableToRevivableType<T extends Revivable> =
+  T extends MessagePort ? 'messagePort' :
+  T extends Promise<any> ? 'promise' :
+  T extends Function ? 'function' :
+  T extends ReadableStream ? 'readableStream' :
+  T extends Date ? 'date' :
+  T extends Error ? 'error' :
+  never
+
 export type Capable =
   | Structurable
   | TransferBox
@@ -105,9 +129,6 @@ export type Capable =
   | Array<Capable>
   | Map<Capable, Capable>
   | Set<Capable>
-
-export type Proxy =
-  { [OSRA_REVIVABLE]: true }
 
 export type MessageBase = {
   [OSRA_KEY]: string
