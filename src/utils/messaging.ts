@@ -50,36 +50,12 @@ export const boxAllTransferables = <T extends Capable>(value: T) =>
         : value
   )
 
-export const serializeTrapBox = (value: Revivable, func: (value: Revivable) => RevivableVariant) => {
-  const trap = (hint?: 'number' | 'string' | 'default') => {
-    const box = {
-      [OSRA_BOX]: 'revivable',
-      ...func(value)
-    } satisfies RevivableBox
-
-    return (
-      hint === 'string'
-        ? JSON.stringify(box)
-        : box
-    )
-  }
-  return {
-    [OSRA_BOX]: 'revivable',
-    type: revivableToType(value),
-    value,
-    [Symbol.toPrimitive]: trap,
-    valueOf: trap,
-    toString: trap,
-    toJSON: () => trap('string')
-  }
-}
-
 export const recursiveBox = <T extends Capable>(value: T, func: (value: Revivable) => RevivableVariant) =>
   replaceRecursive(
     value,
     (value) =>
       isRevivable(value)
-        ? serializeTrapBox(value, func)
+        ? trapBox(value, func)
         : value
   )
 

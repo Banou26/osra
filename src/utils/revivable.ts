@@ -1,20 +1,23 @@
-import type {
-    Capable,
-  MessageWithContext,
-  Revivable,
-  RevivableBox,
-  RevivableDate,
-  RevivableError,
-  RevivableFunction,
-  RevivableMessagePort,
-  RevivablePromise,
-  RevivableReadableStream,
-  RevivableVariant
+import {
+    OSRA_BOX,
+    RevivableToRevivableType,
+    ReviveBoxBase,
+    type Capable,
+  type MessageWithContext,
+  type Revivable,
+  type RevivableBox,
+  type RevivableDate,
+  type RevivableError,
+  type RevivableFunction,
+  type RevivableMessagePort,
+  type RevivablePromise,
+  type RevivableReadableStream,
+  type RevivableVariant
 } from '../types'
 import { ConnectionRevivableContext } from './connection'
 
 import { StrictMessagePort } from './message-channel'
-import { isDate, isError, isFunction, isMessagePort, isPromise, isReadableStream, isRevivable, isRevivableFunctionBox, isRevivableMessagePortBox } from './type-guards'
+import { isDate, isError, isFunction, isMessagePort, isPromise, isReadableStream, isRevivable, isRevivableDateBox, isRevivableErrorBox, isRevivableFunctionBox, isRevivableMessagePortBox, isRevivablePromiseBox, isRevivableReadableStreamBox, revivableToType } from './type-guards'
 
 export const boxMessagePort = (value: MessagePort, context: ConnectionRevivableContext): RevivableVariant & { type: 'messagePort' } => {
   const messagePort = value as StrictMessagePort<MessageWithContext>
@@ -79,20 +82,49 @@ export const reviveDate = (value: RevivableDate, context: ConnectionRevivableCon
 
 }
 
-export const box =
-  (context: ConnectionRevivableContext) =>
-    (value: Revivable) =>
-      isMessagePort(value) ? boxMessagePort(value, context)
-      : isFunction(value) ? boxFunction(value, context)
-      : isPromise(value) ? boxPromise(value, context)
-      : isError(value) ? boxError(value, context)
-      : isReadableStream(value) ? boxReadableStream(value, context)
-      : isDate(value) ? boxDate(value, context)
-      : value
+export const box = (value: Revivable, context: ConnectionRevivableContext) => {
+  const trap = (hint?: 'number' | 'string' | 'default') => {
+    const box = {
+      [OSRA_BOX]: 'revivable',
+      value,
+      ...(
+        isMessagePort(value) ? boxMessagePort(value, context)
+        : isFunction(value) ? boxFunction(value, context)
+        : isPromise(value) ? boxPromise(value, context)
+        : isError(value) ? boxError(value, context)
+        : isReadableStream(value) ? boxReadableStream(value, context)
+        : isDate(value) ? boxDate(value, context)
+        : value
+      )
+    } satisfies RevivableBox
 
-export const revive =
-  (context: ConnectionRevivableContext) =>
-    (value: Capable) =>
-      isRevivableMessagePortBox(value) ? reviveMessagePort(value, context)
-      : isRevivableFunctionBox(value) ? reviveFunction(value, context)
-      : value
+    return (
+      hint === 'string'
+        ? JSON.stringify(box)
+        : box
+    )
+  }
+  return {
+    [OSRA_BOX]: 'revivable',
+    type: revivableToType(value),
+    value,
+    [Symbol.toPrimitive]: trap,
+    valueOf: trap,
+    toString: trap,
+    toJSON: () => trap('string')
+  } satisfies ReviveBoxBase<RevivableToRevivableType<typeof value>>
+}
+
+export const revive = (box: RevivableBox, context: ConnectionRevivableContext) => {
+  if (isRevivable(box.value)) return box.value
+
+  return (
+    isRevivableMessagePortBox(box) ? reviveMessagePort(box, context)
+    : isRevivableFunctionBox(box) ? reviveFunction(box, context)
+    : isRevivablePromiseBox(box) ? revivePromise(box, context)
+    : isRevivableErrorBox(box) ? reviveError(box, context)
+    : isRevivableReadableStreamBox(box) ? reviveReadableStream(box, context)
+    : isRevivableDateBox(box) ? reviveDate(box, context)
+    : box
+  )
+}
