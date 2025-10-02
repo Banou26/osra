@@ -3,7 +3,7 @@ import type {
   CustomTransport, EmitJsonPlatformTransport,
   EmitTransport, JsonPlatformTransport,
   Message, ReceiveJsonPlatformTransport,
-  ReceiveTransport, Revivable, RevivableVariantType, TransferBox, Transport
+  ReceiveTransport, Revivable, RevivableBox, RevivableVariantType, TransferBox, Transport
 } from '../types'
 
 import { OSRA_BOX, OSRA_KEY } from '../types'
@@ -15,10 +15,10 @@ export const isWorker = (value: any) => value instanceof Worker
 export const isSharedWorker = (value: any) => value instanceof SharedWorker
 export const isMessagePort = (value: any) => value instanceof MessagePort
 export const isPromise = (value: any) => value instanceof Promise
+export const isFunction = (value: any): value is Function => typeof value === 'function'
 export const isReadableStream = (value: any) => value instanceof ReadableStream
 export const isDate = (value: any) => value instanceof Date
 export const isError = (value: any) => value instanceof Error
-export const isFunction = (value: any) => typeof value === 'function'
 
 export const isOsraMessage = (value: any): value is Message =>
   Boolean(
@@ -203,7 +203,24 @@ export const isRevivable = (value: any): value is Revivable =>
   || isDate(value)
   || isError(value)
 
-export const revivableToType = (value: Revivable): RevivableVariantType => {
+export const isRevivableBox = (value: any): value is RevivableBox =>
+  OSRA_BOX in value && value[OSRA_BOX] === 'revivable'
+
+export const isRevivableMessagePortBox = (value: any): value is RevivableBox & { type: 'messagePort' } =>
+  isRevivableBox(value) && value.type === 'messagePort'
+
+export const isRevivablePromiseBox = (value: any): value is RevivableBox & { type: 'promise' } =>
+  isRevivableBox(value) && value.type === 'promise'
+
+export const isRevivableFunctionBox = (value: any): value is RevivableBox & { type: 'function' } =>
+  isRevivableBox(value) && value.type === 'function'
+
+export const isRevivableReadableStreamBox = (value: any): value is RevivableBox & { type: 'readableStream' } =>
+  isRevivableBox(value) && value.type === 'readableStream'
+
+export const revivableBoxToType = (value: RevivableBox) => value.type
+
+export const revivableToType = (value: Revivable) => {
   if (isMessagePort(value)) return 'messagePort'
   if (isPromise(value)) return 'promise'
   if (isReadableStream(value)) return 'readableStream'

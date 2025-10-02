@@ -1,8 +1,14 @@
-import type { Capable, Jsonable, Revivable, RevivableVariant, RevivableVariantType, ReviveBox, TransferBox } from '../types'
+import type { Capable, Revivable, RevivableBox, RevivableVariant, TransferBox } from '../types'
 
 import { OSRA_BOX } from '../types'
+import { ConnectionRevivableContext } from './connection'
 import { replaceRecursive } from './replace'
-import { isClonable, isRevivable, isTransferable, isTransferBox, revivableToType } from './type-guards'
+import { box, boxAllTypes, boxMessagePort, revive } from './revivable'
+import {
+  isClonable, isMessagePort, isRevivable,
+  isRevivableBox,
+  isTransferable, isTransferBox, revivableToType
+} from './type-guards'
 
 export const getTransferableObjects = (value: any): Transferable[] => {
   const transferables: Transferable[] = []
@@ -44,21 +50,12 @@ export const boxAllTransferables = <T extends Capable>(value: T) =>
         : value
   )
 
-export const boxAllRevivables = <T extends Capable>(value: T, func: (value: Revivable) => RevivableVariant) =>
-  replaceRecursive(
-    value,
-    (value: any) =>
-      isRevivable(value)
-        ? boxRevivable(value, func)
-        : value
-  )
-
-export const boxRevivable = (value: Revivable, func: (value: Revivable) => RevivableVariant) => {
+export const serializeTrapBox = (value: Revivable, func: (value: Revivable) => RevivableVariant) => {
   const trap = (hint?: 'number' | 'string' | 'default') => {
     const box = {
       [OSRA_BOX]: 'revivable',
       ...func(value)
-    } satisfies ReviveBox
+    } satisfies RevivableBox
 
     return (
       hint === 'string'
@@ -76,3 +73,34 @@ export const boxRevivable = (value: Revivable, func: (value: Revivable) => Reviv
     toJSON: () => trap('string')
   }
 }
+
+export const recursiveBox = <T extends Capable>(value: T, func: (value: Revivable) => RevivableVariant) =>
+  replaceRecursive(
+    value,
+    (value) =>
+      isRevivable(value)
+        ? serializeTrapBox(value, func)
+        : value
+  )
+
+export const recursiveRevive = <T extends Capable>(value: T, context: ConnectionRevivableContext) =>
+  replaceRecursive(
+    value,
+    (value) =>
+      isRevivableBox(value)
+        ? revive(context)(value)
+        : value,
+    true
+  )
+
+export const boxMessage = (value: Capable, context: ConnectionRevivableContext) =>
+  recursiveBox(
+    value,
+    box(context)
+  )
+
+export const reviveMessage = (value: Capable, context: ConnectionRevivableContext) =>
+  recursiveRevive(
+    value,
+    context
+  )

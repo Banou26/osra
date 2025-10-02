@@ -1,16 +1,38 @@
-import type { Capable, ConnectionMessage, Message, MessageContext, MessageVariant, MessageWithContext, Revivable, RevivableVariantType, Uuid } from '../types'
+import type {
+  Capable, ConnectionMessage,
+  Message, MessageWithContext,
+  Uuid
+} from '../types'
 import type { PlatformCapabilities } from './capabilities'
-import { boxAllRevivables } from './messaging'
-import { revivableToType } from './type-guards'
+
+import { StrictMessagePort } from './message-channel'
+import { boxMessageRevivables } from './messaging'
+
+export type BidirectionalConnectionContext = {
+  type: 'bidirectional',
+  messagePort: StrictMessagePort<MessageWithContext>,
+  connection: BidirectionalConnection
+}
+export type UnidirectionalEmittingConnectionContext = {
+  type: 'unidirectional-emitting',
+  connection: UnidirectionalEmittingConnection
+}
+export type UnidirectionalReceivingConnectionContext = {
+  type: 'unidirectional-receiving',
+  messagePort: StrictMessagePort<MessageWithContext>,
+  connection: UnidirectionalReceivingConnection
+}
 
 export type ConnectionContext =
-  | { type: 'bidirectional', messagePort: MessagePort, connection: BidirectionalConnection }
-  | { type: 'unidirectional-emitting', connection: UnidirectionalEmittingConnection }
-  | { type: 'unidirectional-receiving', messagePort: MessagePort, connection: UnidirectionalReceivingConnection }
+  | BidirectionalConnectionContext
+  | UnidirectionalEmittingConnectionContext
+  | UnidirectionalReceivingConnectionContext
 
-export type BidirectionalConnectionContext = ConnectionContext & { type: 'bidirectional' }
-export type UnidirectionalEmittingConnectionContext = ConnectionContext & { type: 'unidirectional-emitting' }
-export type UnidirectionalReceivingConnectionContext = ConnectionContext & { type: 'unidirectional-receiving' }
+export type ConnectionRevivableContext = {
+  messagePorts: Map<string, MessagePort>
+  sendMessage: (message: ConnectionMessage) => void
+  receiveMessagePort: StrictMessagePort<MessageWithContext>
+}
 
 export const startBidirectionalConnection = (
   { value, uuid, remoteUuid, platformCapabilities, receiveMessagePort, send, close }:
@@ -19,17 +41,22 @@ export const startBidirectionalConnection = (
     uuid: Uuid
     remoteUuid: Uuid
     platformCapabilities: PlatformCapabilities
-    receiveMessagePort: MessagePort
+    receiveMessagePort: StrictMessagePort<MessageWithContext>
     send: (message: ConnectionMessage) => void
     close: () => void
   }
 ) => {
+  const revivableContext = {
+    messagePorts: new Map<string, MessagePort>(),
+    sendMessage: send,
+    receiveMessagePort
+  } satisfies ConnectionRevivableContext
   let initResolve: ((message: ConnectionMessage & { type: 'init' }) => void)
   const initMessage = new Promise<ConnectionMessage & { type: 'init' }>((resolve, reject) => {
     initResolve = resolve
   })
 
-  receiveMessagePort.addEventListener('message', (event: MessageEvent<MessageWithContext>) => {
+  receiveMessagePort.addEventListener('message', (event) => {
     const { message, context } = event.data
     if (message.type === 'init') {
       initResolve(message)
@@ -40,33 +67,12 @@ export const startBidirectionalConnection = (
   send({
     type: 'init',
     remoteUuid,
-    data:
-      boxAllRevivables(
-        value,
-        (value: Revivable) => {
-          const type = revivableToType(value)
-
-          if (type === 'messagePort') {
-            const messagePort = value as MessagePort
-            messagePort.addEventListener('message', (event: MessageEvent<MessageWithContext>) => {
-              const { message, context } = event.data
-              send({
-                type: 'message',
-                remoteUuid,
-                data: message,
-                context
-              })
-            })
-          }
-
-          return {
-            type
-          }
-        }
-      )
+    data: boxMessageRevivables(value, revivableContext)
   })
 
   return {
+    close: () => {
+    },
     remoteValue: initMessage.then(initMessage => initMessage.data)
   }
 }
@@ -85,7 +91,9 @@ export const startUnidirectionalEmittingConnection = <T extends Capable>(
 ) => {
 
   return {
-    proxy: new Proxy(
+    close: () => {
+    },
+    remoteValueProxy: new Proxy(
       new Function(),
       {
         apply: (target, thisArg, args) => {
@@ -105,12 +113,14 @@ export const startUnidirectionalReceivingConnection = (
     uuid: Uuid
     remoteUuid?: Uuid
     platformCapabilities: PlatformCapabilities
+    receiveMessagePort: StrictMessagePort<MessageWithContext>
     close: () => void
   }
 ) => {
+
   return {
-    receiveMessage: (message: MessageVariant, messageContext: MessageContext) => {
-    }
+    close: () => {
+    },
   }
 }
 
