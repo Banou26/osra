@@ -2,7 +2,6 @@ import type { WebExtOnConnect, WebExtOnMessage, WebExtPort, WebExtRuntime, WebEx
 
 export const OSRA_KEY = '__OSRA_KEY__' as const
 export const OSRA_DEFAULT_KEY = '__OSRA_DEFAULT_KEY__' as const
-export const OSRA_REVIVABLE = '__OSRA_REVIVABLE__' as const
 export const OSRA_BOX = '__OSRA_BOX__' as const
 
 export type Uuid = `${string}-${string}-${string}-${string}-${string}`
@@ -40,15 +39,23 @@ export type TransferBox<T extends Transferable = Transferable> = {
   value: T
 }
 
-export type ReviveBoxBase = { [OSRA_BOX]: 'revivable' }
+export type ReviveBoxBase = {
+  [OSRA_BOX]: 'revivable'
+}
 
 export type RevivableMessagePort = {
   type: 'messagePort'
-  messageId: string
+  messagePort: MessagePort
+  messagePortId: string
 }
 
 export type RevivablePromise = {
   type: 'promise'
+  port: RevivableMessagePort
+}
+
+export type RevivableFunction = {
+  type: 'function'
   port: RevivableMessagePort
 }
 
@@ -70,6 +77,7 @@ export type RevivableError = {
 export type RevivableVariant =
   | RevivableMessagePort
   | RevivablePromise
+  | RevivableFunction
   | RevivableReadableStream
   | RevivableDate
   | RevivableError
@@ -138,7 +146,7 @@ export type BidirectionalConnectionMessage<JsonOnly extends boolean = false> =
   }
   /** message not needed if transferring MessagePort is supported */
   | {
-    type: 'close'
+    type: 'message-port-close'
     remoteUuid: Uuid
     portId: string
   }
@@ -163,10 +171,10 @@ export type Message<JsonOnly extends boolean = false> =
   & MessageVariant<JsonOnly>
 
 export type MessageContext = {
-  port?: MessagePort | WebExtPort
-  sender?: WebExtSender
+  port?: MessagePort | WebExtPort // WebExtension
+  sender?: WebExtSender // WebExtension
   receiveTransport?: ReceivePlatformTransport
-  source?: MessageEventSource | null
+  source?: MessageEventSource | null // Window, Worker, WebSocket, ect...
 }
 
 export type MessageWithContext = {

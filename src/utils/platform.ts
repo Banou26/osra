@@ -1,7 +1,16 @@
-import type { CustomTransport, EmitTransport, Message, MessageContext, ReceivePlatformTransport, ReceiveTransport, Transport } from '../types'
+import type {
+  CustomTransport, EmitTransport,
+  Message, MessageContext,
+  ReceiveTransport
+} from '../types'
 
 import { OSRA_KEY } from '../types'
-import { isOsraMessage, isCustomTransport, isWebExtensionOnConnect, isWebExtensionOnMessage, isWebExtensionPort, isWebExtensionRuntime, isWebSocket, WebExtOnMessage, WebExtPort, WebExtSender, isWindow, isSharedWorker } from './type-guards'
+import {
+  isOsraMessage, isCustomTransport,
+  isWebExtensionOnConnect, isWebExtensionOnMessage,
+  isWebExtensionPort, isWebSocket, WebExtOnMessage,
+  WebExtPort, WebExtSender, isWindow, isSharedWorker
+} from './type-guards'
 
 export const getWebExtensionGlobal = () => globalThis.browser ?? globalThis.chrome
 export const getWebExtensionRuntime = () => getWebExtensionGlobal().runtime
@@ -24,11 +33,11 @@ export const registerOsraMessageListener = (
     // Custom function handler
     if (typeof receiveTransport === 'function') {
       receiveTransport(listener)
+      // WebExtension handler
     } else if (
-         // WebExtension handler
-         isWebExtensionPort(receiveTransport)
-         || isWebExtensionOnConnect(receiveTransport)
-         || isWebExtensionOnMessage(receiveTransport)
+      isWebExtensionPort(receiveTransport)
+      || isWebExtensionOnConnect(receiveTransport)
+      || isWebExtensionOnMessage(receiveTransport)
     ) {
       const listenOnWebExtOnMessage = (onMessage: WebExtOnMessage, port?: WebExtPort) => {
         const _listener = (message: object, sender?: WebExtSender) => {
@@ -99,7 +108,7 @@ export const sendOsraMessage = (
       emitTransport.send(JSON.stringify(message))
     } else if (isSharedWorker(emitTransport)) {
       emitTransport.port.postMessage(message, transferables)
-    } else {
+    } else { // MessagePort | ServiceWorker | Worker
       emitTransport.postMessage(message, transferables)
     }
   }

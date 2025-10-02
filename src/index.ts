@@ -1,12 +1,13 @@
 import type {
-  EmitTransport,
-  Message,
-  MessageContext,
-  MessageVariant,
-  Capable,
-  Transport
+  EmitTransport, Message,
+  MessageContext, MessageVariant,
+  Capable, Transport,
+  MessageWithContext
 } from './types'
-import type { PlatformCapabilities, ConnectionContext, BidirectionalConnectionContext, BidirectionalConnection } from './utils'
+import type {
+  PlatformCapabilities, ConnectionContext,
+  BidirectionalConnectionContext
+} from './utils'
 
 import { OSRA_DEFAULT_KEY, OSRA_KEY } from './types'
 import {
@@ -41,6 +42,7 @@ export const expose = async <T extends Capable>(
     unregisterSignal,
     platformCapabilities: _platformCapabilities,
     transferAll,
+    logger
   }: {
     transport: Transport
     name?: string
@@ -50,10 +52,11 @@ export const expose = async <T extends Capable>(
     unregisterSignal?: AbortSignal
     platformCapabilities?: PlatformCapabilities
     transferAll?: boolean
+    logger?: {}
   }
 ): Promise<T> => {
   const platformCapabilities = _platformCapabilities ?? await probePlatformCapabilities()
-  const connections = new Map<string, ConnectionContext>()
+  const connectionContexts = new Map<string, ConnectionContext>()
 
   let resolveRemoteValue: (connection: T) => void
   const remoteValuePromise = new Promise<T>((resolve) => {
@@ -90,7 +93,7 @@ export const expose = async <T extends Capable>(
         return
       }
       if (message.remoteUuid !== uuid) return
-      if (connections.has(message.uuid)) {
+      if (connectionContexts.has(message.uuid)) {
         sendMessage(
           transport,
           { type: 'reject-uuid-taken', remoteUuid: message.uuid }
@@ -109,10 +112,10 @@ export const expose = async <T extends Capable>(
             platformCapabilities,
             receiveMessagePort: port2,
             send: (message: MessageVariant) => sendMessage(transport, message),
-            close: () => void connections.delete(message.uuid)
+            close: () => void connectionContexts.delete(message.uuid)
           })
       } satisfies BidirectionalConnectionContext
-      connections.set(message.uuid, connectionContext)
+      connectionContexts.set(message.uuid, connectionContext)
       connectionContext.connection.remoteValue.then((remoteValue) =>
         resolveRemoteValue(remoteValue as T)
       )
@@ -120,16 +123,26 @@ export const expose = async <T extends Capable>(
       if (message.remoteUuid !== uuid) return
       uuid = globalThis.crypto.randomUUID()
       sendMessage(transport, { type: 'announce' })
+    } else if (message.type === 'close') {
+      if (message.remoteUuid !== uuid) return
+      const connectionContext = connectionContexts.get(message.uuid)
+      // We just drop the message if the remote uuid hasn't announced itself
+      if (!connectionContext) {
+        console.warn(`Connection not found for remoteUuid: ${message.uuid}`)
+        return
+      }
+      connectionContext.connection.close()
+      connectionContexts.delete(message.uuid)
     } else {
       if (message.remoteUuid !== uuid) return
-      const connection = connections.get(message.uuid)
+      const connection = connectionContexts.get(message.uuid)
       // We just drop the message if the remote uuid hasn't announced itself
       if (!connection) {
-        console.error(`Connection not found for remoteUuid: ${message.uuid}`)
+        console.warn(`Connection not found for remoteUuid: ${message.uuid}`)
         return
       }
       if (connection.type !== 'unidirectional-emitting') {
-        const messageWithContext = { message, context: messageContext }
+        const messageWithContext = { message, context: messageContext } satisfies MessageWithContext
         const transferables = getTransferableObjects(messageWithContext)
         connection.messagePort.postMessage(messageWithContext, transferables)
       }
@@ -152,14 +165,14 @@ export const expose = async <T extends Capable>(
 
   // Unidirectional emitting mode
   if (isEmitTransport(transport) && !isReceiveTransport(transport)) {
-    const { proxy } = startUnidirectionalEmittingConnection<T>({
+    const { remoteValueProxy } = startUnidirectionalEmittingConnection<T>({
       value,
       uuid,
       platformCapabilities,
       send: (message: MessageVariant) => sendMessage(transport, message),
-      close: () => connections.delete(uuid)
+      close: () => connectionContexts.delete(uuid)
     })
-    return proxy
+    return remoteValueProxy
   }
 
   return remoteValuePromise
