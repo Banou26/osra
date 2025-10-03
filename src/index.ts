@@ -133,7 +133,7 @@ export const expose = async <T extends Capable>(
       }
       connectionContext.connection.close()
       connectionContexts.delete(message.uuid)
-    } else {
+    } else { //  "init" | "message" | "message-port-close"
       if (message.remoteUuid !== uuid) return
       const connection = connectionContexts.get(message.uuid)
       // We just drop the message if the remote uuid hasn't announced itself

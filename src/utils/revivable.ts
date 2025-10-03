@@ -32,21 +32,27 @@ export const boxMessagePort = (
   value: MessagePort,
   context: ConnectionRevivableContext
 ): RevivableVariant & { type: 'messagePort' } => {
-  const messagePort = value as StrictMessagePort<MessageWithContext>
-  messagePort.addEventListener('message', (event) => {
-    const { message } = event.data
-    send({
+  const messagePort = value as StrictMessagePort<Capable>
+  const uuid = context.messagePorts.alloc(messagePort)
+  messagePort.addEventListener('message', ({ data }) => {
+    context.sendMessage({
       type: 'message',
-      remoteUuid,
-      data: message,
-      portId: ''
+      remoteUuid: context.remoteUuid,
+      data: recursiveBox(data, context),
+      portId: uuid
     })
+  })
+
+  context.receiveMessagePort.addEventListener('message', ({ data: { message } }) => {
+    if (message.type !== 'message' || message.uuid !== uuid) return
+    const revivedData = recursiveRevive(message.data, context)
+    messagePort.postMessage(revivedData)
   })
 
   return {
     type: 'messagePort',
     messagePort,
-    messagePortId: ''
+    messagePortId: uuid
   }
 }
 

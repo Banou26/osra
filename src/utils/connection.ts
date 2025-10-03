@@ -3,6 +3,7 @@ import type {
   Message, MessageWithContext,
   Uuid
 } from '../types'
+import { Allocator, makeAllocator } from './allocator'
 import type { PlatformCapabilities } from './capabilities'
 
 import { StrictMessagePort } from './message-channel'
@@ -29,7 +30,8 @@ export type ConnectionContext =
   | UnidirectionalReceivingConnectionContext
 
 export type ConnectionRevivableContext = {
-  messagePorts: Map<string, MessagePort>
+  remoteUuid: Uuid
+  messagePorts: Allocator<MessagePort>
   sendMessage: (message: ConnectionMessage) => void
   receiveMessagePort: StrictMessagePort<MessageWithContext>
 }
@@ -47,7 +49,8 @@ export const startBidirectionalConnection = (
   }
 ) => {
   const revivableContext = {
-    messagePorts: new Map<string, MessagePort>(),
+    remoteUuid,
+    messagePorts: makeAllocator(),
     sendMessage: send,
     receiveMessagePort
   } satisfies ConnectionRevivableContext
