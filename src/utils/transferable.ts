@@ -1,14 +1,8 @@
-import type { Capable, Revivable, RevivableBox, RevivableVariant, TransferBox } from '../types'
+import type { Capable, TransferBox } from '../types'
 
 import { OSRA_BOX } from '../types'
-import { ConnectionRevivableContext } from './connection'
 import { replaceRecursive } from './replace'
-import { box, boxAllTypes, boxMessagePort, revive } from './revivable'
-import {
-  isClonable, isMessagePort, isRevivable,
-  isRevivableBox,
-  isTransferable, isTransferBox, revivableToType
-} from './type-guards'
+import { isClonable, isTransferable, isTransferBox } from './type-guards'
 
 export const getTransferableObjects = (value: any): Transferable[] => {
   const transferables: Transferable[] = []
@@ -41,42 +35,11 @@ export const transfer = <T extends Transferable>(value: T) => ({
   value
 }) as TransferBox<T>
 
-export const boxAllTransferables = <T extends Capable>(value: T) =>
+export const recursiveTransfer = <T extends Capable>(value: T) =>
   replaceRecursive(
     value,
     (value: any) =>
       isTransferable(value)
         ? transfer(value)
         : value
-  )
-
-export const recursiveBox = <T extends Capable>(value: T, func: (value: Revivable) => RevivableVariant) =>
-  replaceRecursive(
-    value,
-    (value) =>
-      isRevivable(value)
-        ? trapBox(value, func)
-        : value
-  )
-
-export const recursiveRevive = <T extends Capable>(value: T, context: ConnectionRevivableContext) =>
-  replaceRecursive(
-    value,
-    (value) =>
-      isRevivableBox(value)
-        ? revive(context)(value)
-        : value,
-    true
-  )
-
-export const boxMessage = (value: Capable, context: ConnectionRevivableContext) =>
-  recursiveBox(
-    value,
-    box(context)
-  )
-
-export const reviveMessage = (value: Capable, context: ConnectionRevivableContext) =>
-  recursiveRevive(
-    value,
-    context
   )
