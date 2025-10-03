@@ -26,7 +26,7 @@ import {
   isRevivableFunctionBox, isRevivableMessagePortBox, isRevivablePromiseBox,
   isRevivableReadableStreamBox, revivableToType
 } from './type-guards'
-import { replaceRecursive } from './replace'
+import { deepReplace } from './replace'
 
 export const boxMessagePort = (
   value: MessagePort,
@@ -128,12 +128,10 @@ export const box = (value: Revivable, context: ConnectionRevivableContext) => {
 }
 
 export const recursiveBox = <T extends Capable>(value: T, context: ConnectionRevivableContext) =>
-  replaceRecursive(
+  deepReplace(
     value,
-    (value) =>
-      isRevivable(value)
-        ? box(value, context)
-        : value
+    isRevivable,
+    (value) => box(value, context)
   )
 
 export const revive = (box: RevivableBox, context: ConnectionRevivableContext) => {
@@ -151,11 +149,9 @@ export const revive = (box: RevivableBox, context: ConnectionRevivableContext) =
 }
 
 export const recursiveRevive = <T extends Capable>(value: T, context: ConnectionRevivableContext) =>
-  replaceRecursive(
+  deepReplace(
     value,
-    (value) =>
-      isRevivableBox(value)
-        ? revive(value, context)
-        : value,
-    true
+    isRevivableBox,
+    (value) => revive(value, context),
+    { order: 'post' }
   )
