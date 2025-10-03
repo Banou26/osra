@@ -152,17 +152,17 @@ export type ProtocolMessage =
     remoteUuid: Uuid
   }
 
-export type BidirectionalConnectionMessage<JsonOnly extends boolean = false> =
+export type BidirectionalConnectionMessage =
   | {
     type: 'init'
     remoteUuid: Uuid
-    data: JsonOnly extends true ? Jsonable : Capable
+    data: Capable
   }
   /** message not needed if transferring MessagePort is supported */
   | {
     type: 'message'
     remoteUuid: Uuid
-    data: JsonOnly extends true ? Jsonable : Capable
+    data: Capable
     portId: string
   }
   /** message not needed if transferring MessagePort is supported */
@@ -172,24 +172,24 @@ export type BidirectionalConnectionMessage<JsonOnly extends boolean = false> =
     portId: string
   }
 
-export type UnidirectionalConnectionMessage<JsonOnly extends boolean = false> = {
+export type UnidirectionalConnectionMessage = {
   type: 'message'
   remoteUuid: Uuid
-  data: JsonOnly extends true ? Jsonable : Capable
+  data: Capable
   portId: string
 }
 
-export type ConnectionMessage<JsonOnly extends boolean = false> =
-  | BidirectionalConnectionMessage<JsonOnly>
-  | UnidirectionalConnectionMessage<JsonOnly>
+export type ConnectionMessage =
+  | BidirectionalConnectionMessage
+  | UnidirectionalConnectionMessage
 
-export type MessageVariant<JsonOnly extends boolean = false> =
+export type MessageVariant =
   | ProtocolMessage
-  | ConnectionMessage<JsonOnly>
+  | ConnectionMessage
 
-export type Message<JsonOnly extends boolean = false> =
+export type Message =
   | MessageBase
-  & MessageVariant<JsonOnly>
+  & MessageVariant
 
 export type MessageContext = {
   port?: MessagePort | WebExtPort // WebExtension
