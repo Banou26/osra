@@ -1,25 +1,37 @@
-import {
-    OSRA_BOX,
-    RevivableToRevivableType,
-    ReviveBoxBase,
-    type Capable,
-  type MessageWithContext,
-  type Revivable,
-  type RevivableBox,
-  type RevivableDate,
-  type RevivableError,
-  type RevivableFunction,
-  type RevivableMessagePort,
-  type RevivablePromise,
-  type RevivableReadableStream,
-  type RevivableVariant
+import type {
+    Capable,
+  MessageWithContext,
+  Revivable,
+  RevivableBox,
+  RevivableDate,
+  RevivableError,
+  RevivableFunction,
+  RevivableMessagePort,
+  RevivablePromise,
+  RevivableReadableStream,
+  RevivableVariant
 } from '../types'
-import { ConnectionRevivableContext } from './connection'
+import type { ConnectionRevivableContext } from './connection'
 
+import {
+  OSRA_BOX,
+  RevivableToRevivableType,
+  ReviveBoxBase,
+} from '../types'
 import { StrictMessagePort } from './message-channel'
-import { isDate, isError, isFunction, isMessagePort, isPromise, isReadableStream, isRevivable, isRevivableDateBox, isRevivableErrorBox, isRevivableFunctionBox, isRevivableMessagePortBox, isRevivablePromiseBox, isRevivableReadableStreamBox, revivableToType } from './type-guards'
+import {
+  isDate, isError, isFunction,
+  isMessagePort, isPromise, isReadableStream,
+  isRevivable, isRevivableBox, isRevivableDateBox, isRevivableErrorBox,
+  isRevivableFunctionBox, isRevivableMessagePortBox, isRevivablePromiseBox,
+  isRevivableReadableStreamBox, revivableToType
+} from './type-guards'
+import { replaceRecursive } from './replace'
 
-export const boxMessagePort = (value: MessagePort, context: ConnectionRevivableContext): RevivableVariant & { type: 'messagePort' } => {
+export const boxMessagePort = (
+  value: MessagePort,
+  context: ConnectionRevivableContext
+): RevivableVariant & { type: 'messagePort' } => {
   const messagePort = value as StrictMessagePort<MessageWithContext>
   messagePort.addEventListener('message', (event) => {
     const { message } = event.data
@@ -115,6 +127,15 @@ export const box = (value: Revivable, context: ConnectionRevivableContext) => {
   } satisfies ReviveBoxBase<RevivableToRevivableType<typeof value>>
 }
 
+export const recursiveBox = <T extends Capable>(value: T, context: ConnectionRevivableContext) =>
+  replaceRecursive(
+    value,
+    (value) =>
+      isRevivable(value)
+        ? box(value, context)
+        : value
+  )
+
 export const revive = (box: RevivableBox, context: ConnectionRevivableContext) => {
   if (isRevivable(box.value)) return box.value
 
@@ -128,3 +149,13 @@ export const revive = (box: RevivableBox, context: ConnectionRevivableContext) =
     : box
   )
 }
+
+export const recursiveRevive = <T extends Capable>(value: T, context: ConnectionRevivableContext) =>
+  replaceRecursive(
+    value,
+    (value) =>
+      isRevivableBox(value)
+        ? revive(value, context)
+        : value,
+    true
+  )
