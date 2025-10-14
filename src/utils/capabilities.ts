@@ -1,4 +1,4 @@
-import { getTransferableObjects } from './messaging'
+import { getTransferableObjects } from './transferable'
 
 export type PlatformCapabilities = {
   jsonOnly: boolean

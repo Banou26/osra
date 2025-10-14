@@ -1,4 +1,4 @@
-type DeepReplace<T, From, To> =
+export type DeepReplace<T, From, To> =
     T extends From ? DeepReplace<To, From, To>
   : T extends Array<infer U> ? Array<DeepReplace<U, From, To>>
   : T extends object ? { [K in keyof T]: DeepReplace<T[K], From, To> }
