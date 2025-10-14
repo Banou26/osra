@@ -7,7 +7,7 @@ import { Allocator, makeAllocator } from './allocator'
 import type { PlatformCapabilities } from './capabilities'
 
 import { StrictMessagePort } from './message-channel'
-import { boxMessageRevivables } from './messaging'
+import { recursiveBox } from './revivable'
 
 export type BidirectionalConnectionContext = {
   type: 'bidirectional',
@@ -70,7 +70,7 @@ export const startBidirectionalConnection = (
   send({
     type: 'init',
     remoteUuid,
-    data: boxMessageRevivables(value, revivableContext)
+    data: recursiveBox(value, revivableContext)
   })
 
   return {

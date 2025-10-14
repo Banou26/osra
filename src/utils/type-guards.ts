@@ -3,7 +3,7 @@ import type {
   CustomTransport, EmitJsonPlatformTransport,
   EmitTransport, JsonPlatformTransport,
   Message, ReceiveJsonPlatformTransport,
-  ReceiveTransport, Revivable, RevivableBox, RevivableVariantType, TransferBox, Transport
+  ReceiveTransport, Revivable, RevivableBox, RevivableToRevivableType, RevivableVariantType, TransferBox, Transport
 } from '../types'
 
 import { OSRA_BOX, OSRA_KEY } from '../types'
@@ -226,11 +226,11 @@ export const isRevivableDateBox = (value: any): value is RevivableBox & { type: 
 
 export const revivableBoxToType = (value: RevivableBox) => value.type
 
-export const revivableToType = (value: Revivable) => {
-  if (isMessagePort(value)) return 'messagePort'
-  if (isPromise(value)) return 'promise'
-  if (isReadableStream(value)) return 'readableStream'
-  if (isDate(value)) return 'date'
-  if (isError(value)) return 'error'
+export const revivableToType = <T extends Revivable>(value: T): RevivableToRevivableType<T> => {
+  if (isMessagePort(value)) return 'messagePort' as RevivableToRevivableType<T>
+  if (isPromise(value)) return 'promise' as RevivableToRevivableType<T>
+  if (isReadableStream(value)) return 'readableStream' as RevivableToRevivableType<T>
+  if (isDate(value)) return 'date' as RevivableToRevivableType<T>
+  if (isError(value)) return 'error' as RevivableToRevivableType<T>
   throw new Error('Unknown revivable type')
 }

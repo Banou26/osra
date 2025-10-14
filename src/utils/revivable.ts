@@ -1,5 +1,5 @@
 import type {
-    Capable,
+  Capable,
   MessageWithContext,
   Revivable,
   RevivableBox,
@@ -26,25 +26,25 @@ import {
   isRevivableFunctionBox, isRevivableMessagePortBox, isRevivablePromiseBox,
   isRevivableReadableStreamBox, revivableToType
 } from './type-guards'
-import { deepReplace } from './replace'
+import { DeepReplace, deepReplace } from './replace'
 
 export const boxMessagePort = (
   value: MessagePort,
   context: ConnectionRevivableContext
 ): RevivableVariant & { type: 'messagePort' } => {
   const messagePort = value as StrictMessagePort<Capable>
-  const uuid = context.messagePorts.alloc(messagePort)
+  const portId = context.messagePorts.alloc(messagePort)
   messagePort.addEventListener('message', ({ data }) => {
     context.sendMessage({
       type: 'message',
       remoteUuid: context.remoteUuid,
       data: recursiveBox(data, context),
-      portId: uuid
+      portId: portId
     })
   })
 
   context.receiveMessagePort.addEventListener('message', ({ data: { message } }) => {
-    if (message.type !== 'message' || message.uuid !== uuid) return
+    if (message.type !== 'message' || message.portId !== portId) return
     const revivedData = recursiveRevive(message.data, context)
     messagePort.postMessage(revivedData)
   })
@@ -52,12 +52,25 @@ export const boxMessagePort = (
   return {
     type: 'messagePort',
     messagePort,
-    messagePortId: uuid
+    messagePortId: portId
   }
 }
 
-export const reviveMessagePort = (value: RevivableMessagePort, context: ConnectionRevivableContext): MessagePort => {
-
+export const reviveMessagePort = (value: RevivableMessagePort, context: ConnectionRevivableContext): StrictMessagePort<Capable> => {
+  if (value.messagePort) {
+    return value.messagePort
+  }
+  const { port1, port2 } = new MessageChannel()
+  context.receiveMessagePort.addEventListener('message', function listener ({ data: { message } }:  MessageEvent<MessageWithContext>) {
+    if (message.type === 'message-port-close') {
+      context.receiveMessagePort.removeEventListener('message', listener)
+      port2.close()
+      return
+    }
+    if (message.type !== 'message' || message.portId !== value.messagePortId) return
+    port2.postMessage(message.data)
+  })
+  return port1
 }
 
 export const boxFunction = (value: Function, context: ConnectionRevivableContext): RevivableVariant & { type: 'function' } => {
@@ -101,17 +114,36 @@ export const reviveDate = (value: RevivableDate, context: ConnectionRevivableCon
 }
 
 export const box = (value: Revivable, context: ConnectionRevivableContext) => {
+  const isAlwaysBox =
+    isFunction(value)
+    || isPromise(value)
+    || isDate(value)
+    || isError(value)
+
+  if (isAlwaysBox) {
+    return {
+      [OSRA_BOX]: 'revivable',
+      ...(
+        isFunction(value) ? boxFunction(value, context)
+        : isPromise(value) ? boxPromise(value, context)
+        : isError(value) ? boxError(value, context)
+        : isDate(value) ? boxDate(value, context)
+        : value
+      )
+    } satisfies RevivableBox
+  }
+
+  // Function that gets called if any of the serialization methods gets called
   const trap = (hint?: 'number' | 'string' | 'default') => {
     const box = {
       [OSRA_BOX]: 'revivable',
-      value,
       ...(
         isMessagePort(value) ? boxMessagePort(value, context)
         : isFunction(value) ? boxFunction(value, context)
         : isPromise(value) ? boxPromise(value, context)
         : isError(value) ? boxError(value, context)
-        : isReadableStream(value) ? boxReadableStream(value, context)
         : isDate(value) ? boxDate(value, context)
+        : isReadableStream(value) ? boxReadableStream(value, context)
         : value
       )
     } satisfies RevivableBox
@@ -122,6 +154,7 @@ export const box = (value: Revivable, context: ConnectionRevivableContext) => {
         : box
     )
   }
+
   return {
     [OSRA_BOX]: 'revivable',
     type: revivableToType(value),
@@ -138,9 +171,10 @@ export const recursiveBox = <T extends Capable>(value: T, context: ConnectionRev
     value,
     isRevivable,
     (value) => box(value, context)
-  )
+  ) as DeepReplace<T, Revivable, ReturnType<typeof box>>
 
 export const revive = (box: RevivableBox, context: ConnectionRevivableContext) => {
+  // If the value got properly sent through the protocol as is, we don't need to revive it
   if (isRevivable(box.value)) return box.value
 
   return (

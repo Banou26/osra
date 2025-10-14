@@ -42,7 +42,7 @@ export type TransferBox<T extends Transferable = Transferable> = {
 export type ReviveBoxBase<T extends RevivableVariant['type'] = RevivableVariant['type']> = {
   [OSRA_BOX]: 'revivable'
   type: T
-  value: RevivableVariantTypeToRevivableVariant<T>
+  value?: RevivableVariantTypeToRevivableVariant<T>
   [Symbol.toPrimitive]?: Function
   valueOf?: Function
   toString?: Function
@@ -132,6 +132,7 @@ export type Capable =
 
 export type MessageBase = {
   [OSRA_KEY]: string
+  /** UUID of the client that sent the message */
   uuid: Uuid
   name?: string
 }
@@ -163,12 +164,14 @@ export type BidirectionalConnectionMessage =
     type: 'message'
     remoteUuid: Uuid
     data: Capable
+    /** uuid of the messagePort that the message was sent through */
     portId: string
   }
   /** message not needed if transferring MessagePort is supported */
   | {
     type: 'message-port-close'
     remoteUuid: Uuid
+    /** uuid of the messagePort that closed */
     portId: string
   }
 
