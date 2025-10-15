@@ -3,13 +3,13 @@ import type {
   Message, MessageContext,
   ReceiveTransport
 } from '../types'
+import type { WebExtOnMessage, WebExtPort, WebExtSender } from './type-guards'
 
 import { OSRA_KEY } from '../types'
 import {
   isOsraMessage, isCustomTransport,
   isWebExtensionOnConnect, isWebExtensionOnMessage,
-  isWebExtensionPort, isWebSocket, WebExtOnMessage,
-  WebExtPort, WebExtSender, isWindow, isSharedWorker
+  isWebExtensionPort, isWebSocket, isWindow, isSharedWorker
 } from './type-guards'
 
 export const getWebExtensionGlobal = () => globalThis.browser ?? globalThis.chrome

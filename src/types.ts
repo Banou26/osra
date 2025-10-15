@@ -55,19 +55,36 @@ export type RevivableMessagePort = {
   messagePortId: string
 }
 
+export type RevivablePromiseContext =
+  | {
+    type: 'resolve'
+    data: Capable
+  }
+  | {
+    type: 'reject'
+    error: string
+  }
+
 export type RevivablePromise = {
   type: 'promise'
-  port: RevivableMessagePort
+  port: MessagePort
 }
+
+export type RevivableFunctionCallContext = [
+  /** MessagePort that will be used to send the result of the function call */
+  MessagePort,
+  /** Arguments that will be passed to the function call */
+  Capable[]
+]
 
 export type RevivableFunction = {
   type: 'function'
-  port: RevivableMessagePort
+  port: MessagePort
 }
 
 export type RevivableReadableStream = {
   type: 'readableStream'
-  port: RevivableMessagePort
+  port: MessagePort
 }
 
 export type RevivableDate = {
