@@ -198,6 +198,7 @@ export const isTransport = (value: any): value is Transport =>
 
 export const isRevivable = (value: any): value is Revivable =>
   isMessagePort(value)
+  || isFunction(value)
   || isPromise(value)
   || isReadableStream(value)
   || isDate(value)
@@ -228,6 +229,7 @@ export const revivableBoxToType = (value: RevivableBox) => value.type
 
 export const revivableToType = <T extends Revivable>(value: T): RevivableToRevivableType<T> => {
   if (isMessagePort(value)) return 'messagePort' as RevivableToRevivableType<T>
+  if (isFunction(value)) return 'function' as RevivableToRevivableType<T>
   if (isPromise(value)) return 'promise' as RevivableToRevivableType<T>
   if (isReadableStream(value)) return 'readableStream' as RevivableToRevivableType<T>
   if (isDate(value)) return 'date' as RevivableToRevivableType<T>

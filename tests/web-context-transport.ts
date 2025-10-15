@@ -15,8 +15,10 @@ export const baseArgsAndResponse = async () => {
     }
   }
   expose(value, { transport: window })
+  console.log('1')
 
   const { test } = await expose<typeof value>({}, { transport: window })
+  console.log('2')
 
   await expect(test({ foo: 1 }, 'bar')).to.eventually.equal(1)
   await expect(test({ foo: 0 }, 'baz')).to.be.rejected

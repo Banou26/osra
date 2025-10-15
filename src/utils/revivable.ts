@@ -62,15 +62,11 @@ export const boxMessagePort = (
 
   return {
     type: 'messagePort',
-    messagePort,
     messagePortId: portId
   }
 }
 
 export const reviveMessagePort = (value: RevivableMessagePort, context: ConnectionRevivableContext): StrictMessagePort<Capable> => {
-  if (value.messagePort) {
-    return value.messagePort
-  }
   const { port1: userPort, port2: internalPort } = new MessageChannel()
   // Since we are in a boxed MessagePort, we want to send a message to the other side through the EmitTransport
   internalPort.addEventListener('message', ({ data }) => {
@@ -198,6 +194,7 @@ export const reviveDate = (value: RevivableDate, context: ConnectionRevivableCon
 }
 
 export const box = (value: Revivable, context: ConnectionRevivableContext) => {
+  console.log('box', revivableToType(value), typeof value, value)
   const isAlwaysBox =
     isFunction(value)
     || isPromise(value)
@@ -210,8 +207,8 @@ export const box = (value: Revivable, context: ConnectionRevivableContext) => {
       ...(
         isFunction(value) ? boxFunction(value, context)
         : isPromise(value) ? boxPromise(value, context)
-        : isError(value) ? boxError(value, context)
         : isDate(value) ? boxDate(value, context)
+        : isError(value) ? boxError(value, context)
         : value
       )
     } satisfies RevivableBox
@@ -223,10 +220,6 @@ export const box = (value: Revivable, context: ConnectionRevivableContext) => {
       [OSRA_BOX]: 'revivable',
       ...(
         isMessagePort(value) ? boxMessagePort(value, context)
-        : isFunction(value) ? boxFunction(value, context)
-        : isPromise(value) ? boxPromise(value, context)
-        : isError(value) ? boxError(value, context)
-        : isDate(value) ? boxDate(value, context)
         : isReadableStream(value) ? boxReadableStream(value, context)
         : value
       )

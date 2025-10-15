@@ -4,6 +4,8 @@ export type DeepReplace<T, From, To> =
   : T extends object ? { [K in keyof T]: DeepReplace<T[K], From, To> }
   : T
 
+let i = 0
+
 export const deepReplace = <T, From, To>(
   value: T,
   predicate: (value: unknown) => value is From,
@@ -13,6 +15,9 @@ export const deepReplace = <T, From, To>(
     order?: 'pre' | 'post'
   } = {}
 ): DeepReplace<T, From, To> => {
+  i++
+  if (i > 100) throw new Error('bruh')
+  console.log('deepReplace', typeof value, value)
   const { order = 'pre' } = options
   const replacedValue =
     order === 'pre' && predicate(value)
