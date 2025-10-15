@@ -3,11 +3,12 @@ import type {
   Message, MessageWithContext,
   Uuid
 } from '../types'
-import { Allocator, makeAllocator } from './allocator'
+import type { Allocator } from './allocator'
 import type { PlatformCapabilities } from './capabilities'
+import type { StrictMessagePort } from './message-channel'
 
-import { StrictMessagePort } from './message-channel'
 import { recursiveBox } from './revivable'
+import { makeAllocator } from './allocator'
 
 export type BidirectionalConnectionContext = {
   type: 'bidirectional',

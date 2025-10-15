@@ -7,6 +7,8 @@ type TestObject = {
 }
 
 test.beforeEach(async ({ page }) => {
+  page.on('console', msg => console.log(msg.text()))
+  page.on('pageerror', err => console.log(err))
   await page.goto('about:blank')
   await page.addScriptTag({ path: './build/test.js', type: 'module' })
 })
