@@ -51,7 +51,6 @@ export type ReviveBoxBase<T extends RevivableVariant['type'] = RevivableVariant[
 
 export type RevivableMessagePort = {
   type: 'messagePort'
-  messagePort: MessagePort
   messagePortId: string
 }
 

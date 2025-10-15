@@ -7,9 +7,26 @@ type TestObject = {
 }
 
 test.beforeEach(async ({ page }) => {
-  page.on('console', msg => console.log(msg.text()))
+  page.on('console', async msg => {
+    const args = msg.args()
+    const logValues =
+      await Promise.all(
+        args.map(arg =>
+          arg.evaluate(obj => {
+            return JSON.stringify(
+              obj,
+              (key, value) =>
+                typeof value === 'function'
+                  ? `[Function: ${value.name || 'anonymous'}]`
+                  : value
+            )
+          })
+        )
+      )
+    console.log(...logValues)
+  })
   page.on('pageerror', err => console.log(err))
-  await page.goto('about:blank')
+  await page.goto('http://localhost:3000')
   await page.addScriptTag({ path: './build/test.js', type: 'module' })
 })
 

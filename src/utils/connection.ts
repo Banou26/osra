@@ -61,6 +61,7 @@ export const startBidirectionalConnection = (
   })
 
   receiveMessagePort.addEventListener('message', (event) => {
+    console.log('msg', event.data)
     const { message, context } = event.data
     if (message.type === 'init') {
       initResolve(message)
@@ -68,10 +69,13 @@ export const startBidirectionalConnection = (
     }
   })
 
+  const boxed = recursiveBox(value, revivableContext)
+  console.log('boxed', boxed)
+
   send({
     type: 'init',
     remoteUuid,
-    data: recursiveBox(value, revivableContext)
+    data: boxed
   })
 
   return {

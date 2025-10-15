@@ -9,14 +9,14 @@ export type PlatformCapabilities = {
 }
 
 const probePlatformCapabilityUtil = <T>(value: T, transfer = false): Promise<T> => {
-  const tranferables = transfer ? getTransferableObjects(value) : []
   const { port1, port2 } = new MessageChannel()
   const result = new Promise<T>(resolve =>
     port1.addEventListener('message', message =>
       resolve(message.data)
     )
   )
-  port2.postMessage(value, tranferables)
+  port1.start()
+  port2.postMessage(value, transfer ? getTransferableObjects(value) : [])
   return result
 }
 
