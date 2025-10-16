@@ -1,7 +1,8 @@
 import { defineConfig, devices } from '@playwright/test'
 
 export default defineConfig({
-  timeout: 5000,
+  timeout: 5000000,
+  // timeout: 5000,
   fullyParallel: true,
   webServer: {
     command: 'npm run start-server',

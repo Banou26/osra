@@ -21,11 +21,13 @@ import type { StrictMessagePort } from './message-channel'
 
 import { OSRA_BOX } from '../types'
 import {
+    isAlwaysBox,
+  isClonable,
   isDate, isError, isFunction,
   isMessagePort, isPromise, isReadableStream,
   isRevivable, isRevivableBox, isRevivableDateBox, isRevivableErrorBox,
   isRevivableFunctionBox, isRevivableMessagePortBox, isRevivablePromiseBox,
-  isRevivableReadableStreamBox, revivableToType
+  isRevivableReadableStreamBox, isTransferable, revivableToType
 } from './type-guards'
 import { deepReplace } from './replace'
 import { getTransferableObjects } from './transferable'
@@ -194,14 +196,9 @@ export const reviveDate = (value: RevivableDate, context: ConnectionRevivableCon
 }
 
 export const box = (value: Revivable, context: ConnectionRevivableContext) => {
-  console.log('box', revivableToType(value), typeof value, value)
-  const isAlwaysBox =
-    isFunction(value)
-    || isPromise(value)
-    || isDate(value)
-    || isError(value)
+  console.log('box', revivableToType(value), typeof value, Object.getPrototypeOf(value)[Symbol.toStringTag], value)
 
-  if (isAlwaysBox) {
+  if (isAlwaysBox(value)) {
     return {
       [OSRA_BOX]: 'revivable',
       ...(
@@ -246,7 +243,9 @@ export const box = (value: Revivable, context: ConnectionRevivableContext) => {
 export const recursiveBox = <T extends Capable>(value: T, context: ConnectionRevivableContext) =>
   deepReplace(
     value,
-    isRevivable,
+    (value, parent): value is Revivable =>
+      isRevivable(value)
+      && !(isRevivableBox(parent) && parent.type !== 'messagePort'),
     (value) => box(value, context)
   ) as DeepReplace<T, Revivable, ReturnType<typeof box>>
 
