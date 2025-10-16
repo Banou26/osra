@@ -70,7 +70,7 @@ export const startBidirectionalConnection = (
   })
 
   const boxed = recursiveBox(value, revivableContext)
-  console.log('boxed', boxed)
+  console.log('boxed', boxed, Object.getPrototypeOf(boxed.test.port)[Symbol.toStringTag])
 
   send({
     type: 'init',

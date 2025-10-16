@@ -20,6 +20,12 @@ export const isReadableStream = (value: any) => value instanceof ReadableStream
 export const isDate = (value: any) => value instanceof Date
 export const isError = (value: any) => value instanceof Error
 
+export const isAlwaysBox = (value: any): value is Function | Promise<any> | Date | Error =>
+  isFunction(value)
+  || isPromise(value)
+  || isDate(value)
+  || isError(value)
+
 export const isOsraMessage = (value: any): value is Message =>
   Boolean(
     value
@@ -205,7 +211,10 @@ export const isRevivable = (value: any): value is Revivable =>
   || isError(value)
 
 export const isRevivableBox = (value: any): value is RevivableBox =>
-  OSRA_BOX in value && value[OSRA_BOX] === 'revivable'
+  value
+  && typeof value === 'object'
+  && OSRA_BOX in value
+  && value[OSRA_BOX] === 'revivable'
 
 export const isRevivableMessagePortBox = (value: any): value is RevivableBox & { type: 'messagePort' } =>
   isRevivableBox(value) && value.type === 'messagePort'
