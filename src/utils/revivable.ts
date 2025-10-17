@@ -196,7 +196,7 @@ export const reviveDate = (value: RevivableDate, context: ConnectionRevivableCon
 }
 
 export const box = (value: Revivable, context: ConnectionRevivableContext) => {
-  console.log('box', revivableToType(value), typeof value, Object.getPrototypeOf(value)[Symbol.toStringTag], value)
+  console.log('box', value)
 
   if (isAlwaysBox(value)) {
     return {
@@ -240,14 +240,25 @@ export const box = (value: Revivable, context: ConnectionRevivableContext) => {
   } satisfies ReviveBoxBase<RevivableToRevivableType<typeof value>>
 }
 
-export const recursiveBox = <T extends Capable>(value: T, context: ConnectionRevivableContext) =>
-  deepReplace(
-    value,
-    (value, parent): value is Revivable =>
-      isRevivable(value)
-      && !(isRevivableBox(parent) && parent.type !== 'messagePort'),
-    (value) => box(value, context)
-  ) as DeepReplace<T, Revivable, ReturnType<typeof box>>
+export const recursiveBox = <T extends Capable>(value: T, context: ConnectionRevivableContext): DeepReplace<T, Revivable, RevivableBox> => {
+  const boxedValue = isRevivable(value) ? box(value, context) : value
+  return (
+    Array.isArray(boxedValue) ? boxedValue.map(value => recursiveBox(value, context)) as DeepReplace<T, Revivable, RevivableBox>
+    : boxedValue && typeof boxedValue === 'object' ? (
+      Object.fromEntries(
+        Object
+          .entries(boxedValue)
+          .map(([key, value]: [string, Capable]) => [
+            key,
+            isRevivableBox(boxedValue) && boxedValue.type === 'messagePort'
+              ? value
+              : recursiveBox(value, context)
+          ])
+      )
+    ) as DeepReplace<T, Revivable, RevivableBox>
+    : boxedValue as DeepReplace<T, Revivable, RevivableBox>
+  )
+}
 
 export const revive = (box: RevivableBox, context: ConnectionRevivableContext) => {
   // If the value got properly sent through the protocol as is, we don't need to revive it
