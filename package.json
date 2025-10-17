@@ -17,7 +17,7 @@
     "dev2": "concurrently \"npm run build-watch\" \"npm run build-test-watch\" \"npm run test-watch-headful\"",
     "test": "npx playwright test",
     "test-watch": "set PWTEST_WATCH=1 & npx playwright test",
-    "test-watch-headful": "npx playwright test --headed",
+    "test-watch-headful": "nodemon --watch build --exec \"npx playwright test --headed\"",
     "type-check": "tsc --noEmit",
     "start-server": "http-server -p 3000"
   },
@@ -41,6 +41,7 @@
     "chai-as-promised": "^8.0.1",
     "concurrently": "^9.1.0",
     "http-server": "^14.1.1",
+    "nodemon": "^3.1.10",
     "playwright": "^1.49.1",
     "typescript": "^5.9.2",
     "vite": "^6.0.4"
