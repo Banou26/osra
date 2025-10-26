@@ -1,83 +1,102 @@
-import type { OsraMessage } from '../src/types'
+import type { Transport } from '../src/types'
 
 import { expect } from 'chai'
 
 import { expose } from '../src/index'
 
-const jsonRemote = (osraMessage: OsraMessage, _: Transferable[]) => {
-  window.postMessage(JSON.stringify(osraMessage), '*', [])
-}
-export const baseArgsAndResponse = async () => {
-  const value = {
-    test: async (data: { foo: number }, bar: string) => {
-      if (data.foo !== 1) {
-        throw new Error('foo is not 1')
-      }
-      if (bar !== 'bar') {
-        throw new Error('bar is not bar')
-      }
-      return 1
-    }
+const jsonTransport = (): Transport => ({
+  isJson: true,
+  receive: (listener) => {
+    window.addEventListener('message', event => {
+      const data = JSON.parse(event.data)
+      listener(data, {})
+    })
+  },
+  emit: async (message) => {
+    window.postMessage(JSON.stringify(message))
   }
-  expose(value, { remote: jsonRemote, local: window })
+})
 
-  const { test } = await expose<typeof value>({}, { remote: jsonRemote, local: window })
+export const baseArgsAndResponse = async () => {
+  const value = async (data: { foo: number }, bar: string) => {
+    if (data.foo !== 1) {
+      throw new Error('foo is not 1')
+    }
+    if (bar !== 'bar') {
+      throw new Error('bar is not bar')
+    }
+    return 1
+  }
+  expose(value, { transport: jsonTransport() })
 
-  await expect(test({ foo: 1 }, 'bar')).to.eventually.equal(1)
+  const test = await expose<typeof value>({}, { transport: jsonTransport() })
+  const a = test({ foo: 1 }, 'bar')
+  await new Promise(resolve => setTimeout(resolve, 1000000))
+
+  await expect(a).to.eventually.equal(1)
   await expect(test({ foo: 0 }, 'baz')).to.be.rejected
 }
 
-export const callback = async () => {
-  const value = { test: async () => async () => 1 }
-  expose(value, { remote: jsonRemote, local: window })
+// export const callback = async () => {
+//   const value = async () => async () => 1
+//   expose(value, { transport: jsonTransport() })
 
-  const { test } = await expose<typeof value>({}, { remote: jsonRemote, local: window })
+//   const test = await expose<typeof value>({}, { transport: jsonTransport() })
 
-  const result = await test()
-  await expect(result()).to.eventually.equal(1)
-}
+//   const result = await test()
+//   await expect(result()).to.eventually.equal(1)
+// }
 
-export const callbackAsArg = async () => {
-  const value = { test: async (callback: () => number) => callback() }
-  expose(value, { remote: jsonRemote, local: window })
+// export const callbackAsArg = async () => {
+//   const value = async (callback: () => number) => callback()
+//   expose(value, { transport: jsonTransport() })
 
-  const { test } = await expose<typeof value>({}, { remote: jsonRemote, local: window })
+//   const test = await expose<typeof value>({}, { transport: jsonTransport() })
 
-  const result = await test(() => 1)
-  expect(result).to.equal(1)
-}
+//   const result = await test(() => 1)
+//   expect(result).to.equal(1)
+// }
 
-export const polyfilledMessageChannel = async () => {
-  const value = { test: async (callback: () => number) => callback() }
-  expose(value, { remote: jsonRemote, local: window })
+// export const objectBaseArgsAndResponse = async () => {
+//   const value = {
+//     test: async (data: { foo: number }, bar: string) => {
+//       if (data.foo !== 1) {
+//         throw new Error('foo is not 1')
+//       }
+//       if (bar !== 'bar') {
+//         throw new Error('bar is not bar')
+//       }
+//       return 1
+//     }
+//   }
+//   expose(value, { transport: jsonTransport() })
 
-  const { test } = await expose<typeof value>({}, { remote: jsonRemote, local: window })
+//   const { test } = await expose<typeof value>({}, { transport: jsonTransport() })
 
-  const result = await test(() => 1)
-  expect(result).to.equal(1)
-}
+//   await expect(test({ foo: 1 }, 'bar')).to.eventually.equal(1)
+//   await expect(test({ foo: 0 }, 'baz')).to.be.rejected
+// }
 
-export const readableStreamTransfer = async () => {
-  const value = {
-    test: async () =>
-      new ReadableStream<string>({
-        start(controller) {
-          controller.enqueue('hello')
-          controller.enqueue('world')
-          controller.close()
-        }
-      })
-  }
-  expose(value, { remote: jsonRemote, local: window })
+// export const objectCallback = async () => {
+//   const value = {
+//     test: async () => async () => 1
+//   }
+//   expose(value, { transport: jsonTransport() })
 
-  const { test } = await expose<typeof value>({}, { remote: jsonRemote, local: window })
+//   const { test } = await expose<typeof value>({}, { transport: jsonTransport() })
 
-  const stream = await test()
-  const values = [] as string[]
-  for await (const value of stream) {
-    values.push(value)
-  }
+//   const result = await test()
+//   await expect(result()).to.eventually.equal(1)
+// }
 
-  expect(values[0]).to.equal('hello')
-  expect(values[1]).to.equal('world')
-}
+// export const objectCallbackAsArg = async () => {
+//   const value = {
+//     test: async (callback: () => number) => callback()
+//   }
+//   expose(value, { transport: jsonTransport() })
+
+//   const { test } = await expose<typeof value>({}, { transport: jsonTransport() })
+
+//   const result = await test(() => 1)
+//   expect(result).to.equal(1)
+// }

@@ -222,6 +222,10 @@ export type Message = {
   context: MessageContext
 }
 
+export type BaseTransport = {
+  isJson?: boolean
+}
+
 export type CustomTransport =
   | {
     receive: ReceivePlatformTransport | ((listener: (event: Message, messageContext: MessageContext) => void) => void)
@@ -271,5 +275,8 @@ export type EmitTransport = EmitPlatformTransport & Extract<CustomTransport, { e
 export type ReceiveTransport = ReceivePlatformTransport & Extract<CustomTransport, { receive: any }>
 
 export type Transport =
-  | PlatformTransport
-  | CustomTransport
+  BaseTransport
+  & (
+    | PlatformTransport
+    | CustomTransport
+  )
