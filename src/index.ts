@@ -17,7 +17,8 @@ import {
   isReceiveTransport,
   isEmitTransport,
   startUnidirectionalEmittingConnection,
-  getTransferableObjects
+  getTransferableObjects,
+  isJsonOnlyTransport
 } from './utils'
 
 /**
@@ -32,7 +33,7 @@ import {
 export const expose = async <T extends Capable>(
   value: Capable,
   {
-    transport,
+    transport: _transport,
     name,
     remoteName,
     key = OSRA_DEFAULT_KEY,
@@ -53,6 +54,12 @@ export const expose = async <T extends Capable>(
     logger?: {}
   }
 ): Promise<T> => {
+  const transport = {
+    isJson:
+      _transport.isJson
+      ?? isJsonOnlyTransport(_transport),
+    ..._transport
+  }
   const platformCapabilities = _platformCapabilities ?? await probePlatformCapabilities()
   const connectionContexts = new Map<string, ConnectionContext>()
 
@@ -106,6 +113,7 @@ export const expose = async <T extends Capable>(
         messagePort: port1,
         connection:
           startBidirectionalConnection({
+            transport,
             value,
             uuid,
             remoteUuid: message.uuid,

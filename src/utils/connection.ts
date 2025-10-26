@@ -1,6 +1,7 @@
 import type {
   Capable, ConnectionMessage,
   Message,
+  Transport,
   Uuid
 } from '../types'
 import type { Allocator } from './allocator'
@@ -31,6 +32,7 @@ export type ConnectionContext =
   | UnidirectionalReceivingConnectionContext
 
 export type ConnectionRevivableContext = {
+  transport: Transport
   remoteUuid: Uuid
   messagePorts: Allocator<MessagePort>
   sendMessage: (message: ConnectionMessage) => void
@@ -38,8 +40,9 @@ export type ConnectionRevivableContext = {
 }
 
 export const startBidirectionalConnection = (
-  { value, uuid, remoteUuid, platformCapabilities, receiveMessagePort, send, close }:
+  { transport, value, uuid, remoteUuid, platformCapabilities, receiveMessagePort, send, close }:
   {
+    transport: Transport
     value: Capable
     uuid: Uuid
     remoteUuid: Uuid
@@ -50,6 +53,7 @@ export const startBidirectionalConnection = (
   }
 ) => {
   const revivableContext = {
+    transport,
     remoteUuid,
     messagePorts: makeAllocator(),
     sendMessage: send,
