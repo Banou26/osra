@@ -136,7 +136,6 @@ export const expose = async <T extends Capable>(
     } else { //  "init" | "message" | "message-port-close"
       if (message.remoteUuid !== uuid) return
       const connection = connectionContexts.get(message.uuid)
-      console.log('message connection', message, connection)
       // We just drop the message if the remote uuid hasn't announced itself
       if (!connection) {
         console.warn(`Connection not found for remoteUuid: ${message.uuid}`)
