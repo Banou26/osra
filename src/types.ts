@@ -217,7 +217,7 @@ export type MessageContext = {
   source?: MessageEventSource | null // Window, Worker, WebSocket, ect...
 }
 
-export type MessageWithContext = {
+export type Message = {
   message: Message
   context: MessageContext
 }
