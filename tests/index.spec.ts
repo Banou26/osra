@@ -1,4 +1,6 @@
 import { test } from '@playwright/test'
+import fs from 'fs'
+import path from 'path'
 
 import tests from './_tests_'
 
@@ -32,6 +34,19 @@ test.beforeEach(async ({ page }) => {
   page.on('pageerror', err => console.log(err))
   await page.goto('http://localhost:3000')
   await page.addScriptTag({ path: './build/test.js', type: 'module' })
+})
+
+test.afterEach(async ({ page }) => {
+  // Collect coverage after each test
+  const coverage = await page.evaluate(() => (window as any).__coverage__)
+  if (coverage) {
+    const coverageDir = path.join(process.cwd(), '.nyc_output')
+    if (!fs.existsSync(coverageDir)) {
+      fs.mkdirSync(coverageDir, { recursive: true })
+    }
+    const coverageFile = path.join(coverageDir, `coverage-${Date.now()}-${Math.random().toString(36).slice(2)}.json`)
+    fs.writeFileSync(coverageFile, JSON.stringify(coverage))
+  }
 })
 
 const recurseTests = (tests: TestObject, path: string[] = []) => {
