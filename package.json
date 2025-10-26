@@ -18,6 +18,9 @@
     "test": "npx playwright test",
     "test-watch": "set PWTEST_WATCH=1 & npx playwright test",
     "test-watch-headful": "nodemon --watch build --exec \"npx playwright test --headed\"",
+    "test-with-coverage": "npm run build-test && npx playwright test && npm run print-coverage && npm run clean-coverage",
+    "print-coverage": "npx nyc report",
+    "clean-coverage": "rimraf .nyc_output coverage",
     "type-check": "tsc --noEmit",
     "start-server": "http-server -p 3000"
   },
@@ -32,6 +35,7 @@
   },
   "homepage": "https://github.com/Banou26/osra#readme",
   "devDependencies": {
+    "@istanbuljs/nyc-config-typescript": "^1.0.2",
     "@playwright/test": "^1.49.1",
     "@types/chai": "^5.0.1",
     "@types/chai-as-promised": "^8.0.1",
@@ -42,8 +46,10 @@
     "concurrently": "^9.1.0",
     "http-server": "^14.1.1",
     "nodemon": "^3.1.10",
+    "nyc": "^17.1.0",
     "playwright": "^1.49.1",
     "typescript": "^5.9.2",
-    "vite": "^6.0.4"
+    "vite": "^6.0.4",
+    "vite-plugin-istanbul": "^7.2.0"
   }
 }
