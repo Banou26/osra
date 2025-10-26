@@ -13,13 +13,17 @@ test.beforeEach(async ({ page }) => {
       await Promise.all(
         args.map(arg =>
           arg.evaluate(obj => {
-            return JSON.stringify(
-              obj,
-              (key, value) =>
-                typeof value === 'function'
-                  ? `[Function: ${value.name || 'anonymous'}]`
-                  : value
-            )
+            try {
+              return JSON.stringify(
+                obj,
+                (key, value) =>
+                  typeof value === 'function'
+                    ? `[Function: ${value.name || 'anonymous'}]`
+                    : value
+              )
+            } catch (err) {
+              return `[Error: ${(err as Error).message}]`
+            }
           })
         )
       )

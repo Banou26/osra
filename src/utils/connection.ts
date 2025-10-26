@@ -1,18 +1,18 @@
 import type {
   Capable, ConnectionMessage,
-  Message, MessageWithContext,
+  Message,
   Uuid
 } from '../types'
 import type { Allocator } from './allocator'
 import type { PlatformCapabilities } from './capabilities'
 import type { StrictMessagePort } from './message-channel'
 
-import { recursiveBox } from './revivable'
+import { recursiveBox, recursiveRevive } from './revivable'
 import { makeAllocator } from './allocator'
 
 export type BidirectionalConnectionContext = {
   type: 'bidirectional',
-  messagePort: StrictMessagePort<MessageWithContext>,
+  messagePort: StrictMessagePort<Message>,
   connection: BidirectionalConnection
 }
 export type UnidirectionalEmittingConnectionContext = {
@@ -21,7 +21,7 @@ export type UnidirectionalEmittingConnectionContext = {
 }
 export type UnidirectionalReceivingConnectionContext = {
   type: 'unidirectional-receiving',
-  messagePort: StrictMessagePort<MessageWithContext>,
+  messagePort: StrictMessagePort<Message>,
   connection: UnidirectionalReceivingConnection
 }
 
@@ -34,7 +34,7 @@ export type ConnectionRevivableContext = {
   remoteUuid: Uuid
   messagePorts: Allocator<MessagePort>
   sendMessage: (message: ConnectionMessage) => void
-  receiveMessagePort: StrictMessagePort<MessageWithContext>
+  receiveMessagePort: StrictMessagePort<Message>
 }
 
 export const startBidirectionalConnection = (
@@ -44,11 +44,12 @@ export const startBidirectionalConnection = (
     uuid: Uuid
     remoteUuid: Uuid
     platformCapabilities: PlatformCapabilities
-    receiveMessagePort: StrictMessagePort<MessageWithContext>
+    receiveMessagePort: StrictMessagePort<Message>
     send: (message: ConnectionMessage) => void
     close: () => void
   }
 ) => {
+  console.log('startBidirectionalConnection')
   const revivableContext = {
     remoteUuid,
     messagePorts: makeAllocator(),
@@ -62,12 +63,13 @@ export const startBidirectionalConnection = (
 
   receiveMessagePort.addEventListener('message', (event) => {
     console.log('msg', event.data)
-    const { message, context } = event.data
+    const message = event.data
     if (message.type === 'init') {
       initResolve(message)
       return
     }
   })
+  receiveMessagePort.start()
 
   const boxed = recursiveBox(value, revivableContext)
   console.log('boxed', boxed)
@@ -81,7 +83,7 @@ export const startBidirectionalConnection = (
   return {
     close: () => {
     },
-    remoteValue: initMessage.then(initMessage => initMessage.data)
+    remoteValue: initMessage.then(initMessage => recursiveRevive(initMessage.data, revivableContext))
   }
 }
 
@@ -121,7 +123,7 @@ export const startUnidirectionalReceivingConnection = (
     uuid: Uuid
     remoteUuid?: Uuid
     platformCapabilities: PlatformCapabilities
-    receiveMessagePort: StrictMessagePort<MessageWithContext>
+    receiveMessagePort: StrictMessagePort<Message>
     close: () => void
   }
 ) => {

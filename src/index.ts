@@ -1,8 +1,7 @@
 import type {
   EmitTransport, Message,
   MessageContext, MessageVariant,
-  Capable, Transport,
-  MessageWithContext
+  Capable, Transport
 } from './types'
 import type {
   PlatformCapabilities, ConnectionContext,
@@ -17,7 +16,6 @@ import {
   startBidirectionalConnection,
   isReceiveTransport,
   isEmitTransport,
-  getTransferBoxes,
   startUnidirectionalEmittingConnection,
   getTransferableObjects
 } from './utils'
@@ -66,7 +64,7 @@ export const expose = async <T extends Capable>(
   let uuid = globalThis.crypto.randomUUID()
 
   const sendMessage = (transport: EmitTransport, message: MessageVariant) => {
-    const transferables = getTransferBoxes(message).map(box => box.value)
+    const transferables = getTransferableObjects(message)
     sendOsraMessage(
       transport,
       {
@@ -81,6 +79,8 @@ export const expose = async <T extends Capable>(
   }
 
   const listener = async (message: Message, messageContext: MessageContext) => {
+    // means that our own message looped back on the channel
+    if (message.uuid === uuid) return
     // Unidirectional receiving mode
     if (!isEmitTransport(transport)) {
       // Handle non bidirectional based messages here
@@ -136,15 +136,15 @@ export const expose = async <T extends Capable>(
     } else { //  "init" | "message" | "message-port-close"
       if (message.remoteUuid !== uuid) return
       const connection = connectionContexts.get(message.uuid)
+      console.log('message connection', message, connection)
       // We just drop the message if the remote uuid hasn't announced itself
       if (!connection) {
         console.warn(`Connection not found for remoteUuid: ${message.uuid}`)
         return
       }
       if (connection.type !== 'unidirectional-emitting') {
-        const messageWithContext = { message, context: messageContext } satisfies MessageWithContext
-        const transferables = getTransferableObjects(messageWithContext)
-        connection.messagePort.postMessage(messageWithContext, transferables)
+        const transferables = getTransferableObjects(message)
+        connection.messagePort.postMessage(message, transferables)
       }
     }
   }
