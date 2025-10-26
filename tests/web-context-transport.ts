@@ -13,18 +13,11 @@ export const baseArgsAndResponse = async () => {
     return 1
   }
   expose(value, { transport: window })
-  console.log('1')
 
   const test = await expose<typeof value>({}, { transport: window })
-  console.log('2', test)
 
-  try {
-    await expect(test({ foo: 1 }, 'bar')).to.eventually.equal(1)
-    await expect(test({ foo: 0 }, 'baz')).to.be.rejected
-  } catch (err) {
-    console.error(err)
-    await new Promise(resolve => setTimeout(resolve, 10000000))
-  }
+  await expect(test({ foo: 1 }, 'bar')).to.eventually.equal(1)
+  await expect(test({ foo: 0 }, 'baz')).to.be.rejected
 }
 
 

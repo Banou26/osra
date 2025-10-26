@@ -49,7 +49,6 @@ export const startBidirectionalConnection = (
     close: () => void
   }
 ) => {
-  console.log('startBidirectionalConnection')
   const revivableContext = {
     remoteUuid,
     messagePorts: makeAllocator(),
@@ -62,7 +61,6 @@ export const startBidirectionalConnection = (
   })
 
   receiveMessagePort.addEventListener('message', (event) => {
-    console.log('msg', event.data)
     const message = event.data
     if (message.type === 'init') {
       initResolve(message)
@@ -72,7 +70,6 @@ export const startBidirectionalConnection = (
   receiveMessagePort.start()
 
   const boxed = recursiveBox(value, revivableContext)
-  console.log('boxed', boxed)
 
   send({
     type: 'init',

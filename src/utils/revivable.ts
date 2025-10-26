@@ -102,8 +102,6 @@ export const boxFunction = (value: Function, context: ConnectionRevivableContext
 
   localPort.addEventListener('message', ({ data }:  MessageEvent<RevivableFunctionCallContext>) => {
     const [returnValuePort, args] = recursiveRevive(data, context) as RevivableFunctionCallContext
-    console.log('LOCALPORT MSG', data)
-    // const boxedArguments = recursiveBox(args, context)
     const result = (async () => value(...args))()
     const boxedResult = recursiveBox(result, context)
     const transferables = getTransferableObjects(boxedResult)
@@ -132,7 +130,6 @@ export const reviveFunction = (value: RevivableFunction, context: ConnectionRevi
       })
       returnValueLocalPort.start()
       const transferables = getTransferableObjects(callContext)
-      console.log('value', value, callContext, transferables)
       value.port.postMessage(callContext, transferables)
     })
 
@@ -198,7 +195,6 @@ export const reviveDate = (value: RevivableDate, context: ConnectionRevivableCon
 }
 
 export const box = (value: Revivable, context: ConnectionRevivableContext) => {
-  console.log('box', value)
 
   if (isAlwaysBox(value)) {
     return {
@@ -277,7 +273,6 @@ export const recursiveBox = <T extends Capable>(value: T, context: ConnectionRev
 }
 
 export const revive = (box: RevivableBox, context: ConnectionRevivableContext) => {
-  console.log('revive', box)
   // If the value got properly sent through the protocol as is, we don't need to revive it
   if (isRevivable(box.value)) return box.value
 
