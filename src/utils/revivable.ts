@@ -161,9 +161,9 @@ export const revivePromise = (value: RevivablePromise, context: ConnectionReviva
     value.port.addEventListener('message', ({ data }:  MessageEvent<RevivablePromiseContext>) => {
       const result = recursiveRevive(data, context)
       if (result.type === 'resolve') {
-        resolve(result.data)
+        resolve(recursiveRevive(result.data, context))
       } else { // result.type === 'reject'
-        reject(new Error(result.error))
+        reject(recursiveRevive(result.error, context))
       }
       value.port.close()
     }, { once: true })
@@ -296,9 +296,7 @@ export const recursiveRevive = <T extends Capable>(value: T, context: Connection
           .entries(value)
           .map(([key, value]: [string, Capable]) => [
             key,
-            isRevivableBox(value)
-              ? value
-              : recursiveRevive(value, context)
+            recursiveRevive(value, context)
           ])
       )
     ) as DeepReplace<T, RevivableBox, Revivable>
