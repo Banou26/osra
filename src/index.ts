@@ -59,7 +59,7 @@ export const expose = async <T extends Capable>(
       _transport.isJson
       ?? isJsonOnlyTransport(_transport),
     ..._transport
-  }
+  } satisfies Transport
   const platformCapabilities = _platformCapabilities ?? await probePlatformCapabilities()
   const connectionContexts = new Map<string, ConnectionContext>()
 
@@ -71,6 +71,7 @@ export const expose = async <T extends Capable>(
   let uuid = globalThis.crypto.randomUUID()
 
   const sendMessage = (transport: EmitTransport, message: MessageVariant) => {
+    console.log('sendMessage', transport, message)
     const transferables = getTransferableObjects(message)
     sendOsraMessage(
       transport,

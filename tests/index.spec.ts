@@ -9,29 +9,29 @@ type TestObject = {
 }
 
 test.beforeEach(async ({ page }) => {
-  page.on('console', async msg => {
-    const args = msg.args()
-    const logValues =
-      await Promise.all(
-        args.map(arg =>
-          arg.evaluate(obj => {
-            try {
-              return JSON.stringify(
-                obj,
-                (key, value) =>
-                  typeof value === 'function'
-                    ? `[Function: ${value.name || 'anonymous'}]`
-                    : value
-              )
-            } catch (err) {
-              return `[Error: ${(err as Error).message}]`
-            }
-          })
-        )
-      )
-    console.log(...logValues)
-  })
-  page.on('pageerror', err => console.log(err))
+  // page.on('console', async msg => {
+  //   const args = msg.args()
+  //   const logValues =
+  //     await Promise.all(
+  //       args.map(arg =>
+  //         arg.evaluate(obj => {
+  //           try {
+  //             return JSON.stringify(
+  //               obj,
+  //               (key, value) =>
+  //                 typeof value === 'function'
+  //                   ? `[Function: ${value.name || 'anonymous'}]`
+  //                   : value
+  //             )
+  //           } catch (err) {
+  //             return `[Error: ${(err as Error).message}]`
+  //           }
+  //         })
+  //       )
+  //     )
+  //   console.log(...logValues)
+  // })
+  // page.on('pageerror', err => console.log(err))
   await page.goto('http://localhost:3000')
   await page.addScriptTag({ path: './build/test.js', type: 'module' })
 })
