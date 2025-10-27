@@ -56,9 +56,8 @@ export const boxMessagePort = (
       return
     }
     if (message.type !== 'message' || message.portId !== portId) return
-    const revivedData = recursiveRevive(message.data, context)
-    const transferables = getTransferableObjects(revivedData)
-    messagePort.postMessage(revivedData, transferables)
+    const transferables = getTransferableObjects(message.data)
+    messagePort.postMessage(message.data, transferables)
   })
 
   return {
@@ -78,9 +77,10 @@ export const reviveMessagePort = (value: RevivableMessagePort, context: Connecti
       portId: value.messagePortId
     })
   })
+  internalPort.start()
 
   // The ReceiveTransport received a message from the other side so we call it on our own side's MessagePort after reviving it
-  context.receiveMessagePort.addEventListener('message', function listener ({ data: { message } }:  MessageEvent<Message>) {
+  context.receiveMessagePort.addEventListener('message', function listener ({ data: message }:  MessageEvent<Message>) {
     if (message.type === 'message-port-close') {
       if (message.portId !== value.messagePortId) return
       context.receiveMessagePort.removeEventListener('message', listener)
@@ -100,7 +100,9 @@ export const boxFunction = (value: Function, context: ConnectionRevivableContext
   const { port1: localPort, port2: remotePort } = new MessageChannel()
 
   localPort.addEventListener('message', ({ data }:  MessageEvent<RevivableFunctionCallContext>) => {
+    console.log('boxFunction called message data', data)
     const [returnValuePort, args] = recursiveRevive(data, context) as RevivableFunctionCallContext
+    console.log('boxFunction called message data REVIVED', [returnValuePort, args])
     const result = (async () => value(...args))()
     const boxedResult = recursiveBox(result, context)
     const transferables = getTransferableObjects(boxedResult)
@@ -209,37 +211,16 @@ export const box = (value: Revivable, context: ConnectionRevivableContext) => {
     } satisfies RevivableBox
   }
 
-  // Function that gets called if any of the serialization methods gets called
-  const trap = (hint?: 'number' | 'string' | 'default') => {
-    const box = {
-      [OSRA_BOX]: 'revivable',
-      ...(
+  return {
+    [OSRA_BOX]: 'revivable',
+    ...context.transport.isJson
+      ? (
         isMessagePort(value) ? boxMessagePort(value, context)
         : isReadableStream(value) ? boxReadableStream(value, context)
         : value
       )
-    } satisfies RevivableBox
-
-    return (
-      hint === 'string'
-        ? JSON.stringify(box)
-        : box
-    )
-  }
-  
-  return {
-    [OSRA_BOX]: 'revivable',
-    type: revivableToType(value),
-    value,
-    ...context.transport.isJson
-      ? {
-        [Symbol.toPrimitive]: trap,
-        valueOf: trap,
-        toString: trap,
-        toJSON: trap
-      }
       : {}
-  } satisfies ReviveBoxBase<RevivableToRevivableType<typeof value>>
+  } as ReviveBoxBase<RevivableToRevivableType<typeof value>>
 }
 
 export const recursiveBox = <T extends Capable>(value: T, context: ConnectionRevivableContext): DeepReplace<T, Revivable, RevivableBox> => {
@@ -279,7 +260,8 @@ export const revive = (box: RevivableBox, context: ConnectionRevivableContext) =
 
 export const recursiveRevive = <T extends Capable>(value: T, context: ConnectionRevivableContext): DeepReplace<T, RevivableBox, Revivable> => {
   const recursedValue = (
-    Array.isArray(value) ? value.map(value => recursiveRevive(value, context)) as DeepReplace<T, RevivableBox, Revivable>
+    isTransferable(value) ? value
+    : Array.isArray(value) ? value.map(value => recursiveRevive(value, context)) as DeepReplace<T, RevivableBox, Revivable>
     : value && typeof value === 'object' ? (
       Object.fromEntries(
         Object

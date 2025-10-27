@@ -31,6 +31,7 @@ export const baseArgsAndResponse = async () => {
 
   const test = await expose<typeof value>({}, { transport: jsonTransport() })
   const a = test({ foo: 1 }, 'bar')
+  console.log('TEST RESULT AAAAAAAAAAAAAA', a)
   await new Promise(resolve => setTimeout(resolve, 1000000))
 
   await expect(a).to.eventually.equal(1)
