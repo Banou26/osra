@@ -48,10 +48,10 @@ export const boxMessagePort = (
   })
 
   // The ReceiveTransport received a message from the other side so we call it on our own side's MessagePort after reviving it
-  context.receiveMessagePort.addEventListener('message', function listener ({ data: message }) {
+  context.eventTarget.addEventListener('message', function listener ({ detail: message }) {
     if (message.type === 'message-port-close') {
       if (message.portId !== portId) return
-      context.receiveMessagePort.removeEventListener('message', listener)
+      context.eventTarget.removeEventListener('message', listener)
       messagePort.close()
       return
     }
@@ -80,14 +80,16 @@ export const reviveMessagePort = (value: RevivableMessagePort, context: Connecti
   internalPort.start()
 
   // The ReceiveTransport received a message from the other side so we call it on our own side's MessagePort after reviving it
-  context.receiveMessagePort.addEventListener('message', function listener ({ data: message }:  MessageEvent<Message>) {
+  context.eventTarget.addEventListener('message', function listener ({ detail: message }) {
+    console.log('MESSAGE CALLED AND RECEIVED RETURN', value.messagePortId, message)
     if (message.type === 'message-port-close') {
       if (message.portId !== value.messagePortId) return
-      context.receiveMessagePort.removeEventListener('message', listener)
+      context.eventTarget.removeEventListener('message', listener)
       internalPort.close()
       return
     }
     if (message.type !== 'message' || message.portId !== value.messagePortId) return
+    console.log('MESSAGE CALLED AND RECEIVED RETURN YAAAAAAAAAAAAAAAAAAA', message)
     // Revive the data before sending it off through the MessagePort
     const revivedData = recursiveRevive(message.data, context)
     const transferables = getTransferableObjects(revivedData)
@@ -104,7 +106,9 @@ export const boxFunction = (value: Function, context: ConnectionRevivableContext
     const [returnValuePort, args] = recursiveRevive(data, context) as RevivableFunctionCallContext
     console.log('boxFunction called message data REVIVED', [returnValuePort, args])
     const result = (async () => value(...args))()
+    console.log('CALLED boxFunction AND RETURNED', result)
     const boxedResult = recursiveBox(result, context)
+    console.log('CALLED boxFunction AND RETURNED boxedResult', boxedResult)
     const transferables = getTransferableObjects(boxedResult)
     returnValuePort.postMessage(boxedResult, transferables)
   })

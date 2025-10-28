@@ -1,6 +1,7 @@
 import type {
   Capable, ConnectionMessage,
   Message,
+  MessageEventTarget,
   Transport,
   Uuid
 } from '../types'
@@ -12,17 +13,17 @@ import { recursiveBox, recursiveRevive } from './revivable'
 import { makeAllocator } from './allocator'
 
 export type BidirectionalConnectionContext = {
-  type: 'bidirectional',
-  messagePort: StrictMessagePort<Message>,
+  type: 'bidirectional'
+  eventTarget: MessageEventTarget
   connection: BidirectionalConnection
 }
 export type UnidirectionalEmittingConnectionContext = {
-  type: 'unidirectional-emitting',
+  type: 'unidirectional-emitting'
   connection: UnidirectionalEmittingConnection
 }
 export type UnidirectionalReceivingConnectionContext = {
-  type: 'unidirectional-receiving',
-  messagePort: StrictMessagePort<Message>,
+  type: 'unidirectional-receiving'
+  eventTarget: MessageEventTarget
   connection: UnidirectionalReceivingConnection
 }
 
@@ -36,18 +37,23 @@ export type ConnectionRevivableContext = {
   remoteUuid: Uuid
   messagePorts: Allocator<MessagePort>
   sendMessage: (message: ConnectionMessage) => void
-  receiveMessagePort: StrictMessagePort<Message>
+  eventTarget: MessageEventTarget
 }
 
-export const startBidirectionalConnection = (
-  { transport, value, uuid, remoteUuid, platformCapabilities, receiveMessagePort, send, close }:
+export type BidirectionalConnection<T extends Capable = Capable> = {
+  close: () => void
+  remoteValue: Promise<T>
+}
+
+export const startBidirectionalConnection = <T extends Capable>(
+  { transport, value, uuid, remoteUuid, platformCapabilities, eventTarget, send, close }:
   {
     transport: Transport
     value: Capable
     uuid: Uuid
     remoteUuid: Uuid
     platformCapabilities: PlatformCapabilities
-    receiveMessagePort: StrictMessagePort<Message>
+    eventTarget: MessageEventTarget
     send: (message: ConnectionMessage) => void
     close: () => void
   }
@@ -57,21 +63,20 @@ export const startBidirectionalConnection = (
     remoteUuid,
     messagePorts: makeAllocator(),
     sendMessage: send,
-    receiveMessagePort
+    eventTarget
   } satisfies ConnectionRevivableContext
   let initResolve: ((message: ConnectionMessage & { type: 'init' }) => void)
   const initMessage = new Promise<ConnectionMessage & { type: 'init' }>((resolve, reject) => {
     initResolve = resolve
   })
 
-  receiveMessagePort.addEventListener('message', (event) => {
-    const message = event.data
+  eventTarget.addEventListener('message', (event) => {
+    const message = event.detail
     if (message.type === 'init') {
       initResolve(message)
       return
     }
   })
-  receiveMessagePort.start()
 
   const boxed = recursiveBox(value, revivableContext)
 
@@ -84,11 +89,16 @@ export const startBidirectionalConnection = (
   return {
     close: () => {
     },
-    remoteValue: initMessage.then(initMessage => recursiveRevive(initMessage.data, revivableContext))
-  }
+    remoteValue:
+      initMessage
+        .then(initMessage => recursiveRevive(initMessage.data, revivableContext)) as Promise<T>
+  } satisfies BidirectionalConnection<T>
 }
 
-export type BidirectionalConnection = ReturnType<typeof startBidirectionalConnection>
+export type UnidirectionalEmittingConnection<T extends Capable = Capable> = {
+  close: () => void
+  remoteValueProxy: T
+}
 
 export const startUnidirectionalEmittingConnection = <T extends Capable>(
   { value, uuid, platformCapabilities, send, close }:
@@ -116,7 +126,9 @@ export const startUnidirectionalEmittingConnection = <T extends Capable>(
   }
 }
 
-export type UnidirectionalEmittingConnection = ReturnType<typeof startUnidirectionalEmittingConnection>
+export type UnidirectionalReceivingConnection = {
+  close: () => void
+}
 
 export const startUnidirectionalReceivingConnection = (
   { uuid, remoteUuid, platformCapabilities, close }:
@@ -124,15 +136,13 @@ export const startUnidirectionalReceivingConnection = (
     uuid: Uuid
     remoteUuid?: Uuid
     platformCapabilities: PlatformCapabilities
-    receiveMessagePort: StrictMessagePort<Message>
+    eventTarget: StrictMessagePort<Message>
     close: () => void
   }
 ) => {
 
   return {
     close: () => {
-    },
+    }
   }
 }
-
-export type UnidirectionalReceivingConnection = ReturnType<typeof startUnidirectionalReceivingConnection>

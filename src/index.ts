@@ -1,7 +1,9 @@
 import type {
   EmitTransport, Message,
   MessageContext, MessageVariant,
-  Capable, Transport
+  Capable, Transport,
+  MessageEventTarget,
+  MessageEventMap
 } from './types'
 import type {
   PlatformCapabilities, ConnectionContext,
@@ -20,6 +22,7 @@ import {
   getTransferableObjects,
   isJsonOnlyTransport
 } from './utils'
+import { TypedEventTarget } from 'typescript-event-target'
 
 /**
  * Protocol mode:
@@ -108,10 +111,10 @@ export const expose = async <T extends Capable>(
         )
         return
       }
-      const { port1, port2 } = new MessageChannel()
+      const eventTarget = new TypedEventTarget<MessageEventMap>()
       const connectionContext = {
         type: 'bidirectional',
-        messagePort: port1,
+        eventTarget,
         connection:
           startBidirectionalConnection({
             transport,
@@ -119,7 +122,7 @@ export const expose = async <T extends Capable>(
             uuid,
             remoteUuid: message.uuid,
             platformCapabilities,
-            receiveMessagePort: port2,
+            eventTarget,
             send: (message: MessageVariant) => sendMessage(transport, message),
             close: () => void connectionContexts.delete(message.uuid)
           })
@@ -151,8 +154,10 @@ export const expose = async <T extends Capable>(
         return
       }
       if (connection.type !== 'unidirectional-emitting') {
-        const transferables = getTransferableObjects(message)
-        connection.messagePort.postMessage(message, transferables)
+        connection.eventTarget.dispatchTypedEvent(
+          'message',
+          new CustomEvent('message', { detail: message })
+        )
       }
     }
   }
