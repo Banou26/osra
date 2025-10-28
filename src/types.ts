@@ -1,3 +1,4 @@
+import { TypedEventTarget } from 'typescript-event-target'
 import type { WebExtOnConnect, WebExtOnMessage, WebExtPort, WebExtRuntime, WebExtSender } from './utils/type-guards'
 
 export const OSRA_KEY = '__OSRA_KEY__' as const
@@ -216,6 +217,11 @@ export type MessageContext = {
   receiveTransport?: ReceivePlatformTransport
   source?: MessageEventSource | null // Window, Worker, WebSocket, ect...
 }
+
+export type MessageEventMap = {
+  message: CustomEvent<Message>
+}
+export type MessageEventTarget = TypedEventTarget<MessageEventMap>
 
 export type CustomTransport =
   { isJson?: boolean }

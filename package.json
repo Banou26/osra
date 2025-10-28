@@ -49,6 +49,7 @@
     "nyc": "^17.1.0",
     "playwright": "^1.49.1",
     "typescript": "^5.9.2",
+    "typescript-event-target": "^1.1.1",
     "vite": "^6.0.4",
     "vite-plugin-istanbul": "^7.2.0"
   }
