@@ -52,7 +52,7 @@ export type ReviveBoxBase<T extends RevivableVariant['type'] = RevivableVariant[
 
 export type RevivableMessagePort = {
   type: 'messagePort'
-  messagePortId: string
+  portId: string
 }
 
 export type RevivablePromiseContext =

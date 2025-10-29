@@ -70,20 +70,17 @@ export const startBidirectionalConnection = <T extends Capable>(
     initResolve = resolve
   })
 
-  eventTarget.addEventListener('message', (event) => {
-    const message = event.detail
-    if (message.type === 'init') {
-      initResolve(message)
+  eventTarget.addEventListener('message', ({ detail }) => {
+    if (detail.type === 'init') {
+      initResolve(detail)
       return
     }
   })
 
-  const boxed = recursiveBox(value, revivableContext)
-
   send({
     type: 'init',
     remoteUuid,
-    data: boxed
+    data: recursiveBox(value, revivableContext)
   })
 
   return {
