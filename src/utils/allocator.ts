@@ -58,16 +58,23 @@ export const makeAllocator = <T>() => {
     return uuid
   }
 
+  const has = (uuid: string) => channels.has(uuid)
   const get = (uuid: string) => channels.get(uuid)
 
   const free = (uuid: string) => {
     channels.delete(uuid)
   }
 
+  const set = (uuid: string, value: T) => {
+    channels.set(uuid, value)
+  }
+
   return {
     alloc,
+    has,
     get,
-    free
+    free,
+    set
   }
 }
 

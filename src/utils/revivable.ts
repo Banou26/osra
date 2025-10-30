@@ -127,7 +127,6 @@ export const boxPromise = (value: Promise<any>, context: ConnectionRevivableCont
 
 export const revivePromise = (value: RevivablePromise, context: ConnectionRevivableContext): Promise<any> => {
   console.log('Promise R', value)
-  debugger
   return new Promise((resolve, reject) => {
     value.port.addEventListener('message', ({ data }:  MessageEvent<RevivablePromiseContext>) => {
       const result = recursiveRevive(data, context)
@@ -171,7 +170,7 @@ export const reviveFunction = (value: RevivableFunction, context: ConnectionRevi
       const callContext = recursiveBox([returnValueRemotePort, args] as const, context)
       console.log('Function R sending parameters', callContext)
       value.port.postMessage(callContext, getTransferableObjects(callContext))
-      
+
       returnValueLocalPort.addEventListener('message', ({ data }:  MessageEvent<Capable>) => {
         console.log('Function R received message data', data)
         if (!isRevivablePromiseBox(data)) throw new Error(`Proxied function did not return a promise`)

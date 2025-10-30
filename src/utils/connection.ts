@@ -36,11 +36,13 @@ export type ConnectionRevivableContext = {
   transport: Transport
   remoteUuid: Uuid
   messagePorts: Allocator<MessagePort>
+  messageChannels: Allocator<MessageChannel>
   sendMessage: (message: ConnectionMessage) => void
   eventTarget: MessageEventTarget
 }
 
 export type BidirectionalConnection<T extends Capable = Capable> = {
+  revivableContext: ConnectionRevivableContext
   close: () => void
   remoteValue: Promise<T>
 }
@@ -62,6 +64,7 @@ export const startBidirectionalConnection = <T extends Capable>(
     transport,
     remoteUuid,
     messagePorts: makeAllocator(),
+    messageChannels: makeAllocator(),
     sendMessage: send,
     eventTarget
   } satisfies ConnectionRevivableContext
@@ -74,6 +77,16 @@ export const startBidirectionalConnection = <T extends Capable>(
     if (detail.type === 'init') {
       initResolve(detail)
       return
+    } else if (detail.type === 'message') {
+      const existingChannel = revivableContext.messageChannels.get(detail.portId)
+      const messageChannel =
+        existingChannel
+          ? existingChannel
+          : new MessageChannel()
+      if (!messageChannel) {
+        revivableContext.messageChannels.set(detail.portId, messageChannel)
+      }
+      // messageChannel.port1.postMessage(detail.data)
     }
   })
 
@@ -84,6 +97,7 @@ export const startBidirectionalConnection = <T extends Capable>(
   })
 
   return {
+    revivableContext,
     close: () => {
     },
     remoteValue:
