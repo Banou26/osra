@@ -1,8 +1,8 @@
 # osra
-what that? https://github.com/GoogleChromeLabs/comlink but nicer to use.
+whats that? A powerful communication library that's really easy to use.
 thats about it
 
-how to?
+how?
 register your functions in the other context like so
 ```ts
 import { expose } from 'osra'
@@ -23,7 +23,7 @@ export type Resolvers = typeof resolvers
 expose(resolvers, { local: globalThis, remote: globalThis })
 ```
 
-and on your current context with full types you can call it easily like
+and on your current context with full typescript support you can call it easily like
 ```ts
 import type { Resolvers } from './worker.ts'
 
@@ -38,6 +38,9 @@ const { foo, bar, baz } = test()
 // bar === 'bar'
 // baz === callable function that will return a promise with its response
 ```
+
+Supports almost any JS types like Promises, Functions, Streams, ect... and plans to support plugins for custom types.
+From efficient transferable messaging transport to JSON only, it always works.
 
 Todo:
 
