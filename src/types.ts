@@ -182,7 +182,7 @@ export type BidirectionalConnectionMessage =
     remoteUuid: Uuid
     data: Capable
     /** uuid of the messagePort that the message was sent through */
-    portId: string
+    portId: Uuid
   }
   /** message not needed if transferring MessagePort is supported */
   | {
@@ -196,7 +196,7 @@ export type UnidirectionalConnectionMessage = {
   type: 'message'
   remoteUuid: Uuid
   data: Capable
-  portId: string
+  portId: Uuid
 }
 
 export type ConnectionMessage =

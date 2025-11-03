@@ -1,50 +1,4 @@
-
-// export const makeNumberAllocator = () => {
-//   let highest = 0
-//   const freedUnused = new Set<number>()
-//   return {
-//     alloc: () => {
-//       if (freedUnused.size > 0) {
-//         const number = freedUnused.values().next().value
-//         if (number === undefined) {
-//           throw new Error(`Tried to allocate number from freedUnused but result was undefined`)
-//         }
-//         freedUnused.delete(number)
-//         return number
-//       }
-//       highest++
-//       return highest
-//     },
-//     free: (number: number) => {
-//       freedUnused.add(number)
-//     }
-//   }
-// }
-
-// export type NumberAllocator = ReturnType<typeof makeNumberAllocator>
-
-// export const makeAllocator = <T>({ numberAllocator }: { numberAllocator: NumberAllocator }) => {
-//   const channels = new Map<number, T>()
-
-//   const alloc = (value: T) => {
-//     const id = numberAllocator.alloc()
-//     channels.set(id, value)
-//     return id
-//   }
-//   const get = (id: number) => channels.get(id)
-//   const free = (id: number) => {
-//     channels.delete(id)
-//     numberAllocator.free(id)
-//   }
-
-//   return {
-//     alloc,
-//     get,
-//     free
-//   }
-// }
-
-// export type Allocator<T> = ReturnType<typeof makeAllocator<T>>
+import type { Uuid } from '../types'
 
 export const makeAllocator = <T>() => {
   const channels = new Map<string, T>()
@@ -79,3 +33,44 @@ export const makeAllocator = <T>() => {
 }
 
 export type Allocator<T> = ReturnType<typeof makeAllocator<T>>
+
+type AllocatedMessageChannel = {
+  uuid: Uuid
+  /** Local port */
+  port1: MessagePort
+  /** Remote port that gets transferred, might be undefined if a remote context created the channel */
+  port2?: MessagePort
+}
+
+export const makeMessageChannelAllocator = () => {
+  const channels = new Map<string, AllocatedMessageChannel>()
+  
+  return {
+    set: (uuid: Uuid, messagePorts: { port1: MessagePort, port2?: MessagePort }) => {
+      channels.set(uuid, { uuid, ...messagePorts })
+    },
+    alloc: (uuid?: Uuid, messagePorts?: { port1: MessagePort, port2?: MessagePort }) => {
+      if (uuid && messagePorts) {
+        channels.set(uuid, { uuid, ...messagePorts })
+        return { uuid, ...messagePorts }
+      }
+      uuid = globalThis.crypto.randomUUID()
+      while (channels.has(uuid)) {
+        uuid = globalThis.crypto.randomUUID()
+      }
+      const messageChannel = new MessageChannel()
+      const allocatedMessageChannel = {
+        uuid,
+        port1: messageChannel.port1,
+        port2: messageChannel.port2
+      } satisfies AllocatedMessageChannel
+      channels.set(uuid, allocatedMessageChannel)
+      return allocatedMessageChannel
+    },
+    has: (uuid: string) => channels.has(uuid),
+    get: (uuid: string) => channels.get(uuid),
+    free: (uuid: string) => channels.delete(uuid)
+  }
+}
+
+export type MessageChannelAllocator = ReturnType<typeof makeMessageChannelAllocator>
