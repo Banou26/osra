@@ -78,20 +78,8 @@ export const startBidirectionalConnection = <T extends Capable>(
       initResolve(detail)
       return
     } else if (detail.type === 'message') {
-      const existingChannel = revivableContext.messageChannels.get(detail.uuid)
-      console.log('bidi received msg, existingChannel', existingChannel)
       const messageChannel = revivableContext.messageChannels.getOrAlloc(detail.portId)
-      console.log('bidi received msg, messageChannel', messageChannel)
       messageChannel.port2?.postMessage(detail)
-      // const existingChannel = revivableContext.messageChannels.get(detail.portId)
-      // const messageChannel =
-      //   existingChannel
-      //     ? existingChannel
-      //     : new MessageChannel()
-      // if (!messageChannel) {
-      //   revivableContext.messageChannels.alloc(detail.portId, messageChannel)
-      // }
-      // // messageChannel.port1.postMessage(detail.data)
     }
   })
 
