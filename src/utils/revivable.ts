@@ -38,7 +38,7 @@ export const boxMessagePort = (
 ): RevivableVariant & { type: 'messagePort' } => {
   console.log('MessagePort B', value)
   const messagePort = value as StrictMessagePort<Capable>
-  const { uuid: portId } = context.messageChannels.alloc(undefined, { port1: value })
+  const { uuid: portId } = context.messageChannels.alloc(undefined, { port1: messagePort })
   // Since we are in a boxed MessagePort, we want to send a message to the other side through the EmitTransport
   messagePort.addEventListener('message', ({ data }) => {
     console.log('MessagePort B received message', data, value)
@@ -107,6 +107,7 @@ export const reviveMessagePort = (value: RevivableMessagePort, context: Connecti
     const revivedData = recursiveRevive(message.data, context)
     internalPort.postMessage(revivedData, getTransferableObjects(revivedData))
   })
+  port1.start()
   return userPort
 }
 

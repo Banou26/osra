@@ -155,6 +155,7 @@ export const expose = async <T extends Capable>(
         return
       }
       if (connection.type !== 'unidirectional-emitting') {
+        console.log('index msg received', message, connection)
         connection.eventTarget.dispatchTypedEvent(
           'message',
           new CustomEvent('message', { detail: message })

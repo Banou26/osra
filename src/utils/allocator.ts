@@ -46,18 +46,22 @@ type AllocatedMessageChannel = {
 export const makeMessageChannelAllocator = () => {
   const channels = new Map<string, AllocatedMessageChannel>()
 
-  return {
+  const result = {
+    getUniqueUuid: () => {
+      let uuid: Uuid
+      if (!uuid) uuid = globalThis.crypto.randomUUID()
+      while (channels.has(uuid)) {
+        uuid = globalThis.crypto.randomUUID()
+      }
+      return uuid
+    },
     set: (uuid: Uuid, messagePorts: { port1: MessagePort, port2?: MessagePort }) => {
       channels.set(uuid, { uuid, ...messagePorts })
     },
-    alloc: (uuid?: Uuid, messagePorts?: { port1: MessagePort, port2?: MessagePort }) => {
-      if (!uuid) uuid = globalThis.crypto.randomUUID()
+    alloc: (uuid: Uuid | undefined = result.getUniqueUuid(), messagePorts?: { port1: MessagePort, port2?: MessagePort }) => {
       if (messagePorts) {
         channels.set(uuid, { uuid, ...messagePorts })
         return { uuid, ...messagePorts }
-      }
-      while (channels.has(uuid)) {
-        uuid = globalThis.crypto.randomUUID()
       }
       const messageChannel = new MessageChannel()
       const allocatedMessageChannel = {
@@ -70,8 +74,14 @@ export const makeMessageChannelAllocator = () => {
     },
     has: (uuid: string) => channels.has(uuid),
     get: (uuid: string) => channels.get(uuid),
-    free: (uuid: string) => channels.delete(uuid)
+    free: (uuid: string) => channels.delete(uuid),
+    getOrAlloc: (uuid: Uuid | undefined = result.getUniqueUuid(), messagePorts?: { port1: MessagePort, port2?: MessagePort }) => {
+      const existingChannel = result.get(uuid)
+      if (existingChannel) return existingChannel!
+      return result.alloc(uuid, messagePorts)
+    }
   }
+  return result
 }
 
 export type MessageChannelAllocator = ReturnType<typeof makeMessageChannelAllocator>
