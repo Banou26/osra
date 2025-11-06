@@ -74,7 +74,6 @@ export const expose = async <T extends Capable>(
   let uuid = globalThis.crypto.randomUUID()
 
   const sendMessage = (transport: EmitTransport, message: MessageVariant) => {
-    console.log('ROOT sendMessage', message)
     const transferables = getTransferableObjects(message)
     sendOsraMessage(
       transport,
@@ -92,7 +91,6 @@ export const expose = async <T extends Capable>(
   const listener = async (message: Message, messageContext: MessageContext) => {
     // means that our own message looped back on the channel
     if (message.uuid === uuid) return
-    console.log('ROOT receivedMessage', message)
     // Unidirectional receiving mode
     if (!isEmitTransport(transport)) {
       // Handle non bidirectional based messages here
@@ -155,7 +153,6 @@ export const expose = async <T extends Capable>(
         return
       }
       if (connection.type !== 'unidirectional-emitting') {
-        console.log('index msg received', message, connection)
         connection.eventTarget.dispatchTypedEvent(
           'message',
           new CustomEvent('message', { detail: message })
