@@ -23,7 +23,7 @@
     "clean-coverage": "rimraf .nyc_output coverage",
     "type-check": "tsc --noEmit",
     "start-server": "http-server -p 3000",
-    "linux-run-playwright": "docker run -it --name playwright -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix:rw --network=host --ipc=host --shm-size=2gb --rm mcr.microsoft.com/playwright:v1.55.1-noble npx npx -y playwright@1.55.1 run-server --port 8010 --host 0.0.0.0",
+    "linux-run-playwright": "xhost +local:docker && docker run -it --name playwright -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix:rw --network=host --ipc=host --shm-size=2gb --rm mcr.microsoft.com/playwright:v1.55.1-noble npx npx -y playwright@1.55.1 run-server --port 8010 --host 0.0.0.0",
     "linux-test": "PW_TEST_CONNECT_WS_ENDPOINT=ws://127.0.0.1:8010/ npx playwright test -c playwright.linux.config.ts",
     "linux-test-watch-headful": "nodemon --watch build --exec \"PW_TEST_CONNECT_WS_ENDPOINT=ws://127.0.0.1:8010/ npx playwright test -c playwright.linux.config.ts\""
   },
