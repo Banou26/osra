@@ -1,4 +1,5 @@
-import type { Uuid } from '../types'
+import type { Message, Uuid } from '../types'
+import type { StrictMessagePort } from './message-channel'
 
 export const makeAllocator = <T>() => {
   const channels = new Map<string, T>()
@@ -37,24 +38,24 @@ export type Allocator<T> = ReturnType<typeof makeAllocator<T>>
 type AllocatedMessageChannel = {
   uuid: Uuid
   /** Local port */
-  port1: MessagePort
+  port1: StrictMessagePort<Message>
   /** Remote port that gets transferred, might be undefined if a remote context created the channel */
-  port2?: MessagePort
+  port2?: StrictMessagePort<Message>
 }
 
 export const makeMessageChannelAllocator = () => {
   const channels = new Map<string, AllocatedMessageChannel>()
-  
+
   return {
     set: (uuid: Uuid, messagePorts: { port1: MessagePort, port2?: MessagePort }) => {
       channels.set(uuid, { uuid, ...messagePorts })
     },
     alloc: (uuid?: Uuid, messagePorts?: { port1: MessagePort, port2?: MessagePort }) => {
-      if (uuid && messagePorts) {
+      if (!uuid) uuid = globalThis.crypto.randomUUID()
+      if (messagePorts) {
         channels.set(uuid, { uuid, ...messagePorts })
         return { uuid, ...messagePorts }
       }
-      uuid = globalThis.crypto.randomUUID()
       while (channels.has(uuid)) {
         uuid = globalThis.crypto.randomUUID()
       }

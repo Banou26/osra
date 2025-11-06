@@ -13,7 +13,8 @@ import type {
   RevivableReadableStream,
   RevivableVariant,
   RevivableToRevivableType,
-  ReviveBoxBase
+  ReviveBoxBase,
+  Uuid
 } from '../types'
 import type { ConnectionRevivableContext } from './connection'
 import type { DeepReplace } from './replace'
@@ -37,7 +38,7 @@ export const boxMessagePort = (
 ): RevivableVariant & { type: 'messagePort' } => {
   console.log('MessagePort B', value)
   const messagePort = value as StrictMessagePort<Capable>
-  const portId = context.messagePorts.alloc(messagePort)
+  const { uuid: portId } = context.messageChannels.alloc(undefined, { port1: value })
   // Since we are in a boxed MessagePort, we want to send a message to the other side through the EmitTransport
   messagePort.addEventListener('message', ({ data }) => {
     console.log('MessagePort B received message', data, value)
@@ -80,17 +81,22 @@ export const reviveMessagePort = (value: RevivableMessagePort, context: Connecti
       type: 'message',
       remoteUuid: context.remoteUuid,
       data: isRevivableBox(data) ? data : recursiveBox(data, context),
-      portId: value.portId
+      portId: value.portId as Uuid
     })
   })
   internalPort.start()
 
+  const existingChannel = context.messageChannels.get(value.portId)
+  const { port1 } =
+    existingChannel
+      ? existingChannel
+      : context.messageChannels.alloc(value.portId as Uuid)
   // The ReceiveTransport received a message from the other side so we call it on our own side's MessagePort after reviving it
-  context.eventTarget.addEventListener('message', function listener ({ detail: message }) {
+  port1.addEventListener('message', function listener ({ data: message }) {
     console.log('MessagePort R received root message', message, value)
     if (message.type === 'message-port-close') {
       if (message.portId !== value.portId) return
-      context.eventTarget.removeEventListener('message', listener)
+      port1.removeEventListener('message', listener)
       internalPort.close()
       context.messagePorts.free(value.portId)
       return

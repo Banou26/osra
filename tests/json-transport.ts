@@ -8,6 +8,7 @@ const jsonTransport = (): Transport => ({
   isJson: true,
   receive: (listener) => {
     window.addEventListener('message', event => {
+      console.log('------------------------------------------')
       const data = JSON.parse(event.data)
       listener(data, {})
     })
@@ -30,9 +31,9 @@ export const baseArgsAndResponse = async () => {
   expose(value, { transport: jsonTransport() })
 
   const test = await expose<typeof value>({}, { transport: jsonTransport() })
-  
+
   console.log('==============================================')
-  
+
   const a = await test({ foo: 1 }, 'bar')
   console.log('TEST RESULT AAAAAAAAAAAAAA', a)
   await new Promise(resolve => setTimeout(resolve, 1000000))
