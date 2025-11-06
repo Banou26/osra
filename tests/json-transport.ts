@@ -8,7 +8,6 @@ const jsonTransport = (): Transport => ({
   isJson: true,
   receive: (listener) => {
     window.addEventListener('message', event => {
-      console.log('------------------------------------------')
       const data = JSON.parse(event.data)
       listener(data, {})
     })
@@ -26,6 +25,8 @@ export const baseArgsAndResponse = async () => {
     if (bar !== 'bar') {
       throw new Error('bar is not bar')
     }
+    await new Promise(resolve => setTimeout(resolve, 100))
+    console.log('..............................................')
     return 1
   }
   expose(value, { transport: jsonTransport() })
