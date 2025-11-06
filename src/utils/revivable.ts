@@ -96,9 +96,14 @@ export const reviveMessagePort = (value: RevivableMessagePort, context: Connecti
       return
     }
     if (message.type !== 'message' || message.portId !== value.portId) return
+    // todo: we have to know if we need to revive the messages or not, AKA if the messagePort is from the user or if its an revivable internal messagePort
+    // if (isInternal(value)) {
+    internalPort.postMessage(message.data)
+    // } else {
     // Revive the data before sending it off through the MessagePort
-    const revivedData = recursiveRevive(message.data, context)
-    internalPort.postMessage(revivedData, getTransferableObjects(revivedData))
+    // const revivedData = recursiveRevive(message.data, context)
+    // internalPort.postMessage(revivedData, getTransferableObjects(revivedData))
+    // }
   })
   port1.start()
   return userPort
