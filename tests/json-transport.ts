@@ -98,3 +98,43 @@ export const objectCallbackAsArg = async () => {
   const result = await test(() => 1)
   expect(result).to.equal(1)
 }
+
+export const userMessagePort = async () => {
+  const { port1: _port1, port2 } = new MessageChannel()
+  const value = {
+    port1: _port1
+  }
+  expose(value, { transport: jsonTransport() })
+
+  const { port1 } = await expose<typeof value>({}, { transport: jsonTransport() })
+
+  let port1Resolve: ((value: number) => void)
+  const port1Promise = new Promise<number>(resolve => port1Resolve = resolve)
+  port1.addEventListener('message', event => {
+    port1Resolve(event.data)
+  })
+  port1.start()
+  port1.postMessage(1)
+  
+  let port2Resolve: ((value: number) => void)
+  const port2Promise = new Promise<number>(resolve => port2Resolve = resolve)
+  port2.addEventListener('message', event => {
+    port2Resolve(event.data)
+  })
+  port2.start()
+  port2.postMessage(2)
+  
+  await expect(port1Promise).to.eventually.equal(2)
+  await expect(port2Promise).to.eventually.equal(1)
+}
+
+export const userPromise = async () => {
+  const value = {
+    promise: Promise.resolve(1)
+  }
+  expose(value, { transport: jsonTransport() })
+
+  const { promise } = await expose<typeof value>({}, { transport: jsonTransport() })
+
+  await expect(promise).to.eventually.equal(1)
+}

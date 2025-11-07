@@ -55,7 +55,7 @@ export const boxMessagePort = (
       if (message.portId !== portId) return
       context.eventTarget.removeEventListener('message', listener)
       messagePort.close()
-      context.messagePorts.free(portId)
+      context.messageChannels.free(portId)
       return
     }
     if (message.type !== 'message' || message.portId !== portId) return
@@ -92,18 +92,17 @@ export const reviveMessagePort = (value: RevivableMessagePort, context: Connecti
       if (message.portId !== value.portId) return
       port1.removeEventListener('message', listener)
       internalPort.close()
-      context.messagePorts.free(value.portId)
+      context.messageChannels.free(value.portId)
       return
     }
     if (message.type !== 'message' || message.portId !== value.portId) return
-    // todo: we have to know if we need to revive the messages or not, AKA if the messagePort is from the user or if its an revivable internal messagePort
-    // if (isInternal(value)) {
-    internalPort.postMessage(message.data)
-    // } else {
-    // Revive the data before sending it off through the MessagePort
-    // const revivedData = recursiveRevive(message.data, context)
-    // internalPort.postMessage(revivedData, getTransferableObjects(revivedData))
-    // }
+    // if the returned messagePort has been registered as internal message port, then we proxy the data without reviving it
+    if (context.messagePorts.has(userPort)) {
+      internalPort.postMessage(message.data)
+    } else { // In this case, userPort is actually passed by the user of osra and we should revive all the message data
+      const revivedData = recursiveRevive(message.data, context)
+      internalPort.postMessage(revivedData, getTransferableObjects(revivedData))
+    }
   })
   port1.start()
   return userPort
@@ -111,6 +110,7 @@ export const reviveMessagePort = (value: RevivableMessagePort, context: Connecti
 
 export const boxPromise = (value: Promise<any>, context: ConnectionRevivableContext): RevivableVariant & { type: 'promise' } => {
   const { port1: localPort, port2: remotePort } = new MessageChannel()
+  context.messagePorts.add(remotePort)
 
   const sendResult = (result: { type: 'resolve', data: Capable } | { type: 'reject', error: string }) => {
     const boxedResult = recursiveBox(result, context)
@@ -129,6 +129,7 @@ export const boxPromise = (value: Promise<any>, context: ConnectionRevivableCont
 }
 
 export const revivePromise = (value: RevivablePromise, context: ConnectionRevivableContext): Promise<any> => {
+  context.messagePorts.add(value.port)
   return new Promise((resolve, reject) => {
     value.port.addEventListener('message', ({ data }:  MessageEvent<RevivablePromiseContext>) => {
       const result = recursiveRevive(data, context)
@@ -145,7 +146,7 @@ export const revivePromise = (value: RevivablePromise, context: ConnectionReviva
 
 export const boxFunction = (value: Function, context: ConnectionRevivableContext): RevivableVariant & { type: 'function' } => {
   const { port1: localPort, port2: remotePort } = new MessageChannel()
-
+  context.messagePorts.add(remotePort)
   localPort.addEventListener('message', ({ data }:  MessageEvent<RevivableFunctionCallContext>) => {
     const [returnValuePort, args] = recursiveRevive(data, context) as RevivableFunctionCallContext
     const result = (async () => value(...args))()
@@ -164,6 +165,7 @@ export const reviveFunction = (value: RevivableFunction, context: ConnectionRevi
   const func = (...args: Capable[]) =>
     new Promise((resolve, reject) => {
       const { port1: returnValueLocalPort, port2: returnValueRemotePort } = new MessageChannel()
+      context.messagePorts.add(returnValueRemotePort)
       const callContext = recursiveBox([returnValueRemotePort, args] as const, context)
       value.port.postMessage(callContext, getTransferableObjects(callContext))
 

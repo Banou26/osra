@@ -35,7 +35,7 @@ export type ConnectionContext =
 export type ConnectionRevivableContext = {
   transport: Transport
   remoteUuid: Uuid
-  messagePorts: Allocator<MessagePort>
+  messagePorts: Set<MessagePort>
   messageChannels: MessageChannelAllocator
   sendMessage: (message: ConnectionMessage) => void
   eventTarget: MessageEventTarget
@@ -63,7 +63,7 @@ export const startBidirectionalConnection = <T extends Capable>(
   const revivableContext = {
     transport,
     remoteUuid,
-    messagePorts: makeAllocator(),
+    messagePorts: new Set(),
     messageChannels: makeMessageChannelAllocator(),
     sendMessage: send,
     eventTarget
