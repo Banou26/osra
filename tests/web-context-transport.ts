@@ -1,85 +1,17 @@
-import { expect } from 'chai'
+import { base } from './base-tests'
 
-import { expose } from '../src/index'
+export const argsAndResponse = () => base.argsAndResponse(window)
 
-export const baseArgsAndResponse = async () => {
-  const value = async (data: { foo: number }, bar: string) => {
-    if (data.foo !== 1) {
-      throw new Error('foo is not 1')
-    }
-    if (bar !== 'bar') {
-      throw new Error('bar is not bar')
-    }
-    return 1
-  }
-  expose(value, { transport: window })
+export const callback = () => base.callback(window)
 
-  const test = await expose<typeof value>({}, { transport: window })
+export const callbackAsArg = () => base.callbackAsArg(window)
 
-  await expect(test({ foo: 1 }, 'bar')).to.eventually.equal(1)
-  await expect(test({ foo: 0 }, 'baz')).to.be.rejected
-}
+export const objectBaseArgsAndResponse = () => base.objectBaseArgsAndResponse(window)
 
-export const callback = async () => {
-  const value = async () => async () => 1
-  expose(value, { transport: window })
+export const objectCallback = () => base.objectCallback(window)
 
-  const test = await expose<typeof value>({}, { transport: window })
+export const objectCallbackAsArg = () => base.objectCallbackAsArg(window)
 
-  const result = await test()
-  await expect(result()).to.eventually.equal(1)
-}
+export const userMessagePort = () => base.userMessagePort(window)
 
-export const callbackAsArg = async () => {
-  const value = async (callback: () => number) => callback()
-  expose(value, { transport: window })
-
-  const test = await expose<typeof value>({}, { transport: window })
-
-  const result = await test(() => 1)
-  expect(result).to.equal(1)
-}
-
-export const objectBaseArgsAndResponse = async () => {
-  const value = {
-    test: async (data: { foo: number }, bar: string) => {
-      if (data.foo !== 1) {
-        throw new Error('foo is not 1')
-      }
-      if (bar !== 'bar') {
-        throw new Error('bar is not bar')
-      }
-      return 1
-    }
-  }
-  expose(value, { transport: window })
-
-  const { test } = await expose<typeof value>({}, { transport: window })
-
-  await expect(test({ foo: 1 }, 'bar')).to.eventually.equal(1)
-  await expect(test({ foo: 0 }, 'baz')).to.be.rejected
-}
-
-export const objectCallback = async () => {
-  const value = {
-    test: async () => async () => 1
-  }
-  expose(value, { transport: window })
-
-  const { test } = await expose<typeof value>({}, { transport: window })
-
-  const result = await test()
-  await expect(result()).to.eventually.equal(1)
-}
-
-export const objectCallbackAsArg = async () => {
-  const value = {
-    test: async (callback: () => number) => callback()
-  }
-  expose(value, { transport: window })
-
-  const { test } = await expose<typeof value>({}, { transport: window })
-
-  const result = await test(() => 1)
-  expect(result).to.equal(1)
-}
+export const userPromise = () => base.userPromise(window)
