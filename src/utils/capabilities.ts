@@ -45,7 +45,7 @@ const probeTransferableStream = async () => {
       controller.close()
     }
   })
-  const transferableStream = await probePlatformCapabilityUtil(stream)
+  const transferableStream = await probePlatformCapabilityUtil(stream, true)
   return transferableStream instanceof ReadableStream
 }
 

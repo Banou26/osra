@@ -256,7 +256,7 @@ export const recursiveBox = <T extends Capable>(value: T, context: ConnectionRev
 
 export const revive = (box: RevivableBox, context: ConnectionRevivableContext) => {
   // If the value got properly sent through the protocol as is, we don't need to revive it
-  if (isRevivable(box.value)) box.value
+  if (isRevivable(box.value)) return box.value
 
   return (
     isRevivableMessagePortBox(box) ? reviveMessagePort(box, context)
