@@ -218,19 +218,25 @@ export const box = (value: Revivable, context: ConnectionRevivableContext) => {
         : isDate(value) ? boxDate(value, context)
         : isError(value) ? boxError(value, context)
         : value
-      )
+      ),
     } satisfies RevivableBox
   }
 
   return {
     [OSRA_BOX]: 'revivable',
-    ...context.transport.isJson
+    ...'isJson' in context.transport && context.transport.isJson
       ? (
         isMessagePort(value) ? boxMessagePort(value, context)
         : isReadableStream(value) ? boxReadableStream(value, context)
         : value
       )
-      : {}
+      : {
+        type:
+          isMessagePort(value) ? 'messagePort'
+          : isReadableStream(value) ? 'readableStream'
+          : 'unknown',
+        value
+      }
   } as ReviveBoxBase<RevivableToRevivableType<typeof value>>
 }
 

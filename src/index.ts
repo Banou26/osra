@@ -20,7 +20,8 @@ import {
   isEmitTransport,
   startUnidirectionalEmittingConnection,
   getTransferableObjects,
-  isJsonOnlyTransport
+  isJsonOnlyTransport,
+  isCustomTransport
 } from './utils'
 import { TypedEventTarget } from 'typescript-event-target'
 
@@ -59,9 +60,17 @@ export const expose = async <T extends Capable>(
 ): Promise<T> => {
   const transport = {
     isJson:
-      _transport.isJson
-      ?? isJsonOnlyTransport(_transport),
-    ..._transport
+      'isJson' in _transport && _transport.isJson !== undefined
+        ? _transport.isJson
+        : isJsonOnlyTransport(_transport),
+    ...(
+      isCustomTransport(_transport)
+        ? _transport
+        : {
+          emit: _transport,
+          receive: _transport
+        }
+    )
   } satisfies Transport
   const platformCapabilities = _platformCapabilities ?? await probePlatformCapabilities()
   const connectionContexts = new Map<string, ConnectionContext>()

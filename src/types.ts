@@ -271,11 +271,8 @@ export type ReceivePlatformTransport =
   | MessagePort
 
 export type PlatformTransport =
-  { isJson: boolean }
-  & (
-    | EmitPlatformTransport
-    | ReceivePlatformTransport
-  )
+  | EmitPlatformTransport
+  | ReceivePlatformTransport
 
 export type EmitTransport = EmitPlatformTransport & Extract<CustomTransport, { emit: any }>
 export type ReceiveTransport = ReceivePlatformTransport & Extract<CustomTransport, { receive: any }>
