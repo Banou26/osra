@@ -126,6 +126,28 @@ export const userPromise = async (transport: Transport) => {
   await expect(promise).to.eventually.equal(1)
 }
 
+const hashToHex = (hash: Uint8Array) =>
+    Array
+      .from(hash)
+      .map(byte => byte.toString(16).padStart(2, '0'))
+      .join('')
+
+export const userArrayBuffer = async (transport: Transport) => {
+  const _arrayBuffer = new ArrayBuffer(100)
+  const uint8Array = new Uint8Array(_arrayBuffer)
+  crypto.getRandomValues(uint8Array)
+  const originalHash = hashToHex(uint8Array)
+  // const originalHash = await crypto.subtle.digest('SHA-256', uint8Array).toHex()
+  const value = {
+    arrayBuffer: _arrayBuffer
+  }
+  expose(value, { transport })
+
+  const { arrayBuffer } = await expose<typeof value>({}, { transport })
+  const newHash = hashToHex(new Uint8Array(arrayBuffer))
+  expect(newHash).to.equal(originalHash)
+}
+
 export const base = {
   argsAndResponse,
   callback,
@@ -134,5 +156,6 @@ export const base = {
   objectCallback,
   objectCallbackAsArg,
   userMessagePort,
-  userPromise
+  userPromise,
+  userArrayBuffer
 }

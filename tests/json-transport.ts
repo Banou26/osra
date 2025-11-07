@@ -30,3 +30,5 @@ export const objectCallbackAsArg = () => base.objectCallbackAsArg(jsonTransport(
 export const userMessagePort = () => base.userMessagePort(jsonTransport())
 
 export const userPromise = () => base.userPromise(jsonTransport())
+
+export const userArrayBuffer = () => base.userArrayBuffer(jsonTransport())

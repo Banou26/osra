@@ -15,3 +15,5 @@ export const objectCallbackAsArg = () => base.objectCallbackAsArg(window)
 export const userMessagePort = () => base.userMessagePort(window)
 
 export const userPromise = () => base.userPromise(window)
+
+export const userArrayBuffer = () => base.userArrayBuffer(window)
