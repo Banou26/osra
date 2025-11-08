@@ -82,6 +82,11 @@ export type RevivableFunction = {
   port: MessagePort
 }
 
+export type RevivableArrayBuffer = {
+  type: 'arrayBuffer'
+  base64Buffer: string
+}
+
 export type RevivableReadableStream = {
   type: 'readableStream'
   port: MessagePort
@@ -101,6 +106,7 @@ export type RevivableVariant =
   | RevivableMessagePort
   | RevivablePromise
   | RevivableFunction
+  | RevivableArrayBuffer
   | RevivableReadableStream
   | RevivableDate
   | RevivableError
@@ -111,6 +117,7 @@ export type RevivableVariantTypeToRevivableVariant<T extends RevivableVariantTyp
   T extends 'messagePort' ? MessagePort :
   T extends 'promise' ? Promise<any> :
   T extends 'function' ? Function :
+  T extends 'arrayBuffer' ? ArrayBuffer :
   T extends 'readableStream' ? ReadableStream :
   T extends 'date' ? Date :
   T extends 'error' ? Error :
@@ -123,6 +130,7 @@ export type RevivableBox =
 export type Revivable =
   | MessagePort
   | Promise<Capable>
+  | ArrayBuffer
   | ReadableStream
   | Date
   | Error
@@ -132,6 +140,7 @@ export type RevivableToRevivableType<T extends Revivable> =
   T extends MessagePort ? 'messagePort' :
   T extends Promise<any> ? 'promise' :
   T extends Function ? 'function' :
+  T extends ArrayBuffer ? 'arrayBuffer' :
   T extends ReadableStream ? 'readableStream' :
   T extends Date ? 'date' :
   T extends Error ? 'error' :

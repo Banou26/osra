@@ -140,6 +140,8 @@ export const userArrayBuffer = async (transport: Transport) => {
   expose(value, { transport })
 
   const { arrayBuffer } = await expose<typeof value>({}, { transport })
+  console.log('arrayBuffer', arrayBuffer)
+  await new Promise(resolve => setTimeout(resolve, 1000000000))
   const newHash = await hashToHex(arrayBuffer)
   expect(newHash).to.equal(originalHash)
 }
