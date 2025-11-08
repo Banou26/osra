@@ -127,6 +127,7 @@ export const userPromise = async (transport: Transport) => {
 }
 
 const hashToHex = (hash: Uint8Array) =>
+  // crypto.subtle.digest('SHA-256', uint8Array).toHex()
     Array
       .from(hash)
       .map(byte => byte.toString(16).padStart(2, '0'))
@@ -137,7 +138,6 @@ export const userArrayBuffer = async (transport: Transport) => {
   const uint8Array = new Uint8Array(_arrayBuffer)
   crypto.getRandomValues(uint8Array)
   const originalHash = hashToHex(uint8Array)
-  // const originalHash = await crypto.subtle.digest('SHA-256', uint8Array).toHex()
   const value = {
     arrayBuffer: _arrayBuffer
   }
@@ -148,6 +148,46 @@ export const userArrayBuffer = async (transport: Transport) => {
   expect(newHash).to.equal(originalHash)
 }
 
+export const userReadableStream = async (transport: Transport) => {
+  const _arrayBuffer = new ArrayBuffer(100)
+  const uint8Array = new Uint8Array(_arrayBuffer)
+  crypto.getRandomValues(uint8Array)
+  const originalHash = hashToHex(uint8Array)
+  const readableStream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(uint8Array)
+      controller.close()
+    }
+  })
+  const value = {
+    readableStream
+  }
+  expose(value, { transport })
+
+  const { readableStream: resultReadableStream } = await expose<typeof value>({}, { transport })
+  const reader = resultReadableStream.getReader()
+  const result = await reader.read()
+  if (!result.value) throw new Error('value is undefined')
+  const newHash = hashToHex(result.value)
+  expect(result.done).to.be.true
+  expect(newHash).to.equal(originalHash)
+}
+
+// export const userWritableStream = async (transport: Transport) => {
+//   const writableStream = new WritableStream({
+//     write(chunk) {
+//       expect(chunk).to.deep.equal(new Uint8Array([1, 2, 3]))
+//     }
+//   })
+//   const value = {
+//     writableStream
+//   }
+//   expose(value, { transport })
+
+//   const { writableStream: resultWritableStream } = await expose<typeof value>({}, { transport })
+//   resultWritableStream.write(new Uint8Array([1, 2, 3]))
+// }
+
 export const base = {
   argsAndResponse,
   callback,
@@ -157,5 +197,6 @@ export const base = {
   objectCallbackAsArg,
   userMessagePort,
   userPromise,
-  userArrayBuffer
+  userArrayBuffer,
+  userReadableStream
 }
