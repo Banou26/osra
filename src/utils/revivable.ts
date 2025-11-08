@@ -14,7 +14,8 @@ import type {
   RevivableVariant,
   RevivableToRevivableType,
   ReviveBoxBase,
-  Uuid
+  Uuid,
+  RevivableArrayBuffer
 } from '../types'
 import type { ConnectionRevivableContext } from './connection'
 import type { DeepReplace } from './replace'
@@ -23,6 +24,7 @@ import type { StrictMessagePort } from './message-channel'
 import { OSRA_BOX } from '../types'
 import {
     isAlwaysBox,
+  isArrayBuffer,
   isClonable,
   isDate, isError, isFunction,
   isMessagePort, isPromise, isReadableStream,
@@ -183,6 +185,17 @@ export const reviveFunction = (value: RevivableFunction, context: ConnectionRevi
   return func
 }
 
+export const boxArrayBuffer = (value: ArrayBuffer, context: ConnectionRevivableContext): RevivableVariant & { type: 'arrayBuffer' } => {
+  return {
+    type: 'arrayBuffer',
+    base64Buffer: new Uint8Array(value).toBase64() as string
+  }
+}
+
+export const reviveArrayBuffer = (value: RevivableArrayBuffer, context: ConnectionRevivableContext): ArrayBuffer => {
+  return (Uint8Array.fromBase64(value.base64Buffer) as Uint8Array).buffer as ArrayBuffer
+}
+
 export const boxError = (value: Error, context: ConnectionRevivableContext): RevivableVariant & { type: 'error' } => {
 
 }
@@ -227,12 +240,14 @@ export const box = (value: Revivable, context: ConnectionRevivableContext) => {
     ...'isJson' in context.transport && context.transport.isJson
       ? (
         isMessagePort(value) ? boxMessagePort(value, context)
+        : isArrayBuffer(value) ? boxArrayBuffer(value, context)
         : isReadableStream(value) ? boxReadableStream(value, context)
         : value
       )
       : {
         type:
           isMessagePort(value) ? 'messagePort'
+          : isArrayBuffer(value) ? 'arrayBuffer'
           : isReadableStream(value) ? 'readableStream'
           : 'unknown',
         value

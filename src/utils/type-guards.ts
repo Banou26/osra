@@ -16,6 +16,7 @@ export const isSharedWorker = (value: any) => value instanceof SharedWorker
 export const isMessagePort = (value: any) => value instanceof MessagePort
 export const isPromise = (value: any) => value instanceof Promise
 export const isFunction = (value: any): value is Function => typeof value === 'function'
+export const isArrayBuffer = (value: any) => value instanceof ArrayBuffer
 export const isReadableStream = (value: any) => value instanceof ReadableStream
 export const isDate = (value: any) => value instanceof Date
 export const isError = (value: any) => value instanceof Error
