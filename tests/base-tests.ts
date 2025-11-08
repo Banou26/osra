@@ -126,25 +126,21 @@ export const userPromise = async (transport: Transport) => {
   await expect(promise).to.eventually.equal(1)
 }
 
-const hashToHex = (hash: Uint8Array) =>
-  // crypto.subtle.digest('SHA-256', uint8Array).toHex()
-    Array
-      .from(hash)
-      .map(byte => byte.toString(16).padStart(2, '0'))
-      .join('')
+const hashToHex = async (arrayBuffer: BufferSource) =>
+  new Uint8Array((await crypto.subtle.digest('SHA-256', arrayBuffer))).toHex() as string
 
 export const userArrayBuffer = async (transport: Transport) => {
   const _arrayBuffer = new ArrayBuffer(100)
   const uint8Array = new Uint8Array(_arrayBuffer)
   crypto.getRandomValues(uint8Array)
-  const originalHash = hashToHex(uint8Array)
+  const originalHash = await hashToHex(_arrayBuffer)
   const value = {
     arrayBuffer: _arrayBuffer
   }
   expose(value, { transport })
 
   const { arrayBuffer } = await expose<typeof value>({}, { transport })
-  const newHash = hashToHex(new Uint8Array(arrayBuffer))
+  const newHash = await hashToHex(arrayBuffer)
   expect(newHash).to.equal(originalHash)
 }
 
@@ -152,7 +148,7 @@ export const userReadableStream = async (transport: Transport) => {
   const _arrayBuffer = new ArrayBuffer(100)
   const uint8Array = new Uint8Array(_arrayBuffer)
   crypto.getRandomValues(uint8Array)
-  const originalHash = hashToHex(uint8Array)
+  const originalHash = await hashToHex(_arrayBuffer)
   const readableStream = new ReadableStream<Uint8Array>({
     start(controller) {
       controller.enqueue(uint8Array)
@@ -168,7 +164,7 @@ export const userReadableStream = async (transport: Transport) => {
   const reader = resultReadableStream.getReader()
   const result = await reader.read()
   if (!result.value) throw new Error('value is undefined')
-  const newHash = hashToHex(result.value)
+  const newHash = await hashToHex(result.value.buffer as ArrayBuffer)
   expect(result.done).to.be.true
   expect(newHash).to.equal(originalHash)
 }
