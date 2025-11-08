@@ -11,7 +11,7 @@ type TestObject = {
 test.beforeEach(async ({ page }) => {
   await page.goto('http://localhost:3000')
   // Uncomment for better debug experience, the devtools will have full context on the console's object's being logged.
-  // await new Promise(resolve => setTimeout(resolve, 250))
+  await new Promise(resolve => setTimeout(resolve, 250))
   await page.addScriptTag({ path: './build/test.js', type: 'module' })
 })
 
@@ -33,7 +33,13 @@ const recurseTests = (tests: TestObject, path: string[] = []) => {
     if (typeof value === 'function') {
       test(key, async ({ page }) => {
         await page.evaluate(async ([key, path]) => {
-          await path.reduce((obj, key) => obj[key], globalThis.tests)[key]()
+          const findTest = () => path.reduce((obj, key) => obj?.[key], globalThis.tests)?.[key]
+          let test = findTest()
+          while (typeof test !== 'function') {
+            await new Promise(resolve => setTimeout(resolve, 100))
+            test = findTest()
+          }
+          await test()
         }, [key, path] as const)
       })
     } else if (typeof value === 'object') {
