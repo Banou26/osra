@@ -87,6 +87,10 @@ export type RevivableArrayBuffer = {
   base64Buffer: string
 }
 
+export type RevivableReadableStreamPullContext = {
+  type: 'pull' | 'cancel'
+}
+
 export type RevivableReadableStream = {
   type: 'readableStream'
   port: MessagePort
