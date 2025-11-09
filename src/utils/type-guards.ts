@@ -207,6 +207,7 @@ export const isRevivable = (value: any): value is Revivable =>
   isMessagePort(value)
   || isFunction(value)
   || isPromise(value)
+  || isArrayBuffer(value)
   || isReadableStream(value)
   || isDate(value)
   || isError(value)
@@ -226,6 +227,9 @@ export const isRevivablePromiseBox = (value: any): value is RevivableBox & { typ
 export const isRevivableFunctionBox = (value: any): value is RevivableBox & { type: 'function' } =>
   isRevivableBox(value) && value.type === 'function'
 
+export const isRevivableArrayBufferBox = (value: any): value is RevivableBox & { type: 'arrayBuffer' } =>
+  isRevivableBox(value) && value.type === 'arrayBuffer'
+
 export const isRevivableReadableStreamBox = (value: any): value is RevivableBox & { type: 'readableStream' } =>
   isRevivableBox(value) && value.type === 'readableStream'
 
@@ -241,6 +245,7 @@ export const revivableToType = <T extends Revivable>(value: T): RevivableToReviv
   if (isMessagePort(value)) return 'messagePort' as RevivableToRevivableType<T>
   if (isFunction(value)) return 'function' as RevivableToRevivableType<T>
   if (isPromise(value)) return 'promise' as RevivableToRevivableType<T>
+  if (isArrayBuffer(value)) return 'arrayBuffer' as RevivableToRevivableType<T>
   if (isReadableStream(value)) return 'readableStream' as RevivableToRevivableType<T>
   if (isDate(value)) return 'date' as RevivableToRevivableType<T>
   if (isError(value)) return 'error' as RevivableToRevivableType<T>
