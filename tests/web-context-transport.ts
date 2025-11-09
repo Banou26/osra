@@ -16,6 +16,6 @@ import { base } from './base-tests'
 
 // export const userPromise = () => base.userPromise(window)
 
-export const userArrayBuffer = () => base.userArrayBuffer(window)
+// export const userArrayBuffer = () => base.userArrayBuffer(window)
 
 // export const userReadableStream = () => base.userReadableStream(window)

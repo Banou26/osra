@@ -15,7 +15,9 @@ import type {
   RevivableToRevivableType,
   ReviveBoxBase,
   Uuid,
-  RevivableArrayBuffer
+  RevivableArrayBuffer,
+  RevivableReadableStreamPullContext,
+  RevivableReadableStreamPullResultContext
 } from '../types'
 import type { ConnectionRevivableContext } from './connection'
 import type { DeepReplace } from './replace'
@@ -171,7 +173,7 @@ export const reviveFunction = (value: RevivableFunction, context: ConnectionRevi
       const callContext = recursiveBox([returnValueRemotePort, args] as const, context)
       value.port.postMessage(callContext, getTransferableObjects(callContext))
 
-      returnValueLocalPort.addEventListener('message', ({ data }:  MessageEvent<Capable>) => {
+      returnValueLocalPort.addEventListener('message', ({ data }: MessageEvent<Capable>) => {
         if (!isRevivablePromiseBox(data)) throw new Error(`Proxied function did not return a promise`)
         const result = recursiveRevive(data, context) as Promise<Capable>
         result
@@ -205,11 +207,63 @@ export const reviveError = (value: RevivableError, context: ConnectionRevivableC
 }
 
 export const boxReadableStream = (value: ReadableStream, context: ConnectionRevivableContext): RevivableVariant & { type: 'readableStream' } => {
+  const { port1: localPort, port2: remotePort } = new MessageChannel()
+  context.messagePorts.add(remotePort)
+  
+  const reader = value.getReader()
+  
+  localPort.addEventListener('message', async ({ data }:  MessageEvent<RevivableReadableStreamPullContext>) => {
+    console.log('box readable msg', data)
+    const { type } = recursiveRevive(data, context) as RevivableReadableStreamPullContext
+    if (type === 'pull') {
+      const pullResult = reader.read()
+      console.log('box readable msg pullResult', pullResult)
+      const boxedResult = recursiveBox(pullResult, context)
+      console.log('box readable msg boxed pullResult', boxedResult)
+      localPort.postMessage(boxedResult, getTransferableObjects(boxedResult))
+    } else {
+      reader.cancel()
+      localPort.close()
+    }
+  })
+  localPort.start()
 
+  return {
+    type: 'readableStream',
+    port: remotePort
+  }
 }
 
 export const reviveReadableStream = (value: RevivableReadableStream, context: ConnectionRevivableContext): ReadableStream => {
-
+  context.messagePorts.add(value.port)
+  value.port.start()
+  return new ReadableStream({
+    start(controller) {},
+    pull(controller) {
+      return new Promise((resolve, reject) => {
+        value.port.addEventListener('message', async ({ data }: MessageEvent<Capable>) => {
+          console.log('revive readable msg', data)
+          if (!isRevivablePromiseBox(data)) throw new Error(`Proxied function did not return a promise`)
+          const result = recursiveRevive(data, context) as Promise<ReadableStreamReadResult<any>>
+          console.log('revive readable msg box res', result)
+          result
+            .then(result => {
+              if (result.done) controller.close()
+              else controller.enqueue(result.value)
+              resolve()
+            })
+            .catch(reject)
+        }, { once: true })
+        console.log('revive readable send pull')
+        value.port.postMessage(recursiveBox({ type: 'pull' }, context))
+      })
+    },
+    cancel() {
+      console.log('revive readable send cancel')
+      value.port.postMessage(recursiveBox({ type: 'cancel' }, context))
+      value.port.close()
+    }
+  })
 }
 
 export const boxDate = (value: Date, context: ConnectionRevivableContext): RevivableVariant & { type: 'date' } => {
