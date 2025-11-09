@@ -28,7 +28,7 @@ import {
   isClonable,
   isDate, isError, isFunction,
   isMessagePort, isPromise, isReadableStream,
-  isRevivable, isRevivableBox, isRevivableDateBox, isRevivableErrorBox,
+  isRevivable, isRevivableArrayBufferBox, isRevivableBox, isRevivableDateBox, isRevivableErrorBox,
   isRevivableFunctionBox, isRevivableMessagePortBox, isRevivablePromiseBox,
   isRevivableReadableStreamBox, isTransferable, revivableToType
 } from './type-guards'
@@ -265,7 +265,9 @@ export const recursiveBox = <T extends Capable>(value: T, context: ConnectionRev
           .entries(boxedValue)
           .map(([key, value]: [string, Capable]) => [
             key,
-            isRevivableBox(boxedValue) && boxedValue.type === 'messagePort'
+            isRevivableBox(boxedValue) && boxedValue.type === 'messagePort' && boxedValue.value instanceof MessagePort
+            || isRevivableBox(boxedValue) && boxedValue.type === 'arrayBuffer' && boxedValue.value instanceof ArrayBuffer
+            || isRevivableBox(boxedValue) && boxedValue.type === 'readableStream' && boxedValue.value instanceof ReadableStream
               ? value
               : recursiveBox(value, context)
           ])
@@ -284,6 +286,7 @@ export const revive = (box: RevivableBox, context: ConnectionRevivableContext) =
     : isRevivableFunctionBox(box) ? reviveFunction(box, context)
     : isRevivablePromiseBox(box) ? revivePromise(box, context)
     : isRevivableErrorBox(box) ? reviveError(box, context)
+    : isRevivableArrayBufferBox(box) ? reviveArrayBuffer(box, context)
     : isRevivableReadableStreamBox(box) ? reviveReadableStream(box, context)
     : isRevivableDateBox(box) ? reviveDate(box, context)
     : box
