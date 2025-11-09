@@ -1,5 +1,5 @@
 import { TypedEventTarget } from 'typescript-event-target'
-import type { WebExtOnConnect, WebExtOnMessage, WebExtPort, WebExtRuntime, WebExtSender } from './utils/type-guards'
+import type { TypedArray, WebExtOnConnect, WebExtOnMessage, WebExtPort, WebExtRuntime, WebExtSender } from './utils/type-guards'
 
 export const OSRA_KEY = '__OSRA_KEY__' as const
 export const OSRA_DEFAULT_KEY = '__OSRA_DEFAULT_KEY__' as const
@@ -82,6 +82,12 @@ export type RevivableFunction = {
   port: MessagePort
 }
 
+export type RevivableTypedArray = {
+  type: 'typedArray'
+  typedArrayType: 'Int8Array' | 'Uint8Array' | 'Uint8ClampedArray' | 'Int16Array' | 'Uint16Array' | 'Int32Array' | 'Uint32Array' | 'Float16Array' | 'Float32Array' | 'Float64Array' | 'BigInt64Array' | 'BigUint64Array'
+  arrayBuffer: ArrayBuffer
+}
+
 export type RevivableArrayBuffer = {
   type: 'arrayBuffer'
   base64Buffer: string
@@ -110,6 +116,7 @@ export type RevivableVariant =
   | RevivableMessagePort
   | RevivablePromise
   | RevivableFunction
+  | RevivableTypedArray
   | RevivableArrayBuffer
   | RevivableReadableStream
   | RevivableDate
@@ -121,6 +128,7 @@ export type RevivableVariantTypeToRevivableVariant<T extends RevivableVariantTyp
   T extends 'messagePort' ? MessagePort :
   T extends 'promise' ? Promise<any> :
   T extends 'function' ? Function :
+  T extends 'typedArray' ? TypedArray :
   T extends 'arrayBuffer' ? ArrayBuffer :
   T extends 'readableStream' ? ReadableStream :
   T extends 'date' ? Date :
@@ -134,6 +142,7 @@ export type RevivableBox =
 export type Revivable =
   | MessagePort
   | Promise<Capable>
+  | TypedArray
   | ArrayBuffer
   | ReadableStream
   | Date
@@ -144,6 +153,7 @@ export type RevivableToRevivableType<T extends Revivable> =
   T extends MessagePort ? 'messagePort' :
   T extends Promise<any> ? 'promise' :
   T extends Function ? 'function' :
+  T extends TypedArray ? 'typedArray' :
   T extends ArrayBuffer ? 'arrayBuffer' :
   T extends ReadableStream ? 'readableStream' :
   T extends Date ? 'date' :

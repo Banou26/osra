@@ -17,7 +17,8 @@ import type {
   Uuid,
   RevivableArrayBuffer,
   RevivableReadableStreamPullContext,
-  RevivableReadableStreamPullResultContext
+  RevivableReadableStreamPullResultContext,
+  RevivableTypedArray
 } from '../types'
 import type { ConnectionRevivableContext } from './connection'
 import type { DeepReplace } from './replace'
@@ -32,7 +33,10 @@ import {
   isMessagePort, isPromise, isReadableStream,
   isRevivable, isRevivableArrayBufferBox, isRevivableBox, isRevivableDateBox, isRevivableErrorBox,
   isRevivableFunctionBox, isRevivableMessagePortBox, isRevivablePromiseBox,
-  isRevivableReadableStreamBox, isTransferable, revivableToType
+  isRevivableReadableStreamBox, isRevivableTypedArrayBox, isTransferable, isTypedArray, revivableToType,
+  TypedArray,
+  typedArrayToType,
+  typedArrayTypeToTypedArrayConstructor
 } from './type-guards'
 import { getTransferableObjects } from './transferable'
 
@@ -118,6 +122,7 @@ export const boxPromise = (value: Promise<any>, context: ConnectionRevivableCont
 
   const sendResult = (result: { type: 'resolve', data: Capable } | { type: 'reject', error: string }) => {
     const boxedResult = recursiveBox(result, context)
+    console.log('promise send boxed result', boxedResult)
     localPort.postMessage(boxedResult, getTransferableObjects(boxedResult))
     localPort.close()
   }
@@ -137,6 +142,7 @@ export const revivePromise = (value: RevivablePromise, context: ConnectionReviva
   return new Promise((resolve, reject) => {
     value.port.addEventListener('message', ({ data }:  MessageEvent<RevivablePromiseContext>) => {
       const result = recursiveRevive(data, context)
+      console.log('promise receive revived result', result)
       if (result.type === 'resolve') {
         resolve(recursiveRevive(result.data, context))
       } else { // result.type === 'reject'
@@ -186,6 +192,29 @@ export const reviveFunction = (value: RevivableFunction, context: ConnectionRevi
 
   return func
 }
+
+export const boxTypedArray = (value: TypedArray, context: ConnectionRevivableContext): RevivableVariant & { type: 'typedArray' } => {
+  console.log('boxTypedArray',
+    {
+      type: 'typedArray',
+      typedArrayType: typedArrayToType(value),
+      arrayBuffer: value.buffer
+    }
+  )
+  return {
+    type: 'typedArray',
+    typedArrayType: typedArrayToType(value),
+    arrayBuffer: value.buffer
+  }
+}
+
+export const reviveTypedArray = (value: RevivableTypedArray, context: ConnectionRevivableContext): TypedArray => {
+  const TypedArrayConstructor = typedArrayTypeToTypedArrayConstructor(value.typedArrayType)
+  const result = new TypedArrayConstructor(value.arrayBuffer)
+  console.log('reviveTypedArray', result)
+  return result
+}
+
 
 export const boxArrayBuffer = (value: ArrayBuffer, context: ConnectionRevivableContext): RevivableVariant & { type: 'arrayBuffer' } => {
   return {
@@ -282,6 +311,7 @@ export const box = (value: Revivable, context: ConnectionRevivableContext) => {
       ...(
         isFunction(value) ? boxFunction(value, context)
         : isPromise(value) ? boxPromise(value, context)
+        : isTypedArray(value) ? boxTypedArray(value, context)
         : isDate(value) ? boxDate(value, context)
         : isError(value) ? boxError(value, context)
         : value
@@ -313,7 +343,7 @@ export const recursiveBox = <T extends Capable>(value: T, context: ConnectionRev
   const boxedValue = isRevivable(value) ? box(value, context) : value
   return (
     Array.isArray(boxedValue) ? boxedValue.map(value => recursiveBox(value, context)) as DeepReplace<T, Revivable, RevivableBox>
-    : boxedValue && typeof boxedValue === 'object' ? (
+    : boxedValue && typeof boxedValue === 'object' && Object.getPrototypeOf(boxedValue) === Object.prototype ? (
       Object.fromEntries(
         Object
           .entries(boxedValue)
@@ -340,6 +370,7 @@ export const revive = (box: RevivableBox, context: ConnectionRevivableContext) =
     : isRevivableFunctionBox(box) ? reviveFunction(box, context)
     : isRevivablePromiseBox(box) ? revivePromise(box, context)
     : isRevivableErrorBox(box) ? reviveError(box, context)
+    : isRevivableTypedArrayBox(box) ? reviveTypedArray(box, context)
     : isRevivableArrayBufferBox(box) ? reviveArrayBuffer(box, context)
     : isRevivableReadableStreamBox(box) ? reviveReadableStream(box, context)
     : isRevivableDateBox(box) ? reviveDate(box, context)
