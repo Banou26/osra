@@ -38,3 +38,7 @@ export const userTypedArray = () => base.userTypedArray(jsonTransport())
 export const userReadableStream = () => base.userReadableStream(jsonTransport())
 
 export const userPromiseTypedArray = () => base.userPromiseTypedArray(jsonTransport())
+
+export const userDate = () => base.userDate(jsonTransport())
+
+export const userError = () => base.userError(jsonTransport())

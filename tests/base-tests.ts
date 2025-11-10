@@ -204,6 +204,37 @@ export const userPromiseTypedArray = async (transport: Transport) => {
   expect(newHash).to.equal(originalHash)
 }
 
+export const userDate = async (transport: Transport) => {
+  const _date = new Date()
+  const value = {
+    date: _date
+  }
+  expose(value, { transport })
+
+  const { date } = await expose<typeof value>({}, { transport })
+
+  // Test that the date is correctly transferred
+  expect(date).to.be.instanceOf(Date)
+  expect(date.toISOString()).to.equal(_date.toISOString())
+}
+
+export const userError = async (transport: Transport) => {
+  const _error = new Error('Test error message')
+  const value = {
+    error: _error,
+    throwError: () => {
+      throw new Error('Thrown error')
+    }
+  }
+  expose(value, { transport })
+
+  const { error, throwError } = await expose<typeof value>({}, { transport })
+
+  expect(error).to.be.instanceOf(Error)
+  expect(error.message).to.equal('Test error message')
+  await expect(throwError()).to.be.rejectedWith('Thrown error')
+}
+
 // export const userWritableStream = async (transport: Transport) => {
 //   const writableStream = new WritableStream({
 //     write(chunk) {
@@ -231,5 +262,7 @@ export const base = {
   userArrayBuffer,
   userTypedArray,
   userReadableStream,
-  userPromiseTypedArray
+  userPromiseTypedArray,
+  userDate,
+  userError
 }

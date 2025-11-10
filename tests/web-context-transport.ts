@@ -23,3 +23,7 @@ export const userTypedArray = () => base.userTypedArray(window)
 export const userReadableStream = () => base.userReadableStream(window)
 
 export const userPromiseTypedArray = () => base.userPromiseTypedArray(window)
+
+export const userDate = () => base.userDate(window)
+
+export const userError = () => base.userError(window)

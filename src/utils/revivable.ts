@@ -17,7 +17,6 @@ import type {
   Uuid,
   RevivableArrayBuffer,
   RevivableReadableStreamPullContext,
-  RevivableReadableStreamPullResultContext,
   RevivableTypedArray
 } from '../types'
 import type { ConnectionRevivableContext } from './connection'
@@ -205,7 +204,6 @@ export const reviveTypedArray = (value: RevivableTypedArray, context: Connection
   return result
 }
 
-
 export const boxArrayBuffer = (value: ArrayBuffer, context: ConnectionRevivableContext): RevivableVariant & { type: 'arrayBuffer' } => {
   return {
     type: 'arrayBuffer',
@@ -218,11 +216,15 @@ export const reviveArrayBuffer = (value: RevivableArrayBuffer, context: Connecti
 }
 
 export const boxError = (value: Error, context: ConnectionRevivableContext): RevivableVariant & { type: 'error' } => {
-
+  return {
+    type: 'error',
+    message: value.message,
+    stack: value.stack || value.toString()
+  }
 }
 
 export const reviveError = (value: RevivableError, context: ConnectionRevivableContext): Error => {
-
+  return new Error(value.message, { cause: value.stack })
 }
 
 export const boxReadableStream = (value: ReadableStream, context: ConnectionRevivableContext): RevivableVariant & { type: 'readableStream' } => {
@@ -279,11 +281,14 @@ export const reviveReadableStream = (value: RevivableReadableStream, context: Co
 }
 
 export const boxDate = (value: Date, context: ConnectionRevivableContext): RevivableVariant & { type: 'date' } => {
-
+  return {
+    type: 'date',
+    ISOString: value.toISOString()
+  }
 }
 
 export const reviveDate = (value: RevivableDate, context: ConnectionRevivableContext): Date => {
-
+  return new Date(value.ISOString)
 }
 
 export const box = (value: Revivable, context: ConnectionRevivableContext) => {
@@ -382,5 +387,5 @@ export const recursiveRevive = <T extends Capable>(value: T, context: Connection
     ) as DeepReplace<T, RevivableBox, Revivable>
     : value as DeepReplace<T, RevivableBox, Revivable>
   )
-  return isRevivableBox(recursedValue) ? revive(recursedValue, context) as DeepReplace<T, RevivableBox, Revivable> : recursedValue
+  return (isRevivableBox(recursedValue) ? revive(recursedValue, context) : recursedValue) as DeepReplace<T, RevivableBox, Revivable>
 }
