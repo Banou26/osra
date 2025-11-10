@@ -17,7 +17,6 @@ export default defineConfig({
   plugins: [
     dts({
       include: ['src/**/*'],
-      exclude: ['**/*.test.ts', '**/*.spec.ts'],
       outDir: 'build',
       rollupTypes: true
     })
