@@ -80,9 +80,11 @@ export const typedArrayTypeToTypedArrayConstructor = (value: TypeArrayType): Typ
 
 export const isTypedArray = (value: any): value is TypedArray => typedArrayConstructors.some(typedArray => value instanceof typedArray)
 export const isWebSocket = (value: any) => value instanceof WebSocket
-export const isServiceWorkerContainer = (value: any) => value instanceof ServiceWorkerContainer
+export const isServiceWorkerContainer = (value: any): value is ServiceWorkerContainer => globalThis.ServiceWorkerContainer && value instanceof ServiceWorkerContainer
 export const isWorker = (value: any) => value instanceof Worker
-export const isSharedWorker = (value: any) => value instanceof SharedWorker
+// @ts-expect-error
+export const isDedicatedWorker = (value: any): value is DedicatedWorkerGlobalScope => globalThis.DedicatedWorkerGlobalScope && value instanceof DedicatedWorkerGlobalScope
+export const isSharedWorker = (value: any): value is SharedWorker => globalThis.SharedWorker && value instanceof SharedWorker
 export const isMessagePort = (value: any) => value instanceof MessagePort
 export const isPromise = (value: any) => value instanceof Promise
 export const isFunction = (value: any): value is Function => typeof value === 'function'
@@ -214,6 +216,7 @@ export const isEmitTransport = (value: any): value is EmitTransport =>
   || isWindow(value)
   || isServiceWorkerContainer(value)
   || isWorker(value)
+  || isDedicatedWorker(value)
   || isSharedWorker(value)
   || isMessagePort(value)
   || isCustomEmitTransport(value)
@@ -229,6 +232,7 @@ export const isReceiveTransport = (value: any): value is ReceiveTransport =>
   || isWindow(value)
   || isServiceWorkerContainer(value)
   || isWorker(value)
+  || isDedicatedWorker(value)
   || isSharedWorker(value)
   || isMessagePort(value)
   || isCustomReceiveTransport(value)
