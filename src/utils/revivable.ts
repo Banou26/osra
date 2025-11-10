@@ -288,13 +288,18 @@ export const reviveDate = (value: RevivableDate, context: ConnectionRevivableCon
 
 export const box = (value: Revivable, context: ConnectionRevivableContext) => {
 
-  if (isAlwaysBox(value)) {
+  if (
+    isAlwaysBox(value)
+    // WebKit doesn't support transferable streams so we force box them
+    || isReadableStream(value) && !context.platformCapabilities.transferableStream
+  ) {
     return {
       [OSRA_BOX]: 'revivable',
       ...(
         isFunction(value) ? boxFunction(value, context)
         : isPromise(value) ? boxPromise(value, context)
         : isTypedArray(value) ? boxTypedArray(value, context)
+        : isReadableStream(value) ? boxReadableStream(value, context)
         : isDate(value) ? boxDate(value, context)
         : isError(value) ? boxError(value, context)
         : value
@@ -309,7 +314,7 @@ export const box = (value: Revivable, context: ConnectionRevivableContext) => {
         isMessagePort(value) ? boxMessagePort(value, context)
         : isArrayBuffer(value) ? boxArrayBuffer(value, context)
         : isReadableStream(value) ? boxReadableStream(value, context)
-        : value
+        : { type: 'unknown', value }
       )
       : {
         type:

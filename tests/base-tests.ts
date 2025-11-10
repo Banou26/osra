@@ -177,6 +177,7 @@ export const userReadableStream = async (transport: Transport) => {
   expose(value, { transport })
 
   const { readableStream: resultReadableStream } = await expose<typeof value>({}, { transport })
+  expect(resultReadableStream).to.be.instanceOf(ReadableStream)
   const reader = resultReadableStream.getReader()
   const result = await reader.read()
   if (!result.value) throw new Error('value is undefined')
