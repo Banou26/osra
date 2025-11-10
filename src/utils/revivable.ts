@@ -144,9 +144,9 @@ export const revivePromise = (value: RevivablePromise, context: ConnectionReviva
       const result = recursiveRevive(data, context)
       console.log('promise receive revived result', result)
       if (result.type === 'resolve') {
-        resolve(recursiveRevive(result.data, context))
+        resolve(result.data)
       } else { // result.type === 'reject'
-        reject(recursiveRevive(result.error, context))
+        reject(result.error)
       }
       value.port.close()
     }, { once: true })

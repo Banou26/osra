@@ -144,6 +144,22 @@ export const userArrayBuffer = async (transport: Transport) => {
   expect(newHash).to.equal(originalHash)
 }
 
+export const userTypedArray = async (transport: Transport) => {
+  const _arrayBuffer = new ArrayBuffer(100)
+  const _uint8Array = new Uint8Array(_arrayBuffer)
+  crypto.getRandomValues(_uint8Array)
+  const originalHash = await hashToHex(_arrayBuffer)
+  const value = {
+    uint8Array: _uint8Array
+  }
+  expose(value, { transport })
+
+  const { uint8Array } = await expose<typeof value>({}, { transport })
+  expect(uint8Array).to.be.instanceOf(Uint8Array)
+  const newHash = await hashToHex(uint8Array)
+  expect(newHash).to.equal(originalHash)
+}
+
 export const userReadableStream = async (transport: Transport) => {
   const _arrayBuffer = new ArrayBuffer(100)
   const uint8Array = new Uint8Array(_arrayBuffer)
@@ -174,6 +190,22 @@ export const userReadableStream = async (transport: Transport) => {
   expect(doneResult.done).to.be.true
 }
 
+export const userPromiseTypedArray = async (transport: Transport) => {
+  const _arrayBuffer = new ArrayBuffer(100)
+  const _uint8Array = new Uint8Array(_arrayBuffer)
+  crypto.getRandomValues(_uint8Array)
+  const originalHash = await hashToHex(_arrayBuffer)
+  const value = {
+    uint8Array: Promise.resolve(_uint8Array)
+  }
+  expose(value, { transport })
+
+  const { uint8Array } = await expose<typeof value>({}, { transport })
+  expect(uint8Array).to.be.instanceOf(Promise)
+  const newHash = await hashToHex(await uint8Array)
+  expect(newHash).to.equal(originalHash)
+}
+
 // export const userWritableStream = async (transport: Transport) => {
 //   const writableStream = new WritableStream({
 //     write(chunk) {
@@ -199,5 +231,7 @@ export const base = {
   userMessagePort,
   userPromise,
   userArrayBuffer,
-  userReadableStream
+  userTypedArray,
+  userReadableStream,
+  userPromiseTypedArray
 }

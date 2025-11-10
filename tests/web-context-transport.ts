@@ -18,4 +18,8 @@ import { base } from './base-tests'
 
 // export const userArrayBuffer = () => base.userArrayBuffer(window)
 
+// export const userTypedArray = () => base.userTypedArray(window)
+
 // export const userReadableStream = () => base.userReadableStream(window)
+// 
+export const userPromiseTypedArray = () => base.userPromiseTypedArray(window)

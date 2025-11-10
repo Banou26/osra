@@ -33,4 +33,8 @@ const jsonTransport = (): Transport => ({
 
 // export const userArrayBuffer = () => base.userArrayBuffer(jsonTransport())
 
-export const userReadableStream = () => base.userReadableStream(jsonTransport())
+// export const userTypedArray = () => base.userTypedArray(jsonTransport())
+
+// export const userReadableStream = () => base.userReadableStream(jsonTransport())
+// 
+export const userPromiseTypedArray = () => base.userPromiseTypedArray(jsonTransport())
