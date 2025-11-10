@@ -5,6 +5,7 @@
     "lib": ["dom", "dom.iterable", "esnext"],
     "emitDeclarationOnly": true,
     "declaration": true,
+    "declarationDir": "./build",
     "composite": false,
     "outDir": "./build",
     "sourceMap": true,
@@ -16,5 +17,17 @@
     "allowSyntheticDefaultImports": true,
     "types": ["@types/chrome", "@types/firefox-webext-browser"],
     "skipLibCheck": true
-  }
+  },
+  "include": ["src/**/*"],
+  "exclude": [
+    "node_modules",
+    "build",
+    "tests",
+    "test-results",
+    "**/*.test.ts",
+    "**/*.spec.ts",
+    "*.config.ts",
+    "vite.*.config.ts",
+    "playwright.*.config.ts"
+  ]
 }
