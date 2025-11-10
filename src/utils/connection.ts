@@ -5,12 +5,12 @@ import type {
   Transport,
   Uuid
 } from '../types'
-import type { Allocator, MessageChannelAllocator } from './allocator'
+import type { MessageChannelAllocator } from './allocator'
 import type { PlatformCapabilities } from './capabilities'
 import type { StrictMessagePort } from './message-channel'
 
 import { recursiveBox, recursiveRevive } from './revivable'
-import { makeAllocator, makeMessageChannelAllocator } from './allocator'
+import { makeMessageChannelAllocator } from './allocator'
 
 export type BidirectionalConnectionContext = {
   type: 'bidirectional'
@@ -33,6 +33,7 @@ export type ConnectionContext =
   | UnidirectionalReceivingConnectionContext
 
 export type ConnectionRevivableContext = {
+  platformCapabilities: PlatformCapabilities
   transport: Transport
   remoteUuid: Uuid
   messagePorts: Set<MessagePort>
@@ -61,6 +62,7 @@ export const startBidirectionalConnection = <T extends Capable>(
   }
 ) => {
   const revivableContext = {
+    platformCapabilities,
     transport,
     remoteUuid,
     messagePorts: new Set(),
