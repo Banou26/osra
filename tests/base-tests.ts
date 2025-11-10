@@ -177,11 +177,8 @@ export const userReadableStream = async (transport: Transport) => {
   expose(value, { transport })
 
   const { readableStream: resultReadableStream } = await expose<typeof value>({}, { transport })
-  console.log('resultReadableStream', resultReadableStream)
   const reader = resultReadableStream.getReader()
   const result = await reader.read()
-  console.log('result', result)
-  await new Promise(resolve => setTimeout(resolve, 10000000))
   if (!result.value) throw new Error('value is undefined')
   const newHash = await hashToHex(result.value.buffer as ArrayBuffer)
   expect(newHash).to.equal(originalHash)

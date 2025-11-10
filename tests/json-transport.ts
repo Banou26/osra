@@ -15,26 +15,26 @@ const jsonTransport = (): Transport => ({
   }
 })
 
-// export const argsAndResponse = () => base.argsAndResponse(jsonTransport())
+export const argsAndResponse = () => base.argsAndResponse(jsonTransport())
 
-// export const callback = () => base.callback(jsonTransport())
+export const callback = () => base.callback(jsonTransport())
 
-// export const callbackAsArg = () => base.callbackAsArg(jsonTransport())
+export const callbackAsArg = () => base.callbackAsArg(jsonTransport())
 
-// export const objectBaseArgsAndResponse = () => base.objectBaseArgsAndResponse(jsonTransport())
+export const objectBaseArgsAndResponse = () => base.objectBaseArgsAndResponse(jsonTransport())
 
-// export const objectCallback = () => base.objectCallback(jsonTransport())
+export const objectCallback = () => base.objectCallback(jsonTransport())
 
-// export const objectCallbackAsArg = () => base.objectCallbackAsArg(jsonTransport())
+export const objectCallbackAsArg = () => base.objectCallbackAsArg(jsonTransport())
 
-// export const userMessagePort = () => base.userMessagePort(jsonTransport())
+export const userMessagePort = () => base.userMessagePort(jsonTransport())
 
-// export const userPromise = () => base.userPromise(jsonTransport())
+export const userPromise = () => base.userPromise(jsonTransport())
 
-// export const userArrayBuffer = () => base.userArrayBuffer(jsonTransport())
+export const userArrayBuffer = () => base.userArrayBuffer(jsonTransport())
 
-// export const userTypedArray = () => base.userTypedArray(jsonTransport())
+export const userTypedArray = () => base.userTypedArray(jsonTransport())
 
-// export const userReadableStream = () => base.userReadableStream(jsonTransport())
-// 
+export const userReadableStream = () => base.userReadableStream(jsonTransport())
+
 export const userPromiseTypedArray = () => base.userPromiseTypedArray(jsonTransport())
