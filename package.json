@@ -8,7 +8,7 @@
   "main": "build/index.js",
   "type": "module",
   "scripts": {
-    "build": "vite build && tsc",
+    "build": "vite build",
     "build-watch": "vite build --watch",
     "build-test": "vite build --config vite.test.config.ts",
     "build-test-watch": "vite build --config vite.test.config.ts --watch",
@@ -54,6 +54,7 @@
     "typescript": "^5.9.3",
     "typescript-event-target": "^1.1.1",
     "vite": "^7.2.2",
+    "vite-plugin-dts": "^4.5.4",
     "vite-plugin-istanbul": "^7.2.0"
   }
 }
