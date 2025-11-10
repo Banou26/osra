@@ -109,6 +109,7 @@ export type RevivableDate = {
 
 export type RevivableError = {
   type: 'error'
+  message: string
   stack: string
 }
 

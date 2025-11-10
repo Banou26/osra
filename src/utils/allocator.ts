@@ -48,8 +48,7 @@ export const makeMessageChannelAllocator = () => {
 
   const result = {
     getUniqueUuid: () => {
-      let uuid: Uuid
-      if (!uuid) uuid = globalThis.crypto.randomUUID()
+      let uuid: Uuid = globalThis.crypto.randomUUID()
       while (channels.has(uuid)) {
         uuid = globalThis.crypto.randomUUID()
       }
