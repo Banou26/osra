@@ -20,7 +20,7 @@ const resolvers = {
 
 export type Resolvers = typeof resolvers
 
-expose(resolvers, { local: globalThis, remote: globalThis })
+expose(resolvers, { transport: worker })
 ```
 
 and on your current context with full typescript support you can call it easily like
@@ -31,7 +31,7 @@ import { expose } from 'osra'
 
 const worker = new Worker('/worker.js', { type: 'module' })
 
-const { test } = await expose<Resolvers>({}, { local: worker, remote: worker })
+const { test } = await expose<Resolvers>({}, { transport: worker })
 
 const { foo, bar, baz } = test()
 // foo === 1
