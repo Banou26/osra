@@ -60,123 +60,112 @@ export interface RevivableHandler<
   requiresJsonBoxing?: boolean
 }
 
+// ============ Registry state ============
+
+const handlers = new Map<RevivableVariantType, RevivableHandler>()
+const handlerList: RevivableHandler[] = []
+
+// ============ Registry functions ============
+
 /**
- * Registry of all revivable type handlers.
- * Provides a centralized way to manage type checking, boxing, and reviving.
+ * Register a new handler for a revivable type.
  */
-export class RevivableRegistry {
-  private handlers: Map<RevivableVariantType, RevivableHandler> = new Map()
-  private handlerList: RevivableHandler[] = []
+export const registerHandler = <TType extends RevivableVariantType>(
+  handler: RevivableHandler<TType, any, any>
+): void => {
+  handlers.set(handler.type, handler as RevivableHandler)
+  handlerList.push(handler as RevivableHandler)
+}
 
-  /**
-   * Register a new handler for a revivable type.
-   */
-  register<TType extends RevivableVariantType>(handler: RevivableHandler<TType, any, any>): this {
-    this.handlers.set(handler.type, handler as RevivableHandler)
-    this.handlerList.push(handler as RevivableHandler)
-    return this
-  }
+/**
+ * Get a handler by its type name.
+ */
+export const getHandler = (type: RevivableVariantType): RevivableHandler | undefined =>
+  handlers.get(type)
 
-  /**
-   * Get a handler by its type name.
-   */
-  getHandler(type: RevivableVariantType): RevivableHandler | undefined {
-    return this.handlers.get(type)
-  }
+/**
+ * Get all registered handlers.
+ */
+export const getAllHandlers = (): readonly RevivableHandler[] => handlerList
 
-  /**
-   * Get all registered handlers.
-   */
-  getAllHandlers(): readonly RevivableHandler[] {
-    return this.handlerList
-  }
+/**
+ * Check if a value is any revivable type.
+ */
+export const isRevivable = (value: unknown): value is Revivable =>
+  handlerList.some(handler => handler.check(value))
 
-  /**
-   * Check if a value is any revivable type.
-   */
-  isRevivable(value: unknown): value is Revivable {
-    return this.handlerList.some(handler => handler.check(value))
-  }
+/**
+ * Check if a value should always be boxed.
+ */
+export const isAlwaysBox = (value: unknown): boolean =>
+  handlerList.some(handler => handler.alwaysBox && handler.check(value))
 
-  /**
-   * Check if a value should always be boxed.
-   */
-  isAlwaysBox(value: unknown): boolean {
-    return this.handlerList.some(handler => handler.alwaysBox && handler.check(value))
-  }
-
-  /**
-   * Get the type name for a revivable value.
-   */
-  getType(value: Revivable): RevivableVariantType {
-    for (const handler of this.handlerList) {
-      if (handler.check(value)) {
-        return handler.type
-      }
+/**
+ * Get the type name for a revivable value.
+ */
+export const getRevivableType = (value: Revivable): RevivableVariantType => {
+  for (const handler of handlerList) {
+    if (handler.check(value)) {
+      return handler.type
     }
+  }
+  throw new Error(
+    `Unknown revivable type: ${(value as object)?.constructor?.name ?? typeof value}. ` +
+    `Expected one of: ${handlerList.map(h => h.type).join(', ')}`
+  )
+}
+
+/**
+ * Check if a boxed value is a revivable box.
+ */
+export const isRevivableBox = (value: unknown): value is RevivableBox =>
+  value !== null &&
+  typeof value === 'object' &&
+  OSRA_BOX in value &&
+  (value as RevivableBox)[OSRA_BOX] === 'revivable'
+
+/**
+ * Find the handler for a given value.
+ */
+export const findHandlerForValue = (value: unknown): RevivableHandler | undefined =>
+  handlerList.find(handler => handler.check(value))
+
+/**
+ * Find the handler for a given boxed value.
+ */
+export const findHandlerForBox = (box: RevivableBox): RevivableHandler | undefined =>
+  handlerList.find(handler => handler.checkBox(box))
+
+/**
+ * Box a revivable value using the appropriate handler.
+ */
+export const boxWithRegistry = (value: Revivable, context: ConnectionRevivableContext): RevivableBox => {
+  const handler = findHandlerForValue(value)
+  if (!handler) {
     throw new Error(
-      `Unknown revivable type: ${(value as object)?.constructor?.name ?? typeof value}. ` +
-      `Expected one of: ${this.handlerList.map(h => h.type).join(', ')}`
+      `No handler found for value: ${(value as object)?.constructor?.name ?? typeof value}`
     )
   }
+  return {
+    [OSRA_BOX]: 'revivable',
+    ...handler.box(value, context)
+  } as RevivableBox
+}
 
-  /**
-   * Check if a boxed value is a revivable box.
-   */
-  isRevivableBox(value: unknown): value is RevivableBox {
-    return (
-      value !== null &&
-      typeof value === 'object' &&
-      OSRA_BOX in value &&
-      (value as RevivableBox)[OSRA_BOX] === 'revivable'
-    )
+/**
+ * Revive a boxed value using the appropriate handler.
+ */
+export const reviveWithRegistry = (box: RevivableBox, context: ConnectionRevivableContext): Revivable => {
+  // If the value got properly sent through the protocol as is, we don't need to revive it
+  if (isRevivable(box.value)) {
+    return box.value as Revivable
   }
 
-  /**
-   * Find the handler for a given value.
-   */
-  findHandlerForValue(value: unknown): RevivableHandler | undefined {
-    return this.handlerList.find(handler => handler.check(value))
+  const handler = findHandlerForBox(box)
+  if (!handler) {
+    throw new Error(`No handler found for box type: ${box.type}`)
   }
-
-  /**
-   * Find the handler for a given boxed value.
-   */
-  findHandlerForBox(box: RevivableBox): RevivableHandler | undefined {
-    return this.handlerList.find(handler => handler.checkBox(box))
-  }
-
-  /**
-   * Box a revivable value using the appropriate handler.
-   */
-  box(value: Revivable, context: ConnectionRevivableContext): RevivableBox {
-    const handler = this.findHandlerForValue(value)
-    if (!handler) {
-      throw new Error(
-        `No handler found for value: ${(value as object)?.constructor?.name ?? typeof value}`
-      )
-    }
-    return {
-      [OSRA_BOX]: 'revivable',
-      ...handler.box(value, context)
-    } as RevivableBox
-  }
-
-  /**
-   * Revive a boxed value using the appropriate handler.
-   */
-  revive(box: RevivableBox, context: ConnectionRevivableContext): Revivable {
-    // If the value got properly sent through the protocol as is, we don't need to revive it
-    if (this.isRevivable(box.value)) {
-      return box.value as Revivable
-    }
-
-    const handler = this.findHandlerForBox(box)
-    if (!handler) {
-      throw new Error(`No handler found for box type: ${box.type}`)
-    }
-    return handler.revive(box as any, context) as Revivable
-  }
+  return handler.revive(box as any, context) as Revivable
 }
 
 // ============ Type checking functions ============
@@ -236,7 +225,3 @@ export const isRevivableArrayBufferBox = createBoxChecker('arrayBuffer')
 export const isRevivableReadableStreamBox = createBoxChecker('readableStream')
 export const isRevivableDateBox = createBoxChecker('date')
 export const isRevivableErrorBox = createBoxChecker('error')
-
-// ============ Create and export the global registry ============
-
-export const revivableRegistry = new RevivableRegistry()

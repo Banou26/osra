@@ -12,17 +12,19 @@
 import type {
   Capable,
   Revivable,
-  RevivableBox,
-  RevivableToRevivableType,
-  ReviveBoxBase
+  RevivableBox
 } from '../types'
 import type { ConnectionRevivableContext } from './connection'
 import type { DeepReplace } from './replace'
 
 import { OSRA_BOX } from '../types'
-import { revivableRegistry } from './revivable-registry'
+import {
+  isRevivable,
+  isRevivableBox,
+  findHandlerForValue,
+  findHandlerForBox
+} from './revivable-registry'
 import { setRecursiveFunctions } from './revivable-handlers'
-import { getTransferableObjects } from './transferable'
 import { isTransferable } from './type-guards'
 
 // Import handlers to register them with the registry
@@ -33,7 +35,7 @@ import './revivable-handlers'
  * Determines whether boxing is needed based on the value type and transport capabilities.
  */
 export const box = (value: Revivable, context: ConnectionRevivableContext): RevivableBox => {
-  const handler = revivableRegistry.findHandlerForValue(value)
+  const handler = findHandlerForValue(value)
 
   if (!handler) {
     // Unknown type, return as-is with type marker
@@ -89,7 +91,7 @@ export const recursiveBox = <T extends Capable>(
   context: ConnectionRevivableContext
 ): DeepReplace<T, Revivable, RevivableBox> => {
   // First, box if this value is revivable
-  const boxedValue = revivableRegistry.isRevivable(value) ? box(value, context) : value
+  const boxedValue = isRevivable(value) ? box(value, context) : value
 
   // Handle arrays
   if (Array.isArray(boxedValue)) {
@@ -99,7 +101,7 @@ export const recursiveBox = <T extends Capable>(
   // Handle plain objects (but not boxed values with transferable content)
   if (boxedValue && typeof boxedValue === 'object' && Object.getPrototypeOf(boxedValue) === Object.prototype) {
     // Skip recursion for boxed values that contain transferable native values
-    if (revivableRegistry.isRevivableBox(boxedValue)) {
+    if (isRevivableBox(boxedValue)) {
       const boxType = (boxedValue as RevivableBox).type
       const boxValue = (boxedValue as RevivableBox).value
       if (
@@ -127,11 +129,11 @@ export const recursiveBox = <T extends Capable>(
  */
 export const revive = (boxedValue: RevivableBox, context: ConnectionRevivableContext): Revivable => {
   // If the value got properly sent through the protocol as is, we don't need to revive it
-  if (revivableRegistry.isRevivable(boxedValue.value)) {
+  if (isRevivable(boxedValue.value)) {
     return boxedValue.value as Revivable
   }
 
-  const handler = revivableRegistry.findHandlerForBox(boxedValue)
+  const handler = findHandlerForBox(boxedValue)
   if (!handler) {
     // Unknown box type, return as-is
     return boxedValue as unknown as Revivable
@@ -167,7 +169,7 @@ export const recursiveRevive = <T extends Capable>(
     ) as DeepReplace<T, RevivableBox, Revivable>
 
     // Check if this is a revivable box and revive it
-    if (revivableRegistry.isRevivableBox(recursedValue)) {
+    if (isRevivableBox(recursedValue)) {
       return revive(recursedValue as RevivableBox, context) as DeepReplace<T, RevivableBox, Revivable>
     }
 
@@ -180,8 +182,16 @@ export const recursiveRevive = <T extends Capable>(
 // Set up the recursive functions in the handlers module
 setRecursiveFunctions(recursiveBox as any, recursiveRevive as any)
 
-// Re-export the registry for external use
-export { revivableRegistry } from './revivable-registry'
+// Re-export registry functions for external use
+// Note: isRevivable, isAlwaysBox, isRevivableBox are exported from type-guards.ts
+export {
+  registerHandler,
+  getHandler,
+  getAllHandlers,
+  getRevivableType,
+  findHandlerForValue,
+  findHandlerForBox
+} from './revivable-registry'
 
 // Re-export handler types for extension
 export type { RevivableHandler } from './revivable-registry'

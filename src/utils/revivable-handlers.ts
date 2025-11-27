@@ -21,7 +21,8 @@ import type { RevivableHandler } from './revivable-registry'
 import type { TypedArray } from './type-guards'
 
 import {
-  revivableRegistry,
+  registerHandler,
+  isRevivableBox,
   isMessagePort,
   isPromise,
   isFunction,
@@ -74,7 +75,7 @@ const messagePortHandler: RevivableHandler<'messagePort', MessagePort, Revivable
       context.sendMessage({
         type: 'message',
         remoteUuid: context.remoteUuid,
-        data: revivableRegistry.isRevivableBox(data) ? data : recursiveBox(data, context),
+        data: isRevivableBox(data) ? data : recursiveBox(data, context),
         portId
       })
     })
@@ -102,7 +103,7 @@ const messagePortHandler: RevivableHandler<'messagePort', MessagePort, Revivable
       context.sendMessage({
         type: 'message',
         remoteUuid: context.remoteUuid,
-        data: revivableRegistry.isRevivableBox(data) ? data : recursiveBox(data, context),
+        data: isRevivableBox(data) ? data : recursiveBox(data, context),
         portId: box.portId as Uuid
       })
     })
@@ -371,15 +372,14 @@ const errorHandler: RevivableHandler<'error', Error, RevivableVariant & { type: 
 
 // ============ Register all handlers ============
 
-revivableRegistry
-  .register(messagePortHandler)
-  .register(promiseHandler)
-  .register(functionHandler)
-  .register(typedArrayHandler)
-  .register(arrayBufferHandler)
-  .register(readableStreamHandler)
-  .register(dateHandler)
-  .register(errorHandler)
+registerHandler(messagePortHandler)
+registerHandler(promiseHandler)
+registerHandler(functionHandler)
+registerHandler(typedArrayHandler)
+registerHandler(arrayBufferHandler)
+registerHandler(readableStreamHandler)
+registerHandler(dateHandler)
+registerHandler(errorHandler)
 
 /**
  * Export individual handlers for testing or extension.
