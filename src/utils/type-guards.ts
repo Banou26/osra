@@ -9,6 +9,9 @@ import type {
 import { OSRA_BOX, OSRA_KEY } from '../types'
 import { getWebExtensionRuntime } from './platform'
 
+// Float16Array is a recent addition (2024) and may not be available in all environments
+const Float16ArrayConstructor = typeof Float16Array !== 'undefined' ? Float16Array : undefined
+
 const typedArrayConstructors = [
   Int8Array,
   Uint8Array,
@@ -17,12 +20,12 @@ const typedArrayConstructors = [
   Uint16Array,
   Int32Array,
   Uint32Array,
-  Float16Array,
+  ...(Float16ArrayConstructor ? [Float16ArrayConstructor] : []),
   Float32Array,
   Float64Array,
   BigInt64Array,
   BigUint64Array
-]
+] as const
 export type TypedArrayConstructor = typeof typedArrayConstructors[number]
 
 const typedArrays = [
@@ -33,12 +36,12 @@ const typedArrays = [
   new Uint16Array(),
   new Int32Array(),
   new Uint32Array(),
-  new Float16Array(),
+  ...(Float16ArrayConstructor ? [new Float16ArrayConstructor()] : []),
   new Float32Array(),
   new Float64Array(),
   new BigInt64Array(),
   new BigUint64Array()
-]
+] as const
 export type TypedArray = typeof typedArrays[number]
 export const typedArrayToType = <T extends TypedArray>(value: T) => {
   const type =
@@ -49,13 +52,15 @@ export const typedArrayToType = <T extends TypedArray>(value: T) => {
     value instanceof Uint16Array ? 'Uint16Array' :
     value instanceof Int32Array ? 'Int32Array' :
     value instanceof Uint32Array ? 'Uint32Array' :
-    value instanceof Float16Array ? 'Float16Array' :
+    (Float16ArrayConstructor && value instanceof Float16ArrayConstructor) ? 'Float16Array' :
     value instanceof Float32Array ? 'Float32Array' :
     value instanceof Float64Array ? 'Float64Array' :
     value instanceof BigInt64Array ? 'BigInt64Array' :
     value instanceof BigUint64Array ? 'BigUint64Array' :
     undefined
-  if (type === undefined) throw new Error('Unknown typed array type')
+  if (type === undefined) {
+    throw new Error(`Unknown typed array type: ${value?.constructor?.name ?? typeof value}. Expected one of: Int8Array, Uint8Array, Uint8ClampedArray, Int16Array, Uint16Array, Int32Array, Uint32Array, Float16Array, Float32Array, Float64Array, BigInt64Array, BigUint64Array`)
+  }
   return type
 }
 export type TypeArrayType = ReturnType<typeof typedArrayToType>
@@ -68,13 +73,15 @@ export const typedArrayTypeToTypedArrayConstructor = (value: TypeArrayType): Typ
     value === 'Uint16Array' ? Uint16Array :
     value === 'Int32Array' ? Int32Array :
     value === 'Uint32Array' ? Uint32Array :
-    value === 'Float16Array' ? Float16Array :
+    (value === 'Float16Array' && Float16ArrayConstructor) ? Float16ArrayConstructor :
     value === 'Float32Array' ? Float32Array :
     value === 'Float64Array' ? Float64Array :
     value === 'BigInt64Array' ? BigInt64Array :
     value === 'BigUint64Array' ? BigUint64Array :
     undefined
-  if (typedArray === undefined) throw new Error('Unknown typed array type')
+  if (typedArray === undefined) {
+    throw new Error(`Unknown typed array type name: "${value}". Expected one of: Int8Array, Uint8Array, Uint8ClampedArray, Int16Array, Uint16Array, Int32Array, Uint32Array, Float16Array, Float32Array, Float64Array, BigInt64Array, BigUint64Array`)
+  }
   return typedArray
 }
 
@@ -222,7 +229,9 @@ export const isEmitTransport = (value: any): value is EmitTransport =>
   || isCustomEmitTransport(value)
 
 export function assertEmitTransport (transport: Transport): asserts transport is EmitTransport {
-  if (!isEmitTransport(transport)) throw new Error('Transport is not emitable')
+  if (!isEmitTransport(transport)) {
+    throw new Error(`Transport cannot emit messages. Received: ${transport?.constructor?.name ?? typeof transport}. Expected: Window, Worker, SharedWorker, MessagePort, WebSocket, or custom transport with emit function.`)
+  }
 }
 
 
@@ -238,7 +247,9 @@ export const isReceiveTransport = (value: any): value is ReceiveTransport =>
   || isCustomReceiveTransport(value)
 
 export function assertReceiveTransport (transport: Transport): asserts transport is ReceiveTransport {
-  if (!isReceiveTransport(transport)) throw new Error('Transport is not receiveable')
+  if (!isReceiveTransport(transport)) {
+    throw new Error(`Transport cannot receive messages. Received: ${transport?.constructor?.name ?? typeof transport}. Expected: Window, Worker, SharedWorker, MessagePort, WebSocket, or custom transport with receive function.`)
+  }
 }
 
 export const isCustomEmitTransport = (value: any): value is CustomEmitTransport =>
@@ -329,5 +340,5 @@ export const revivableToType = <T extends Revivable>(value: T): RevivableToReviv
   if (isReadableStream(value)) return 'readableStream' as RevivableToRevivableType<T>
   if (isDate(value)) return 'date' as RevivableToRevivableType<T>
   if (isError(value)) return 'error' as RevivableToRevivableType<T>
-  throw new Error('Unknown revivable type')
+  throw new Error(`Unknown revivable type: ${(value as object)?.constructor?.name ?? typeof value}. Expected one of: MessagePort, Function, Promise, TypedArray, ArrayBuffer, ReadableStream, Date, Error`)
 }

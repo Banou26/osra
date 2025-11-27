@@ -6,7 +6,8 @@ export default defineConfig({
   fullyParallel: true,
   webServer: {
     command: 'npm run start-server',
-    url: 'http://localhost:3000'
+    url: 'http://localhost:3000',
+    reuseExistingServer: true
   },
   use: {
     launchOptions: {

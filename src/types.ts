@@ -1,12 +1,23 @@
 import { TypedEventTarget } from 'typescript-event-target'
 import type { TypedArray, WebExtOnConnect, WebExtOnMessage, WebExtPort, WebExtRuntime, WebExtSender } from './utils/type-guards'
 
+/** Internal key used to identify Osra messages */
 export const OSRA_KEY = '__OSRA_KEY__' as const
+/** Default key for Osra message identification */
 export const OSRA_DEFAULT_KEY = '__OSRA_DEFAULT_KEY__' as const
+/** Key used to identify boxed values that need special handling */
 export const OSRA_BOX = '__OSRA_BOX__' as const
 
+/**
+ * UUID string type in standard format (8-4-4-4-12 hex digits).
+ * Used for identifying connections and message ports.
+ */
 export type Uuid = `${string}-${string}-${string}-${string}-${string}`
 
+/**
+ * Types that can be safely serialized to JSON.
+ * These types are supported natively by JSON.stringify/parse.
+ */
 export type Jsonable =
   | boolean
   | null
@@ -15,12 +26,17 @@ export type Jsonable =
   | { [key: string]: Jsonable }
   | Array<Jsonable>
 
+/**
+ * Types that can be sent via the structured clone algorithm.
+ * This includes all Jsonable types plus additional types like Date, RegExp, Blob, etc.
+ * @see https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Structured_clone_algorithm
+ */
 export type Structurable =
   | Jsonable
   /** not really structureable but here for convenience */
   | void
   | undefined
-  | BigInt
+  | bigint
   | Date
   | RegExp
   | Blob
@@ -35,6 +51,10 @@ export type Structurable =
   | Map<Structurable, Structurable>
   | Set<Structurable>
 
+/**
+ * A box that wraps a transferable value for explicit transfer.
+ * When encountered, the value will be transferred instead of cloned.
+ */
 export type TransferBox<T extends Transferable = Transferable> = {
   [OSRA_BOX]: 'transferable'
   value: T
@@ -140,6 +160,11 @@ export type RevivableBox =
   | ReviveBoxBase
   & RevivableVariant
 
+/**
+ * Types that require special serialization/deserialization (boxing/reviving).
+ * These types cannot be directly serialized via JSON or structured clone
+ * and need to be proxied through MessageChannels or converted to a serializable format.
+ */
 export type Revivable =
   | MessagePort
   | Promise<Capable>
@@ -161,6 +186,15 @@ export type RevivableToRevivableType<T extends Revivable> =
   T extends Error ? 'error' :
   never
 
+/**
+ * The union of all types that can be sent through Osra.
+ * This includes:
+ * - Structurable types (JSON, Date, Blob, etc.)
+ * - TransferBox wrapped values
+ * - Transferable objects (ArrayBuffer, MessagePort, etc.)
+ * - Revivable types (Functions, Promises, Streams, etc.)
+ * - Nested objects and arrays containing any of the above
+ */
 export type Capable =
   | Structurable
   | TransferBox
@@ -247,6 +281,21 @@ export type MessageEventMap = {
 }
 export type MessageEventTarget = TypedEventTarget<MessageEventMap>
 
+/**
+ * A custom transport that can be used to send and receive messages.
+ * Useful for implementing custom communication channels or wrapping
+ * existing protocols.
+ *
+ * @example
+ * ```typescript
+ * // Custom WebSocket transport
+ * const wsTransport: CustomTransport = {
+ *   isJson: true,
+ *   emit: (message) => ws.send(JSON.stringify(message)),
+ *   receive: (listener) => ws.onmessage = (e) => listener(JSON.parse(e.data), {})
+ * }
+ * ```
+ */
 export type CustomTransport =
   { isJson?: boolean }
   & (
@@ -301,6 +350,25 @@ export type PlatformTransport =
 export type EmitTransport = EmitPlatformTransport & Extract<CustomTransport, { emit: any }>
 export type ReceiveTransport = ReceivePlatformTransport & Extract<CustomTransport, { receive: any }>
 
+/**
+ * The transport type for Osra communication.
+ * Can be either a platform transport (Window, Worker, MessagePort, etc.)
+ * or a custom transport for specialized use cases.
+ *
+ * @example
+ * ```typescript
+ * // Worker transport
+ * const worker = new Worker('./worker.js')
+ * expose(api, { transport: worker })
+ *
+ * // Window transport (iframe communication)
+ * expose(api, { transport: iframe.contentWindow, origin: 'https://example.com' })
+ *
+ * // MessagePort transport
+ * const { port1, port2 } = new MessageChannel()
+ * expose(api, { transport: port1 })
+ * ```
+ */
 export type Transport =
   | PlatformTransport
   | CustomTransport

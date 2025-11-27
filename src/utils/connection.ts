@@ -94,6 +94,13 @@ export const startBidirectionalConnection = <T extends Capable>(
   return {
     revivableContext,
     close: () => {
+      // Close all tracked message ports
+      for (const port of revivableContext.messagePorts) {
+        port.close()
+      }
+      revivableContext.messagePorts.clear()
+      // Call the provided close callback to clean up connection context
+      close()
     },
     remoteValue:
       initMessage
@@ -119,13 +126,17 @@ export const startUnidirectionalEmittingConnection = <T extends Capable>(
 
   return {
     close: () => {
+      // Call the provided close callback to clean up connection context
+      close()
     },
     remoteValueProxy: new Proxy(
       new Function(),
       {
         apply: (target, thisArg, args) => {
+          // TODO: Implement unidirectional emitting mode apply handler
         },
         get: (target, prop) => {
+          // TODO: Implement unidirectional emitting mode get handler
         }
       }
     ) as T
@@ -146,9 +157,11 @@ export const startUnidirectionalReceivingConnection = (
     close: () => void
   }
 ) => {
-
+  // TODO: Implement unidirectional receiving mode
   return {
     close: () => {
+      // Call the provided close callback to clean up connection context
+      close()
     }
   }
 }
