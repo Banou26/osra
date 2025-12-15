@@ -1,6 +1,6 @@
 import { expect } from 'chai'
 
-import { expose } from '../src/index'
+import { expose } from '../../src/index'
 import { makeJsonTransport } from './utils'
 
 // Simulates a websocket broadcast case where only one client can broadcast and the rest can only receive messages

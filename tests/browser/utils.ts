@@ -1,4 +1,4 @@
-import { Message } from '../src/types'
+import { Message } from '../../src/types'
 
 export const makeJsonEmitter =
   (port: MessagePort) =>

@@ -1,4 +1,4 @@
-import type { Transport } from '../src/types'
+import type { Transport } from '../../src/types'
 
 import { base } from './base-tests'
 

@@ -1,37 +1,14 @@
 import { test } from '@playwright/test'
-import fs from 'fs'
 import path from 'path'
 
 import tests from './_tests_'
+import { mkdir, writeFile } from 'fs/promises'
 
 type TestObject = {
   [key: string]: TestObject | (() => any)
 }
 
 test.beforeEach(async ({ page }) => {
-  // page.on('console', async msg => {
-  //   const args = msg.args()
-  //   const logValues =
-  //     await Promise.all(
-  //       args.map(arg =>
-  //         arg.evaluate(obj => {
-  //           try {
-  //             return JSON.stringify(
-  //               obj,
-  //               (key, value) =>
-  //                 typeof value === 'function'
-  //                   ? `[Function: ${value.name || 'anonymous'}]`
-  //                   : value
-  //             )
-  //           } catch (err) {
-  //             return `[Error: ${(err as Error).message}]`
-  //           }
-  //         })
-  //       )
-  //     )
-  //   console.log(...logValues)
-  // })
-  // page.on('pageerror', err => console.log(err))
   await page.goto('http://localhost:3000')
   // Uncomment for better debug experience, the devtools will have full context on the console's object's being logged.
   await new Promise(resolve => setTimeout(resolve, 250))
@@ -43,11 +20,9 @@ test.afterEach(async ({ page }) => {
   const coverage = await page.evaluate(() => (window as any).__coverage__)
   if (coverage) {
     const coverageDir = path.join(process.cwd(), '.nyc_output')
-    if (!fs.existsSync(coverageDir)) {
-      fs.mkdirSync(coverageDir, { recursive: true })
-    }
-    const coverageFile = path.join(coverageDir, `coverage-${Date.now()}-${Math.random().toString(36).slice(2)}.json`)
-    fs.writeFileSync(coverageFile, JSON.stringify(coverage))
+    await mkdir(coverageDir, { recursive: true }).catch(() => {})
+    const coverageFilePath = path.join(coverageDir, `coverage-${Date.now()}-${Math.random().toString(36).slice(2)}.json`)
+    await writeFile(coverageFilePath, JSON.stringify(coverage))
   }
 })
 
