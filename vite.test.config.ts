@@ -24,7 +24,7 @@ export default defineConfig({
     lib: {
       name: 'osra',
       fileName: 'test',
-      entry: 'tests/_tests_.ts',
+      entry: 'tests/browser/_tests_.ts',
       formats: ['es']
     }
   }

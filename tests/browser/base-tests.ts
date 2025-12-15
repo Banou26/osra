@@ -1,8 +1,8 @@
-import type { Transport } from '../src/types'
+import type { Transport } from '../../src/types'
 
 import { expect } from 'chai'
 
-import { expose } from '../src/index'
+import { expose } from '../../src/index'
 
 export const argsAndResponse = async (transport: Transport) => {
   const value = async (data: { foo: number }, bar: string) => {
