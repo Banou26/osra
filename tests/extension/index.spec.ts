@@ -1,4 +1,4 @@
-import { test, chromium, type BrowserContext, type Page } from '@playwright/test'
+import { test, chromium, type BrowserContext, type CDPSession } from '@playwright/test'
 import path from 'path'
 import fs from 'fs'
 import { fileURLToPath } from 'url'
@@ -28,7 +28,6 @@ test.beforeAll(async () => {
     ],
   })
 
-  // Get extension ID
   const workers = context.serviceWorkers()
   extensionId = workers.find(w => w.url().startsWith('chrome-extension://'))?.url().split('/')[2] ?? ''
 
@@ -42,77 +41,65 @@ test.afterAll(async () => {
   await context?.close()
 })
 
-// Helper to wait for content script to be ready
-const waitForContentScript = async (page: Page) => {
-  await page.evaluate(() => new Promise<void>((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error('Content script timeout')), 15000)
-    window.addEventListener('message', function handler(event) {
-      if (event.data?.type === 'OSRA_CONTENT_READY' || event.data?.type === 'OSRA_PONG') {
-        clearTimeout(timeout)
-        window.removeEventListener('message', handler)
-        resolve()
-      }
-    })
-    const ping = setInterval(() => window.postMessage({ type: 'OSRA_PING' }, '*'), 100)
-    setTimeout(() => clearInterval(ping), 15000)
-  }))
-}
-
-// Helper to run a content script test via message passing
-const runContentTest = async (page: Page, key: string, path: string[]) => {
-  const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`
-
-  const result = await page.evaluate(([key, path, id]) => new Promise<{ success: boolean; error?: string }>((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error('Test execution timeout')), 30000)
-
-    window.addEventListener('message', function handler(event) {
-      if (event.data?.type === 'OSRA_TEST_RESULT' && event.data?.id === id) {
-        clearTimeout(timeout)
-        window.removeEventListener('message', handler)
-        resolve({ success: event.data.success, error: event.data.error })
-      }
-    })
-
-    window.postMessage({ type: 'OSRA_RUN_TEST', key, path, id }, '*')
-  }), [key, path, id] as const)
-
-  if (!result.success) {
-    throw new Error(result.error || 'Test failed')
-  }
-}
-
-// Content script tests - use message passing due to isolated world
+// Content script tests - use CDP to evaluate in content script context
 test.describe('Content', () => {
-  let page: Page
+  let cdp: CDPSession
+  let contextId: number
 
   test.beforeAll(async () => {
-    page = await context.newPage()
-    await page.goto('http://localhost:3000')
-    await waitForContentScript(page)
-  })
+    const page = await context.newPage()
+    cdp = await page.context().newCDPSession(page)
+    await cdp.send('Runtime.enable')
 
-  test.afterAll(async () => {
-    await page?.close()
+    contextId = await new Promise<number>((resolve) => {
+      cdp.on('Runtime.executionContextCreated', ({ context }) => {
+        if (context.origin?.startsWith(`chrome-extension://${extensionId}`)) {
+          resolve(context.id)
+        }
+      })
+      page.goto('http://localhost:3000')
+    })
+
+    // Wait for tests to be ready
+    await new Promise<void>(async (resolve) => {
+      while (true) {
+        const { result } = await cdp.send('Runtime.evaluate', {
+          expression: 'globalThis.tests?.Content !== undefined',
+          contextId
+        })
+        if (result.value) {
+          resolve()
+          break
+        }
+        await new Promise(r => setTimeout(r, 100))
+      }
+    })
   })
 
   const contentTests = tests.Content as TestObject
   for (const [key, value] of Object.entries(contentTests)) {
     if (typeof value === 'function' && key !== 'setApi') {
       test(key, async () => {
-        await runContentTest(page, key, ['Content'])
+        const { result, exceptionDetails } = await cdp.send('Runtime.evaluate', {
+          expression: `globalThis.tests.Content.${key}()`,
+          contextId,
+          awaitPromise: true
+        })
+        if (exceptionDetails) {
+          throw new Error(exceptionDetails.exception?.description || 'Test failed')
+        }
       })
     }
   }
 })
 
-// Popup tests - can use direct page.evaluate since popup runs in extension page context
+// Popup tests - direct page.evaluate since popup runs in extension context
 test.describe('Popup', () => {
-  let popupPage: Page
+  let popupPage: Awaited<ReturnType<BrowserContext['newPage']>>
 
   test.beforeAll(async () => {
     popupPage = await context.newPage()
     await popupPage.goto(`chrome-extension://${extensionId}/popup.html`)
-    // Wait for popup to be ready
     await popupPage.waitForFunction(() => (globalThis as any).tests?.Popup !== undefined, { timeout: 15000 })
   })
 
@@ -124,13 +111,9 @@ test.describe('Popup', () => {
   for (const [key, value] of Object.entries(popupTests)) {
     if (typeof value === 'function' && key !== 'setApi') {
       test(key, async () => {
-        await popupPage.evaluate(async ([key]) => {
-          const test = (globalThis as any).tests?.Popup?.[key]
-          if (typeof test !== 'function') {
-            throw new Error(`Test not found: Popup.${key}`)
-          }
-          await test()
-        }, [key] as const)
+        await popupPage.evaluate(async (key) => {
+          await (globalThis as any).tests.Popup[key]()
+        }, key)
       })
     }
   }
