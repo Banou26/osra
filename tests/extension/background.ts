@@ -9,8 +9,12 @@ const jsonOnlyCapabilities = {
   transferableStream: false
 }
 
-// Store content API reference for background->content calls
+// Content API from content-initiated connection
 let contentApi: ContentAPI | null = null
+// Content API from background-initiated connection
+let bgInitiatedContentApi: ContentAPI | null = null
+// Tab ID from the content-initiated connection (for background-initiated connection)
+let connectedTabId: number | null = null
 
 const api: TestAPI = {
   // Original background API (content->background)
@@ -40,7 +44,7 @@ const api: TestAPI = {
     }
   }),
 
-  // Background->Content wrapper methods (for testing background->content calls)
+  // Background->Content via content-initiated connection
   bgToContent: {
     getInfo: async () => {
       if (!contentApi) throw new Error('Content not connected')
@@ -70,12 +74,64 @@ const api: TestAPI = {
       if (!contentApi) throw new Error('Content not connected')
       return contentApi.processContentBuffer(data)
     },
+  },
+
+  // Background-initiated connection methods
+  bgInitiated: {
+    connect: async () => {
+      if (!connectedTabId) throw new Error('No tab connected yet')
+      const port = chrome.tabs.connect(connectedTabId, { name: `bg-to-content-${Date.now()}` })
+      bgInitiatedContentApi = await expose<ContentAPI, TestAPI>(api, {
+        transport: { isJson: true, emit: port, receive: port },
+        platformCapabilities: jsonOnlyCapabilities
+      })
+      return true
+    },
+    getInfo: async () => {
+      if (!bgInitiatedContentApi) throw new Error('Background-initiated connection not established')
+      return bgInitiatedContentApi.getContentInfo()
+    },
+    process: async (data: string) => {
+      if (!bgInitiatedContentApi) throw new Error('Background-initiated connection not established')
+      return bgInitiatedContentApi.processInContent(data)
+    },
+    getCallback: async () => {
+      if (!bgInitiatedContentApi) throw new Error('Background-initiated connection not established')
+      return bgInitiatedContentApi.contentCallback()
+    },
+    getDate: async () => {
+      if (!bgInitiatedContentApi) throw new Error('Background-initiated connection not established')
+      return bgInitiatedContentApi.getContentDate()
+    },
+    getError: async () => {
+      if (!bgInitiatedContentApi) throw new Error('Background-initiated connection not established')
+      return bgInitiatedContentApi.getContentError()
+    },
+    throwError: async () => {
+      if (!bgInitiatedContentApi) throw new Error('Background-initiated connection not established')
+      return bgInitiatedContentApi.throwContentError()
+    },
+    processBuffer: async (data: Uint8Array) => {
+      if (!bgInitiatedContentApi) throw new Error('Background-initiated connection not established')
+      return bgInitiatedContentApi.processContentBuffer(data)
+    },
   }
 }
 
+// Listen for content-initiated and popup connections
 chrome.runtime.onConnect.addListener(async (port) => {
-  contentApi = await expose<ContentAPI, TestAPI>(api, {
-    transport: { isJson: true, emit: port, receive: port },
-    platformCapabilities: jsonOnlyCapabilities
-  })
+  if (port.name.startsWith('content-')) {
+    // Track the tab ID for background-initiated connections
+    connectedTabId = port.sender?.tab?.id ?? null
+    contentApi = await expose<ContentAPI, typeof api>(api, {
+      transport: { isJson: true, emit: port, receive: port },
+      platformCapabilities: jsonOnlyCapabilities
+    })
+  } else if (port.name.startsWith('popup-')) {
+    // Handle popup connections (unidirectional - popup only calls background)
+    await expose<void, typeof api>(api, {
+      transport: { isJson: true, emit: port, receive: port },
+      platformCapabilities: jsonOnlyCapabilities
+    })
+  }
 })

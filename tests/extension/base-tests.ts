@@ -75,7 +75,7 @@ export const getStream = async (api: TestAPI) => {
   expect(Array.from(chunks[1])).to.deep.equal([4, 5, 6])
 }
 
-// Background -> Content tests
+// Background -> Content tests (via content-initiated connection)
 export const bgToContentGetInfo = async (api: TestAPI) => {
   const info = await api.bgToContent.getInfo()
   expect(info).to.have.property('location')
@@ -114,6 +114,45 @@ export const bgToContentProcessBuffer = async (api: TestAPI) => {
   expect(Array.from(result)).to.deep.equal([2, 3, 4, 5])
 }
 
+// Background-initiated connection tests
+export const bgInitiatedConnect = async (api: TestAPI) => {
+  const result = await api.bgInitiated.connect()
+  expect(result).to.be.true
+}
+
+export const bgInitiatedGetInfo = async (api: TestAPI) => {
+  const info = await api.bgInitiated.getInfo()
+  expect(info).to.have.property('location')
+  expect(info).to.have.property('timestamp')
+}
+
+export const bgInitiatedProcess = async (api: TestAPI) => {
+  const result = await api.bgInitiated.process('bg-initiated-data')
+  expect(result).to.equal('content-processed: bg-initiated-data')
+}
+
+export const bgInitiatedGetDate = async (api: TestAPI) => {
+  const date = await api.bgInitiated.getDate()
+  expect(date).to.be.instanceOf(Date)
+  expect(Date.now() - date.getTime()).to.be.lessThan(60000)
+}
+
+export const bgInitiatedGetError = async (api: TestAPI) => {
+  const error = await api.bgInitiated.getError()
+  expect(error).to.be.instanceOf(Error)
+  expect(error.message).to.equal('Content error')
+}
+
+export const bgInitiatedThrowError = async (api: TestAPI) => {
+  await expect(api.bgInitiated.throwError()).to.be.rejected
+}
+
+export const bgInitiatedProcessBuffer = async (api: TestAPI) => {
+  const result = await api.bgInitiated.processBuffer(new Uint8Array([1, 2, 3, 4]))
+  expect(result).to.be.instanceOf(Uint8Array)
+  expect(Array.from(result)).to.deep.equal([2, 3, 4, 5])
+}
+
 export const base = {
   echo,
   add,
@@ -138,4 +177,14 @@ export const bgToContent = {
   bgToContentGetError,
   bgToContentThrowError,
   bgToContentProcessBuffer
+}
+
+export const bgInitiated = {
+  bgInitiatedConnect,
+  bgInitiatedGetInfo,
+  bgInitiatedProcess,
+  bgInitiatedGetDate,
+  bgInitiatedGetError,
+  bgInitiatedThrowError,
+  bgInitiatedProcessBuffer
 }

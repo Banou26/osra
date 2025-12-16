@@ -1,7 +1,7 @@
 import { expose } from '../../src/index'
 import type { ContentAPI, TestAPI } from './types'
 import * as contentTests from './content-tests'
-import { setApi } from './content-tests'
+import { setApi, setBgInitiatedApi } from './content-tests'
 
 const jsonOnlyCapabilities = {
   jsonOnly: true,
@@ -22,6 +22,7 @@ const contentApi: ContentAPI = {
   processContentBuffer: async (data: Uint8Array) => new Uint8Array(data.map(x => x + 1)),
 }
 
+// Content-initiated connection to background
 const port = chrome.runtime.connect({ name: `content-${Date.now()}` })
 const api = await expose<TestAPI, ContentAPI>(contentApi, {
   transport: { isJson: true, emit: port, receive: port },
@@ -29,5 +30,16 @@ const api = await expose<TestAPI, ContentAPI>(contentApi, {
 })
 
 setApi(api)
+
+// Listen for background-initiated connections
+chrome.runtime.onConnect.addListener(async (port) => {
+  if (port.name.startsWith('bg-to-content-')) {
+    const bgInitiatedApi = await expose<TestAPI, ContentAPI>(contentApi, {
+      transport: { isJson: true, emit: port, receive: port },
+      platformCapabilities: jsonOnlyCapabilities
+    })
+    setBgInitiatedApi(bgInitiatedApi)
+  }
+})
 
 globalThis.tests = { Content: contentTests }
