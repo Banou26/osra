@@ -1,6 +1,19 @@
 import { expose } from '../../src/index'
+import type { ContentAPI, TestAPI } from './types'
 
-const api = {
+const jsonOnlyCapabilities = {
+  jsonOnly: true,
+  messagePort: false,
+  arrayBuffer: false,
+  transferable: false,
+  transferableStream: false
+}
+
+// Store content API reference for background->content calls
+let contentApi: ContentAPI | null = null
+
+const api: TestAPI = {
+  // Original background API (content->background)
   echo: async <T>(data: T): Promise<T> => data,
   add: async (a: number, b: number) => a + b,
   math: {
@@ -25,21 +38,43 @@ const api = {
       controller.enqueue(new Uint8Array([4, 5, 6]))
       controller.close()
     }
-  })
+  }),
+
+  // Background->Content wrapper methods (for testing background->content calls)
+  bgToContent: {
+    getInfo: async () => {
+      if (!contentApi) throw new Error('Content not connected')
+      return contentApi.getContentInfo()
+    },
+    process: async (data: string) => {
+      if (!contentApi) throw new Error('Content not connected')
+      return contentApi.processInContent(data)
+    },
+    getCallback: async () => {
+      if (!contentApi) throw new Error('Content not connected')
+      return contentApi.contentCallback()
+    },
+    getDate: async () => {
+      if (!contentApi) throw new Error('Content not connected')
+      return contentApi.getContentDate()
+    },
+    getError: async () => {
+      if (!contentApi) throw new Error('Content not connected')
+      return contentApi.getContentError()
+    },
+    throwError: async () => {
+      if (!contentApi) throw new Error('Content not connected')
+      return contentApi.throwContentError()
+    },
+    processBuffer: async (data: Uint8Array) => {
+      if (!contentApi) throw new Error('Content not connected')
+      return contentApi.processContentBuffer(data)
+    },
+  }
 }
 
-export type TestAPI = typeof api
-
-const jsonOnlyCapabilities = {
-  jsonOnly: true,
-  messagePort: false,
-  arrayBuffer: false,
-  transferable: false,
-  transferableStream: false
-}
-
-chrome.runtime.onConnect.addListener((port) => {
-  expose(api, {
+chrome.runtime.onConnect.addListener(async (port) => {
+  contentApi = await expose<ContentAPI, TestAPI>(api, {
     transport: { isJson: true, emit: port, receive: port },
     platformCapabilities: jsonOnlyCapabilities
   })
