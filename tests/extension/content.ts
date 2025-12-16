@@ -1,7 +1,8 @@
+import { Resolvers as BackgroundResolvers } from './background'
+
 import { expose } from '../../src/index'
-import type { TestAPI } from './background'
 import * as contentTests from './content-tests'
-import { setApi } from './content-tests'
+import { setApi, setBgInitiatedApi } from './content-tests'
 
 const jsonOnlyCapabilities = {
   jsonOnly: true,
@@ -11,53 +12,37 @@ const jsonOnlyCapabilities = {
   transferableStream: false
 }
 
+// API exposed by content script to background
+const resolvers = {
+  getContentInfo: async () => ({ location: window.location.href, timestamp: Date.now() }),
+  processInContent: async (data: string) => `content-processed: ${data}`,
+  contentCallback: async () => async () => 'from-content-callback',
+  getContentDate: async () => new Date(),
+  getContentError: async () => new Error('Content error'),
+  throwContentError: async (): Promise<never> => { throw new Error('Content thrown') },
+  processContentBuffer: async (data: Uint8Array) => new Uint8Array(data.map(x => x + 1)),
+}
+
+export type Resolvers = typeof resolvers
+
+// Content-initiated connection to background
 const port = chrome.runtime.connect({ name: `content-${Date.now()}` })
-const api = await expose<TestAPI>({}, {
+const api = await expose<BackgroundResolvers>(resolvers, {
   transport: { isJson: true, emit: port, receive: port },
   platformCapabilities: jsonOnlyCapabilities
 })
 
 setApi(api)
 
-const tests = { Content: contentTests }
-globalThis.tests = tests
-
-type TestObject = {
-  [key: string]: TestObject | ((...args: any[]) => any)
-}
-
-const findTest = (path: string[], key: string): (() => Promise<void>) | undefined => {
-  const obj = path.reduce((obj, k) => (obj as TestObject)?.[k], tests as TestObject)
-  return (obj as TestObject)?.[key] as (() => Promise<void>) | undefined
-}
-
-window.addEventListener('message', async (event) => {
-  if (event.source !== window) return
-
-  if (event.data?.type === 'OSRA_RUN_TEST') {
-    const { key, path, id } = event.data as { key: string; path: string[]; id: string }
-    try {
-      const test = findTest(path, key)
-      if (!test) {
-        throw new Error(`Test not found: ${[...path, key].join('.')}`)
-      }
-      await test()
-      window.postMessage({ type: 'OSRA_TEST_RESULT', id, success: true }, '*')
-    } catch (error) {
-      window.postMessage({
-        type: 'OSRA_TEST_RESULT',
-        id,
-        success: false,
-        error: error instanceof Error ? error.message : String(error)
-      }, '*')
-    }
-  }
-
-  if (event.data?.type === 'OSRA_PING') {
-    window.postMessage({ type: 'OSRA_PONG' }, '*')
+// Listen for background-initiated connections
+chrome.runtime.onConnect.addListener(async (port) => {
+  if (port.name.startsWith('bg-to-content-')) {
+    const bgInitiatedApi = await expose<BackgroundResolvers>(resolvers, {
+      transport: { isJson: true, emit: port, receive: port },
+      platformCapabilities: jsonOnlyCapabilities
+    })
+    setBgInitiatedApi(bgInitiatedApi)
   }
 })
 
-window.postMessage({ type: 'OSRA_CONTENT_READY' }, '*')
-
-console.log('content script')
+globalThis.tests = { Content: contentTests }
