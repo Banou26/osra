@@ -1,5 +1,5 @@
 import { expose } from '../../src/index'
-import type { TestAPI } from './background'
+import type { ContentAPI, TestAPI } from './types'
 import * as contentTests from './content-tests'
 import { setApi } from './content-tests'
 
@@ -11,8 +11,19 @@ const jsonOnlyCapabilities = {
   transferableStream: false
 }
 
+// API exposed by content script to background
+const contentApi: ContentAPI = {
+  getContentInfo: async () => ({ location: window.location.href, timestamp: Date.now() }),
+  processInContent: async (data: string) => `content-processed: ${data}`,
+  contentCallback: async () => async () => 'from-content-callback',
+  getContentDate: async () => new Date(),
+  getContentError: async () => new Error('Content error'),
+  throwContentError: async (): Promise<never> => { throw new Error('Content thrown') },
+  processContentBuffer: async (data: Uint8Array) => new Uint8Array(data.map(x => x + 1)),
+}
+
 const port = chrome.runtime.connect({ name: `content-${Date.now()}` })
-const api = await expose<TestAPI>({}, {
+const api = await expose<TestAPI, ContentAPI>(contentApi, {
   transport: { isJson: true, emit: port, receive: port },
   platformCapabilities: jsonOnlyCapabilities
 })

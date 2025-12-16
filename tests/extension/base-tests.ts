@@ -1,6 +1,7 @@
-import type { TestAPI } from './background'
+import type { TestAPI } from './types'
 import { expect } from 'chai'
 
+// Content -> Background tests
 export const echo = async (api: TestAPI) => {
   expect(await api.echo({ foo: 'bar' })).to.deep.equal({ foo: 'bar' })
 }
@@ -74,6 +75,45 @@ export const getStream = async (api: TestAPI) => {
   expect(Array.from(chunks[1])).to.deep.equal([4, 5, 6])
 }
 
+// Background -> Content tests
+export const bgToContentGetInfo = async (api: TestAPI) => {
+  const info = await api.bgToContent.getInfo()
+  expect(info).to.have.property('location')
+  expect(info).to.have.property('timestamp')
+}
+
+export const bgToContentProcess = async (api: TestAPI) => {
+  const result = await api.bgToContent.process('test-data')
+  expect(result).to.equal('content-processed: test-data')
+}
+
+export const bgToContentCallback = async (api: TestAPI) => {
+  const callback = await api.bgToContent.getCallback()
+  expect(await callback()).to.equal('from-content-callback')
+}
+
+export const bgToContentGetDate = async (api: TestAPI) => {
+  const date = await api.bgToContent.getDate()
+  expect(date).to.be.instanceOf(Date)
+  expect(Date.now() - date.getTime()).to.be.lessThan(60000)
+}
+
+export const bgToContentGetError = async (api: TestAPI) => {
+  const error = await api.bgToContent.getError()
+  expect(error).to.be.instanceOf(Error)
+  expect(error.message).to.equal('Content error')
+}
+
+export const bgToContentThrowError = async (api: TestAPI) => {
+  await expect(api.bgToContent.throwError()).to.be.rejected
+}
+
+export const bgToContentProcessBuffer = async (api: TestAPI) => {
+  const result = await api.bgToContent.processBuffer(new Uint8Array([1, 2, 3, 4]))
+  expect(result).to.be.instanceOf(Uint8Array)
+  expect(Array.from(result)).to.deep.equal([2, 3, 4, 5])
+}
+
 export const base = {
   echo,
   add,
@@ -88,4 +128,14 @@ export const base = {
   getBuffer,
   getPromise,
   getStream
+}
+
+export const bgToContent = {
+  bgToContentGetInfo,
+  bgToContentProcess,
+  bgToContentCallback,
+  bgToContentGetDate,
+  bgToContentGetError,
+  bgToContentThrowError,
+  bgToContentProcessBuffer
 }

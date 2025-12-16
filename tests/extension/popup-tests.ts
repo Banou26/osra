@@ -1,7 +1,7 @@
 import { use } from 'chai'
 import chaiAsPromised from 'chai-as-promised'
 import { base } from './base-tests'
-import type { TestAPI } from './background'
+import type { TestAPI } from './types'
 
 use(chaiAsPromised)
 
