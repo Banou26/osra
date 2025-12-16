@@ -78,7 +78,7 @@ test.describe('Content', () => {
 
   const contentTests = tests.Content as TestObject
   for (const [key, value] of Object.entries(contentTests)) {
-    if (typeof value === 'function' && key !== 'setApi') {
+    if (typeof value === 'function' && !key.startsWith('set')) {
       test(key, async () => {
         const { result, exceptionDetails } = await cdp.send('Runtime.evaluate', {
           expression: `globalThis.tests.Content.${key}()`,

@@ -1,5 +1,5 @@
 import { expose } from '../../src/index'
-import type { TestAPI } from './background'
+import type { TestAPI } from './types'
 import * as popupTests from './popup-tests'
 import { setApi } from './popup-tests'
 

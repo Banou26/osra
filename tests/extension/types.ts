@@ -26,7 +26,19 @@ export type TestAPI = {
   getBuffer: () => Promise<ArrayBuffer>
   getPromise: () => Promise<number>
   getStream: () => Promise<ReadableStream<Uint8Array>>
+  // Background->Content via content-initiated connection
   bgToContent: {
+    getInfo: () => Promise<{ location: string; timestamp: number }>
+    process: (data: string) => Promise<string>
+    getCallback: () => Promise<() => Promise<string>>
+    getDate: () => Promise<Date>
+    getError: () => Promise<Error>
+    throwError: () => Promise<never>
+    processBuffer: (data: Uint8Array) => Promise<Uint8Array>
+  }
+  // Background-initiated connection to content script
+  bgInitiated: {
+    connect: () => Promise<boolean>
     getInfo: () => Promise<{ location: string; timestamp: number }>
     process: (data: string) => Promise<string>
     getCallback: () => Promise<() => Promise<string>>
