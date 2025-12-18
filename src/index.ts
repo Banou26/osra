@@ -97,10 +97,7 @@ export const expose = async <T extends Capable>(
     )
   }
 
-  // Track peers we've sent acknowledges to (for handshake synchronization)
-  const acknowledgedPeers = new Set<string>()
-
-  const createConnection = (remoteUuid: string) => {
+  const createConnection = (remoteUuid: string, weAcknowledgedThem: boolean, theyAcknowledgedUs: boolean) => {
     if (connectionContexts.has(remoteUuid)) return
     const eventTarget = new TypedEventTarget<MessageEventMap>()
     const connectionContext = {
@@ -117,7 +114,9 @@ export const expose = async <T extends Capable>(
       platformCapabilities,
       eventTarget,
       send: (message: MessageVariant) => sendMessage(transport, message),
-      close: () => void connectionContexts.delete(remoteUuid)
+      close: () => void connectionContexts.delete(remoteUuid),
+      weAcknowledgedThem,
+      theyAcknowledgedUs
     })
     connectionContext.connection.remoteValue.then((remoteValue) =>
       resolveRemoteValue(remoteValue as T)
@@ -135,23 +134,22 @@ export const expose = async <T extends Capable>(
     // Bidirectional mode
     if (message.type === 'announce') {
       if (!message.remoteUuid) {
-        // Initial announce from remote - send our acknowledge
-        sendMessage(transport, { type: 'announce', remoteUuid: message.uuid })
-        acknowledgedPeers.add(message.uuid)
+        // Initial announce from remote - create connection (it will send acknowledge)
+        createConnection(message.uuid, false, false)
         return
       }
       // Acknowledge from remote (has remoteUuid)
       if (message.remoteUuid !== uuid) return
-      if (connectionContexts.has(message.uuid)) return
-      if (acknowledgedPeers.has(message.uuid)) {
-        // We've already acknowledged them, handshake complete
-        acknowledgedPeers.delete(message.uuid)
-        createConnection(message.uuid)
+      const connection = connectionContexts.get(message.uuid)
+      if (connection) {
+        // Forward to existing connection
+        connection.eventTarget.dispatchTypedEvent(
+          'message',
+          new CustomEvent('message', { detail: message })
+        )
       } else {
         // Startup race: they announced before we started listening
-        // Send our acknowledge and create connection
-        sendMessage(transport, { type: 'announce', remoteUuid: message.uuid })
-        createConnection(message.uuid)
+        createConnection(message.uuid, false, true)
       }
     } else if (message.type === 'reject-uuid-taken') {
       if (message.remoteUuid !== uuid) return
