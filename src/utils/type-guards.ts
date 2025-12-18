@@ -1,3 +1,4 @@
+import type { Runtime } from 'webextension-polyfill'
 import type {
   CustomEmitTransport, CustomReceiveTransport,
   CustomTransport, EmitJsonPlatformTransport,
@@ -138,21 +139,21 @@ export const isWebExtensionRuntime = (value: any): value is WebExtRuntime => {
   )
 }
 
-export type WebExtPort = ReturnType<WebExtRuntime['connect']>
+export type WebExtPort = ReturnType<WebExtRuntime['connect']> | Runtime.Port
 export const isWebExtensionPort = (value: any, connectPort: boolean = false): value is WebExtPort => {
   return Boolean(
     value
     && typeof value === 'object'
-    && (value as WebExtPort).name
-    && (value as WebExtPort).disconnect
-    && (value as WebExtPort).postMessage
+    && ('name' in (value as WebExtPort))
+    && ('disconnect' in (value as WebExtPort))
+    && ('postMessage' in (value as WebExtPort))
     && (
       connectPort
         // these properties are only present on WebExtPort that were created through runtime.connect()
         ? (
-             (value as WebExtPort).sender
-          && (value as WebExtPort).onMessage
-          && (value as WebExtPort).onDisconnect
+             ('sender' in (value as WebExtPort))
+             && ('onMessage' in (value as WebExtPort))
+             && ('onDisconnect' in (value as WebExtPort))
         )
         : true
     )

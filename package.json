@@ -48,6 +48,7 @@
     "@types/chrome": "^0.1.27",
     "@types/firefox-webext-browser": "^143.0.0",
     "@types/node": "^25.0.2",
+    "@types/webextension-polyfill": "^0.12.4",
     "chai": "^5.3.3",
     "chai-as-promised": "^8.0.1",
     "concurrently": "^9.1.0",
