@@ -97,6 +97,33 @@ export const expose = async <T extends Capable>(
     )
   }
 
+  // Track peers we've sent acknowledges to (for handshake synchronization)
+  const acknowledgedPeers = new Set<string>()
+
+  const createConnection = (remoteUuid: string) => {
+    if (connectionContexts.has(remoteUuid)) return
+    const eventTarget = new TypedEventTarget<MessageEventMap>()
+    const connectionContext = {
+      type: 'bidirectional',
+      eventTarget,
+      connection: undefined!
+    } as BidirectionalConnectionContext
+    connectionContexts.set(remoteUuid, connectionContext)
+    connectionContext.connection = startBidirectionalConnection({
+      transport,
+      value,
+      uuid,
+      remoteUuid,
+      platformCapabilities,
+      eventTarget,
+      send: (message: MessageVariant) => sendMessage(transport, message),
+      close: () => void connectionContexts.delete(remoteUuid)
+    })
+    connectionContext.connection.remoteValue.then((remoteValue) =>
+      resolveRemoteValue(remoteValue as T)
+    )
+  }
+
   const listener = async (message: Message, messageContext: MessageContext) => {
     // means that our own message looped back on the channel
     if (message.uuid === uuid) return
@@ -108,37 +135,24 @@ export const expose = async <T extends Capable>(
     // Bidirectional mode
     if (message.type === 'announce') {
       if (!message.remoteUuid) {
+        // Initial announce from remote - send our acknowledge
         sendMessage(transport, { type: 'announce', remoteUuid: message.uuid })
+        acknowledgedPeers.add(message.uuid)
         return
       }
+      // Acknowledge from remote (has remoteUuid)
       if (message.remoteUuid !== uuid) return
-      if (connectionContexts.has(message.uuid)) {
-        sendMessage(
-          transport,
-          { type: 'reject-uuid-taken', remoteUuid: message.uuid }
-        )
-        return
+      if (connectionContexts.has(message.uuid)) return
+      if (acknowledgedPeers.has(message.uuid)) {
+        // We've already acknowledged them, handshake complete
+        acknowledgedPeers.delete(message.uuid)
+        createConnection(message.uuid)
+      } else {
+        // Startup race: they announced before we started listening
+        // Send our acknowledge and create connection
+        sendMessage(transport, { type: 'announce', remoteUuid: message.uuid })
+        createConnection(message.uuid)
       }
-      const eventTarget = new TypedEventTarget<MessageEventMap>()
-      const connectionContext = {
-        type: 'bidirectional',
-        eventTarget,
-        connection:
-          startBidirectionalConnection({
-            transport,
-            value,
-            uuid,
-            remoteUuid: message.uuid,
-            platformCapabilities,
-            eventTarget,
-            send: (message: MessageVariant) => sendMessage(transport, message),
-            close: () => void connectionContexts.delete(message.uuid)
-          })
-      } satisfies BidirectionalConnectionContext
-      connectionContexts.set(message.uuid, connectionContext)
-      connectionContext.connection.remoteValue.then((remoteValue) =>
-        resolveRemoteValue(remoteValue as T)
-      )
     } else if (message.type === 'reject-uuid-taken') {
       if (message.remoteUuid !== uuid) return
       uuid = globalThis.crypto.randomUUID()
@@ -156,7 +170,6 @@ export const expose = async <T extends Capable>(
     } else { //  "init" | "message" | "message-port-close"
       if (message.remoteUuid !== uuid) return
       const connection = connectionContexts.get(message.uuid)
-      // We just drop the message if the remote uuid hasn't announced itself
       if (!connection) {
         console.warn(`Connection not found for remoteUuid: ${message.uuid}`)
         return
