@@ -2,7 +2,6 @@ import type {
   Capable, ConnectionMessage,
   Message,
   MessageEventTarget,
-  MessageVariant,
   Transport,
   Uuid
 } from '../types'
@@ -39,7 +38,7 @@ export type ConnectionRevivableContext = {
   remoteUuid: Uuid
   messagePorts: Set<MessagePort>
   messageChannels: MessageChannelAllocator
-  sendMessage: (message: MessageVariant) => void
+  sendMessage: (message: ConnectionMessage) => void
   eventTarget: MessageEventTarget
 }
 
@@ -50,8 +49,7 @@ export type BidirectionalConnection<T extends Capable = Capable> = {
 }
 
 export const startBidirectionalConnection = <T extends Capable>(
-  { transport, value, uuid, remoteUuid, platformCapabilities, eventTarget, send, close,
-    weAcknowledgedThem, theyAcknowledgedUs }:
+  { transport, value, uuid, remoteUuid, platformCapabilities, eventTarget, send, close }:
   {
     transport: Transport
     value: Capable
@@ -59,10 +57,8 @@ export const startBidirectionalConnection = <T extends Capable>(
     remoteUuid: Uuid
     platformCapabilities: PlatformCapabilities
     eventTarget: MessageEventTarget
-    send: (message: MessageVariant) => void
+    send: (message: ConnectionMessage) => void
     close: () => void
-    weAcknowledgedThem: boolean
-    theyAcknowledgedUs: boolean
   }
 ) => {
   const revivableContext = {
@@ -74,53 +70,26 @@ export const startBidirectionalConnection = <T extends Capable>(
     sendMessage: send,
     eventTarget
   } satisfies ConnectionRevivableContext
-
   let initResolve: ((message: ConnectionMessage & { type: 'init' }) => void)
   const initMessage = new Promise<ConnectionMessage & { type: 'init' }>((resolve, reject) => {
     initResolve = resolve
   })
 
-  let handshakeComplete = weAcknowledgedThem && theyAcknowledgedUs
-  let initSent = false
-
-  const trySendInit = () => {
-    if (handshakeComplete && !initSent) {
-      initSent = true
-      send({
-        type: 'init',
-        remoteUuid,
-        data: recursiveBox(value, revivableContext)
-      })
-    }
-  }
-
-  // Send acknowledge if we haven't yet
-  if (!weAcknowledgedThem) {
-    send({ type: 'announce', remoteUuid })
-    weAcknowledgedThem = true
-    handshakeComplete = weAcknowledgedThem && theyAcknowledgedUs
-  }
-
   eventTarget.addEventListener('message', ({ detail }) => {
-    if (detail.type === 'announce' && detail.remoteUuid === uuid) {
-      // Received acknowledge from peer
-      theyAcknowledgedUs = true
-      handshakeComplete = weAcknowledgedThem && theyAcknowledgedUs
-      trySendInit()
-      return
-    }
     if (detail.type === 'init') {
       initResolve(detail)
       return
-    }
-    if (detail.type === 'message') {
+    } else if (detail.type === 'message') {
       const messageChannel = revivableContext.messageChannels.getOrAlloc(detail.portId)
       messageChannel.port2?.postMessage(detail)
     }
   })
 
-  // Try to send init if handshake already complete
-  trySendInit()
+  send({
+    type: 'init',
+    remoteUuid,
+    data: recursiveBox(value, revivableContext)
+  })
 
   return {
     revivableContext,
