@@ -4,7 +4,7 @@ import type {
 } from '../../types'
 import type { ConnectionRevivableContext } from '../connection'
 
-export const name = 'error'
+export const type = 'error'
 
 export const is = (value: unknown): value is Error =>
   value instanceof Error
@@ -14,7 +14,7 @@ export const box = (
   _context: ConnectionRevivableContext
 ): RevivableVariant & { type: 'error' } => {
   return {
-    type: 'error',
+    type,
     message: value.message,
     stack: value.stack || value.toString()
   }

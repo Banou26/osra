@@ -10,7 +10,7 @@ import {
   isTypedArray
 } from '../type-guards'
 
-export const name = 'typedArray'
+export const type = 'typedArray'
 
 export const is = (value: unknown): value is TypedArray =>
   isTypedArray(value)
@@ -20,7 +20,7 @@ export const box = (
   _context: ConnectionRevivableContext
 ): RevivableVariant & { type: 'typedArray' } => {
   return {
-    type: 'typedArray',
+    type,
     typedArrayType: typedArrayToType(value),
     arrayBuffer: value.buffer
   }

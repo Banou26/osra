@@ -4,7 +4,7 @@ import type {
 } from '../../types'
 import type { ConnectionRevivableContext } from '../connection'
 
-export const name = 'arrayBuffer'
+export const type = 'arrayBuffer'
 
 export const is = (value: unknown): value is ArrayBuffer =>
   value instanceof ArrayBuffer
@@ -14,7 +14,7 @@ export const box = (
   _context: ConnectionRevivableContext
 ): RevivableVariant & { type: 'arrayBuffer' } => {
   return {
-    type: 'arrayBuffer',
+    type,
     base64Buffer: new Uint8Array(value).toBase64() as string
   }
 }

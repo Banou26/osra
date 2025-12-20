@@ -9,7 +9,7 @@ import type { ConnectionRevivableContext } from '../connection'
 import { isRevivablePromiseBox } from '../type-guards'
 import { getTransferableObjects } from '../transferable'
 
-export const name = 'function'
+export const type = 'function'
 
 export const is = (value: unknown): value is Function =>
   typeof value === 'function'
@@ -29,7 +29,7 @@ export const box = (
   localPort.start()
 
   return {
-    type: 'function',
+    type,
     port: remotePort
   }
 }

@@ -8,7 +8,7 @@ import type { ConnectionRevivableContext } from '../connection'
 
 import { getTransferableObjects } from '../transferable'
 
-export const name = 'promise'
+export const type = 'promise'
 
 export const is = (value: unknown): value is Promise<any> =>
   value instanceof Promise
@@ -31,7 +31,7 @@ export const box = (
     .catch(error => sendResult({ type: 'reject', error: error.stack }))
 
   return {
-    type: 'promise',
+    type,
     port: remotePort
   }
 }

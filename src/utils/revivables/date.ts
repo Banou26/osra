@@ -4,7 +4,7 @@ import type {
 } from '../../types'
 import type { ConnectionRevivableContext } from '../connection'
 
-export const name = 'date'
+export const type = 'date'
 
 export const is = (value: unknown): value is Date =>
   value instanceof Date
@@ -14,7 +14,7 @@ export const box = (
   _context: ConnectionRevivableContext
 ): RevivableVariant & { type: 'date' } => {
   return {
-    type: 'date',
+    type,
     ISOString: value.toISOString()
   }
 }

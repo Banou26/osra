@@ -10,7 +10,7 @@ import type { StrictMessagePort } from '../message-channel'
 import { isRevivableBox } from '../type-guards'
 import { getTransferableObjects } from '../transferable'
 
-export const name = 'messagePort'
+export const type = 'messagePort'
 
 export const is = (value: unknown): value is MessagePort =>
   value instanceof MessagePort
@@ -46,7 +46,7 @@ export const box = (
   })
 
   return {
-    type: 'messagePort',
+    type,
     portId
   }
 }
