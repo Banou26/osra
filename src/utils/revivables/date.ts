@@ -11,9 +11,7 @@ export const is = (value: unknown): value is Date =>
 
 export const box = (
   value: Date,
-  _context: ConnectionRevivableContext,
-  _recursiveBox?: (value: any, context: ConnectionRevivableContext) => any,
-  _recursiveRevive?: (value: any, context: ConnectionRevivableContext) => any
+  _context: ConnectionRevivableContext
 ): RevivableVariant & { type: 'date' } => {
   return {
     type: 'date',
@@ -23,9 +21,7 @@ export const box = (
 
 export const revive = (
   value: RevivableDate,
-  _context: ConnectionRevivableContext,
-  _recursiveBox?: (value: any, context: ConnectionRevivableContext) => any,
-  _recursiveRevive?: (value: any, context: ConnectionRevivableContext) => any
+  _context: ConnectionRevivableContext
 ): Date => {
   return new Date(value.ISOString)
 }

@@ -11,9 +11,7 @@ export const is = (value: unknown): value is ArrayBuffer =>
 
 export const box = (
   value: ArrayBuffer,
-  _context: ConnectionRevivableContext,
-  _recursiveBox?: (value: any, context: ConnectionRevivableContext) => any,
-  _recursiveRevive?: (value: any, context: ConnectionRevivableContext) => any
+  _context: ConnectionRevivableContext
 ): RevivableVariant & { type: 'arrayBuffer' } => {
   return {
     type: 'arrayBuffer',
@@ -23,9 +21,7 @@ export const box = (
 
 export const revive = (
   value: RevivableArrayBuffer,
-  _context: ConnectionRevivableContext,
-  _recursiveBox?: (value: any, context: ConnectionRevivableContext) => any,
-  _recursiveRevive?: (value: any, context: ConnectionRevivableContext) => any
+  _context: ConnectionRevivableContext
 ): ArrayBuffer => {
   return (Uint8Array.fromBase64(value.base64Buffer) as Uint8Array).buffer as ArrayBuffer
 }

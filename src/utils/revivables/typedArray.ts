@@ -17,9 +17,7 @@ export const is = (value: unknown): value is TypedArray =>
 
 export const box = (
   value: TypedArray,
-  _context: ConnectionRevivableContext,
-  _recursiveBox?: (value: any, context: ConnectionRevivableContext) => any,
-  _recursiveRevive?: (value: any, context: ConnectionRevivableContext) => any
+  _context: ConnectionRevivableContext
 ): RevivableVariant & { type: 'typedArray' } => {
   return {
     type: 'typedArray',
@@ -30,9 +28,7 @@ export const box = (
 
 export const revive = (
   value: RevivableTypedArray,
-  _context: ConnectionRevivableContext,
-  _recursiveBox?: (value: any, context: ConnectionRevivableContext) => any,
-  _recursiveRevive?: (value: any, context: ConnectionRevivableContext) => any
+  _context: ConnectionRevivableContext
 ): TypedArray => {
   const TypedArrayConstructor = typedArrayTypeToTypedArrayConstructor(value.typedArrayType)
   const result = new TypedArrayConstructor(value.arrayBuffer)
