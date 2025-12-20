@@ -11,9 +11,7 @@ export const is = (value: unknown): value is Error =>
 
 export const box = (
   value: Error,
-  _context: ConnectionRevivableContext,
-  _recursiveBox?: (value: any, context: ConnectionRevivableContext) => any,
-  _recursiveRevive?: (value: any, context: ConnectionRevivableContext) => any
+  _context: ConnectionRevivableContext
 ): RevivableVariant & { type: 'error' } => {
   return {
     type: 'error',
@@ -24,9 +22,7 @@ export const box = (
 
 export const revive = (
   value: RevivableError,
-  _context: ConnectionRevivableContext,
-  _recursiveBox?: (value: any, context: ConnectionRevivableContext) => any,
-  _recursiveRevive?: (value: any, context: ConnectionRevivableContext) => any
+  _context: ConnectionRevivableContext
 ): Error => {
   return new Error(value.message, { cause: value.stack })
 }

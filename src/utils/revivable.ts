@@ -35,7 +35,7 @@ export const box = (value: Revivable, context: ConnectionRevivableContext) => {
     if (module) {
       return {
         [OSRA_BOX]: 'revivable',
-        ...module.box(value, context, recursiveBox, recursiveRevive)
+        ...module.box(value, context)
       } as RevivableBox
     }
   }
@@ -45,19 +45,19 @@ export const box = (value: Revivable, context: ConnectionRevivableContext) => {
     if (isMessagePort(value)) {
       return {
         [OSRA_BOX]: 'revivable',
-        ...revivables.messagePort.box(value, context, recursiveBox, recursiveRevive)
+        ...revivables.messagePort.box(value, context)
       } as RevivableBox
     }
     if (isArrayBuffer(value)) {
       return {
         [OSRA_BOX]: 'revivable',
-        ...revivables.arrayBuffer.box(value, context, recursiveBox, recursiveRevive)
+        ...revivables.arrayBuffer.box(value, context)
       } as RevivableBox
     }
     if (isReadableStream(value)) {
       return {
         [OSRA_BOX]: 'revivable',
-        ...revivables.readableStream.box(value, context, recursiveBox, recursiveRevive)
+        ...revivables.readableStream.box(value, context)
       } as RevivableBox
     }
   }
@@ -107,7 +107,7 @@ export const revive = (box: RevivableBox, context: ConnectionRevivableContext) =
   // Use dynamic lookup to find the appropriate reviver
   const module = findRevivableByType(box.type)
   if (module) {
-    return module.revive(box as any, context, recursiveBox, recursiveRevive)
+    return module.revive(box, context)
   }
 
   return box as DeepReplace<RevivableBox, RevivableBox, Revivable>

@@ -1,4 +1,4 @@
-import type { Capable, Revivable, RevivableBox, RevivableVariant, RevivableVariantType } from '../../types'
+import type { Revivable, RevivableBox, RevivableVariant, RevivableVariantType } from '../../types'
 import type { ConnectionRevivableContext } from '../connection'
 
 import * as messagePort from './messagePort'
@@ -10,24 +10,11 @@ import * as error from './error'
 import * as readableStream from './readableStream'
 import * as date from './date'
 
-type RecursiveBox = (value: Capable, context: ConnectionRevivableContext) => Capable
-type RecursiveRevive = (value: Capable, context: ConnectionRevivableContext) => Capable
-
 export type RevivableModule = {
   name: RevivableVariantType
   is: (value: unknown) => boolean
-  box: (
-    value: any,
-    context: ConnectionRevivableContext,
-    recursiveBox: RecursiveBox,
-    recursiveRevive: RecursiveRevive
-  ) => RevivableVariant
-  revive: (
-    value: any,
-    context: ConnectionRevivableContext,
-    recursiveBox: RecursiveBox,
-    recursiveRevive: RecursiveRevive
-  ) => any
+  box: (value: any, context: ConnectionRevivableContext) => RevivableVariant
+  revive: (value: any, context: ConnectionRevivableContext) => any
 }
 
 // Registry of all revivable modules
@@ -58,23 +45,19 @@ export const findRevivableByType = (type: RevivableVariantType): RevivableModule
 // Box a revivable value using the appropriate module
 export const boxValue = (
   value: Revivable,
-  context: ConnectionRevivableContext,
-  recursiveBox: RecursiveBox,
-  recursiveRevive: RecursiveRevive
+  context: ConnectionRevivableContext
 ): RevivableVariant | undefined => {
   const module = findRevivableForValue(value)
   if (!module) return undefined
-  return module.box(value, context, recursiveBox, recursiveRevive)
+  return module.box(value, context)
 }
 
 // Revive a boxed value using the appropriate module
 export const reviveValue = (
   box: RevivableBox,
-  context: ConnectionRevivableContext,
-  recursiveBox: RecursiveBox,
-  recursiveRevive: RecursiveRevive
+  context: ConnectionRevivableContext
 ): Revivable | undefined => {
   const module = findRevivableByType(box.type)
   if (!module) return undefined
-  return module.revive(box, context, recursiveBox, recursiveRevive)
+  return module.revive(box, context)
 }

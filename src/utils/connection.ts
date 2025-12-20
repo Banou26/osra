@@ -40,6 +40,8 @@ export type ConnectionRevivableContext = {
   messageChannels: MessageChannelAllocator
   sendMessage: (message: ConnectionMessage) => void
   eventTarget: MessageEventTarget
+  recursiveBox: (value: Capable, context: ConnectionRevivableContext) => Capable
+  recursiveRevive: (value: Capable, context: ConnectionRevivableContext) => Capable
 }
 
 export type BidirectionalConnection<T extends Capable = Capable> = {
@@ -61,15 +63,17 @@ export const startBidirectionalConnection = <T extends Capable>(
     close: () => void
   }
 ) => {
-  const revivableContext = {
+  const revivableContext: ConnectionRevivableContext = {
     platformCapabilities,
     transport,
     remoteUuid,
     messagePorts: new Set(),
     messageChannels: makeMessageChannelAllocator(),
     sendMessage: send,
-    eventTarget
-  } satisfies ConnectionRevivableContext
+    eventTarget,
+    recursiveBox,
+    recursiveRevive
+  }
   let initResolve: ((message: ConnectionMessage & { type: 'init' }) => void)
   const initMessage = new Promise<ConnectionMessage & { type: 'init' }>((resolve, reject) => {
     initResolve = resolve
