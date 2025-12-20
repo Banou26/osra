@@ -20,8 +20,7 @@ import {
 } from './type-guards'
 import {
   findRevivableForValue,
-  findRevivableByType,
-  revivables
+  findRevivableByType
 } from './revivables'
 
 export const box = (value: Revivable, context: ConnectionRevivableContext) => {
@@ -31,7 +30,7 @@ export const box = (value: Revivable, context: ConnectionRevivableContext) => {
     // WebKit doesn't support transferable streams so we force box them
     || isReadableStream(value) && !context.platformCapabilities.transferableStream
   ) {
-    const module = findRevivableForValue(value)
+    const module = findRevivableForValue(value, context.revivables)
     if (module) {
       return {
         [OSRA_BOX]: 'revivable',
@@ -43,22 +42,31 @@ export const box = (value: Revivable, context: ConnectionRevivableContext) => {
   // For JSON transports, we need to box MessagePort, ArrayBuffer, ReadableStream
   if ('isJson' in context.transport && context.transport.isJson) {
     if (isMessagePort(value)) {
-      return {
-        [OSRA_BOX]: 'revivable',
-        ...revivables.messagePort.box(value, context)
-      } as RevivableBox
+      const module = context.revivables.messagePort
+      if (module) {
+        return {
+          [OSRA_BOX]: 'revivable',
+          ...module.box(value, context)
+        } as RevivableBox
+      }
     }
     if (isArrayBuffer(value)) {
-      return {
-        [OSRA_BOX]: 'revivable',
-        ...revivables.arrayBuffer.box(value, context)
-      } as RevivableBox
+      const module = context.revivables.arrayBuffer
+      if (module) {
+        return {
+          [OSRA_BOX]: 'revivable',
+          ...module.box(value, context)
+        } as RevivableBox
+      }
     }
     if (isReadableStream(value)) {
-      return {
-        [OSRA_BOX]: 'revivable',
-        ...revivables.readableStream.box(value, context)
-      } as RevivableBox
+      const module = context.revivables.readableStream
+      if (module) {
+        return {
+          [OSRA_BOX]: 'revivable',
+          ...module.box(value, context)
+        } as RevivableBox
+      }
     }
   }
 
@@ -105,7 +113,7 @@ export const revive = (box: RevivableBox, context: ConnectionRevivableContext) =
   if (isRevivable(box.value)) return box.value
 
   // Use dynamic lookup to find the appropriate reviver
-  const module = findRevivableByType(box.type)
+  const module = findRevivableByType(box.type, context.revivables)
   if (module) {
     return module.revive(box, context)
   }

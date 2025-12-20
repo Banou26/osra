@@ -11,14 +11,16 @@ import * as readableStream from './readableStream'
 import * as date from './date'
 
 export type RevivableModule = {
-  name: RevivableVariantType
+  name: string
   is: (value: unknown) => boolean
   box: (value: any, context: ConnectionRevivableContext) => RevivableVariant
   revive: (value: any, context: ConnectionRevivableContext) => any
 }
 
-// Registry of all revivable modules
-export const revivables = {
+export type RevivablesRegistry = Record<string, RevivableModule>
+
+// Default revivables that ship with osra
+export const defaultRevivables: RevivablesRegistry = {
   messagePort,
   promise,
   function: func,
@@ -27,27 +29,28 @@ export const revivables = {
   error,
   readableStream,
   date
-} as const
-
-export type RevivablesRegistry = typeof revivables
-
-// Array of revivables for iteration
-export const revivablesList: RevivableModule[] = Object.values(revivables) as RevivableModule[]
+}
 
 // Find the revivable module that can handle a given value
-export const findRevivableForValue = (value: unknown): RevivableModule | undefined =>
-  revivablesList.find(revivable => revivable.is(value))
+export const findRevivableForValue = (
+  value: unknown,
+  revivables: RevivablesRegistry
+): RevivableModule | undefined =>
+  Object.values(revivables).find(revivable => revivable.is(value))
 
 // Find the revivable module by type name
-export const findRevivableByType = (type: RevivableVariantType): RevivableModule | undefined =>
-  revivables[type as keyof RevivablesRegistry] as RevivableModule | undefined
+export const findRevivableByType = (
+  type: RevivableVariantType,
+  revivables: RevivablesRegistry
+): RevivableModule | undefined =>
+  revivables[type]
 
 // Box a revivable value using the appropriate module
 export const boxValue = (
   value: Revivable,
   context: ConnectionRevivableContext
 ): RevivableVariant | undefined => {
-  const module = findRevivableForValue(value)
+  const module = findRevivableForValue(value, context.revivables)
   if (!module) return undefined
   return module.box(value, context)
 }
@@ -57,7 +60,7 @@ export const reviveValue = (
   box: RevivableBox,
   context: ConnectionRevivableContext
 ): Revivable | undefined => {
-  const module = findRevivableByType(box.type)
+  const module = findRevivableByType(box.type, context.revivables)
   if (!module) return undefined
   return module.revive(box, context)
 }
