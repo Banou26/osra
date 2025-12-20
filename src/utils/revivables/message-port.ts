@@ -15,6 +15,9 @@ export const type = 'messagePort'
 export const is = (value: unknown): value is MessagePort =>
   value instanceof MessagePort
 
+export const shouldBox = (_value: MessagePort, context: ConnectionRevivableContext): boolean =>
+  'isJson' in context.transport && Boolean(context.transport.isJson)
+
 export const box = (
   value: MessagePort,
   context: ConnectionRevivableContext

@@ -94,13 +94,6 @@ export const isReadableStream = (value: any) => value instanceof ReadableStream
 export const isDate = (value: any) => value instanceof Date
 export const isError = (value: any) => value instanceof Error
 
-export const isAlwaysBox = (value: any): value is Function | Promise<any> | Date | Error =>
-  isFunction(value)
-  || isPromise(value)
-  || isTypedArray(value)
-  || isDate(value)
-  || isError(value)
-
 export const isOsraMessage = (value: any): value is Message =>
   Boolean(
     value

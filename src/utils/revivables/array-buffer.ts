@@ -9,6 +9,9 @@ export const type = 'arrayBuffer'
 export const is = (value: unknown): value is ArrayBuffer =>
   value instanceof ArrayBuffer
 
+export const shouldBox = (_value: ArrayBuffer, context: ConnectionRevivableContext): boolean =>
+  'isJson' in context.transport && Boolean(context.transport.isJson)
+
 export const box = (
   value: ArrayBuffer,
   _context: ConnectionRevivableContext

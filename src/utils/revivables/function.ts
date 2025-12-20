@@ -14,6 +14,9 @@ export const type = 'function'
 export const is = (value: unknown): value is Function =>
   typeof value === 'function'
 
+export const shouldBox = (_value: Function, _context: ConnectionRevivableContext): boolean =>
+  true
+
 export const box = (
   value: Function,
   context: ConnectionRevivableContext

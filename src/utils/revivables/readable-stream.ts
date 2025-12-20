@@ -14,6 +14,10 @@ export const type = 'readableStream'
 export const is = (value: unknown): value is ReadableStream =>
   value instanceof ReadableStream
 
+export const shouldBox = (_value: ReadableStream, context: ConnectionRevivableContext): boolean =>
+  !context.platformCapabilities.transferableStream
+  || ('isJson' in context.transport && Boolean(context.transport.isJson))
+
 export const box = (
   value: ReadableStream,
   context: ConnectionRevivableContext
