@@ -8,9 +8,11 @@ import type {
 import type { MessageChannelAllocator } from './allocator'
 import type { PlatformCapabilities } from './capabilities'
 import type { StrictMessagePort } from './message-channel'
+import type { RevivablesRegistry } from './revivables'
 
 import { recursiveBox, recursiveRevive } from './revivable'
 import { makeMessageChannelAllocator } from './allocator'
+import { defaultRevivables } from './revivables'
 
 export type BidirectionalConnectionContext = {
   type: 'bidirectional'
@@ -40,6 +42,7 @@ export type ConnectionRevivableContext = {
   messageChannels: MessageChannelAllocator
   sendMessage: (message: ConnectionMessage) => void
   eventTarget: MessageEventTarget
+  revivables: RevivablesRegistry
   recursiveBox: (value: Capable, context: ConnectionRevivableContext) => Capable
   recursiveRevive: (value: Capable, context: ConnectionRevivableContext) => Capable
 }
@@ -51,7 +54,7 @@ export type BidirectionalConnection<T extends Capable = Capable> = {
 }
 
 export const startBidirectionalConnection = <T extends Capable>(
-  { transport, value, uuid, remoteUuid, platformCapabilities, eventTarget, send, close }:
+  { transport, value, uuid, remoteUuid, platformCapabilities, eventTarget, send, close, revivables = defaultRevivables }:
   {
     transport: Transport
     value: Capable
@@ -61,6 +64,7 @@ export const startBidirectionalConnection = <T extends Capable>(
     eventTarget: MessageEventTarget
     send: (message: ConnectionMessage) => void
     close: () => void
+    revivables?: RevivablesRegistry
   }
 ) => {
   const revivableContext: ConnectionRevivableContext = {
@@ -71,6 +75,7 @@ export const startBidirectionalConnection = <T extends Capable>(
     messageChannels: makeMessageChannelAllocator(),
     sendMessage: send,
     eventTarget,
+    revivables,
     recursiveBox,
     recursiveRevive
   }
