@@ -15,6 +15,9 @@ export const type = 'typedArray'
 export const is = (value: unknown): value is TypedArray =>
   isTypedArray(value)
 
+export const shouldBox = (_value: TypedArray, _context: ConnectionRevivableContext): boolean =>
+  true
+
 export const box = (
   value: TypedArray,
   _context: ConnectionRevivableContext

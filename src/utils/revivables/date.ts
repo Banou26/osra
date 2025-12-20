@@ -9,6 +9,9 @@ export const type = 'date'
 export const is = (value: unknown): value is Date =>
   value instanceof Date
 
+export const shouldBox = (_value: Date, _context: ConnectionRevivableContext): boolean =>
+  true
+
 export const box = (
   value: Date,
   _context: ConnectionRevivableContext

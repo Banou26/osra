@@ -12,7 +12,6 @@ import type { DeepReplace } from '../replace'
 
 import { OSRA_BOX } from '../../types'
 import {
-  isAlwaysBox,
   isArrayBuffer,
   isMessagePort,
   isReadableStream,
@@ -33,6 +32,7 @@ import * as date from './date'
 export type RevivableModule = {
   type: string
   is: (value: unknown) => boolean
+  shouldBox: (value: any, context: ConnectionRevivableContext) => boolean
   box: (value: any, context: ConnectionRevivableContext) => RevivableVariant
   revive: (value: any, context: ConnectionRevivableContext) => any
 }
@@ -65,50 +65,21 @@ export const findRevivableByType = (
 ): RevivableModule | undefined =>
   revivables[type]
 
+// Determine if a value should be boxed based on its type and context
+export const shouldBox = (value: unknown, context: ConnectionRevivableContext): boolean => {
+  const module = findRevivableForValue(value, context.revivables)
+  if (!module) return false
+  return module.shouldBox(value, context)
+}
+
 export const box = (value: Revivable, context: ConnectionRevivableContext) => {
-  // Types that are always boxed regardless of transport
-  if (
-    isAlwaysBox(value)
-    // WebKit doesn't support transferable streams so we force box them
-    || isReadableStream(value) && !context.platformCapabilities.transferableStream
-  ) {
+  if (shouldBox(value, context)) {
     const module = findRevivableForValue(value, context.revivables)
     if (module) {
       return {
         [OSRA_BOX]: 'revivable',
         ...module.box(value, context)
       } as RevivableBox
-    }
-  }
-
-  // For JSON transports, we need to box MessagePort, ArrayBuffer, ReadableStream
-  if ('isJson' in context.transport && context.transport.isJson) {
-    if (isMessagePort(value)) {
-      const module = context.revivables.messagePort
-      if (module) {
-        return {
-          [OSRA_BOX]: 'revivable',
-          ...module.box(value, context)
-        } as RevivableBox
-      }
-    }
-    if (isArrayBuffer(value)) {
-      const module = context.revivables.arrayBuffer
-      if (module) {
-        return {
-          [OSRA_BOX]: 'revivable',
-          ...module.box(value, context)
-        } as RevivableBox
-      }
-    }
-    if (isReadableStream(value)) {
-      const module = context.revivables.readableStream
-      if (module) {
-        return {
-          [OSRA_BOX]: 'revivable',
-          ...module.box(value, context)
-        } as RevivableBox
-      }
     }
   }
 

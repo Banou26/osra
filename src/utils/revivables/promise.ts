@@ -13,6 +13,9 @@ export const type = 'promise'
 export const is = (value: unknown): value is Promise<any> =>
   value instanceof Promise
 
+export const shouldBox = (_value: Promise<any>, _context: ConnectionRevivableContext): boolean =>
+  true
+
 export const box = (
   value: Promise<any>,
   context: ConnectionRevivableContext

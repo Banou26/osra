@@ -9,6 +9,9 @@ export const type = 'error'
 export const is = (value: unknown): value is Error =>
   value instanceof Error
 
+export const shouldBox = (_value: Error, _context: ConnectionRevivableContext): boolean =>
+  true
+
 export const box = (
   value: Error,
   _context: ConnectionRevivableContext
