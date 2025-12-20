@@ -1,0 +1,31 @@
+import type {
+  RevivableArrayBuffer,
+  RevivableVariant
+} from '../../types'
+import type { ConnectionRevivableContext } from '../connection'
+
+export const name = 'arrayBuffer'
+
+export const is = (value: unknown): value is ArrayBuffer =>
+  value instanceof ArrayBuffer
+
+export const box = (
+  value: ArrayBuffer,
+  _context: ConnectionRevivableContext,
+  _recursiveBox?: (value: any, context: ConnectionRevivableContext) => any,
+  _recursiveRevive?: (value: any, context: ConnectionRevivableContext) => any
+): RevivableVariant & { type: 'arrayBuffer' } => {
+  return {
+    type: 'arrayBuffer',
+    base64Buffer: new Uint8Array(value).toBase64() as string
+  }
+}
+
+export const revive = (
+  value: RevivableArrayBuffer,
+  _context: ConnectionRevivableContext,
+  _recursiveBox?: (value: any, context: ConnectionRevivableContext) => any,
+  _recursiveRevive?: (value: any, context: ConnectionRevivableContext) => any
+): ArrayBuffer => {
+  return (Uint8Array.fromBase64(value.base64Buffer) as Uint8Array).buffer as ArrayBuffer
+}
