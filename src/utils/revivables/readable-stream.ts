@@ -9,7 +9,7 @@ import type { ConnectionRevivableContext } from '../connection'
 import { isRevivablePromiseBox } from '../type-guards'
 import { getTransferableObjects } from '../transferable'
 
-export const name = 'readableStream'
+export const type = 'readableStream'
 
 export const is = (value: unknown): value is ReadableStream =>
   value instanceof ReadableStream
@@ -37,7 +37,7 @@ export const box = (
   localPort.start()
 
   return {
-    type: 'readableStream',
+    type,
     port: remotePort
   }
 }

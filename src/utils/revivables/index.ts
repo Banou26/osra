@@ -1,17 +1,17 @@
 import type { Revivable, RevivableBox, RevivableVariant, RevivableVariantType } from '../../types'
 import type { ConnectionRevivableContext } from '../connection'
 
-import * as messagePort from './messagePort'
+import * as messagePort from './message-port'
 import * as promise from './promise'
 import * as func from './function'
-import * as typedArray from './typedArray'
-import * as arrayBuffer from './arrayBuffer'
+import * as typedArray from './typed-array'
+import * as arrayBuffer from './array-buffer'
 import * as error from './error'
-import * as readableStream from './readableStream'
+import * as readableStream from './readable-stream'
 import * as date from './date'
 
 export type RevivableModule = {
-  name: string
+  type: string
   is: (value: unknown) => boolean
   box: (value: any, context: ConnectionRevivableContext) => RevivableVariant
   revive: (value: any, context: ConnectionRevivableContext) => any
