@@ -1,5 +1,25 @@
-import type { Revivable, RevivableBox, RevivableVariant, RevivableVariantType } from '../../types'
+import type {
+  Capable,
+  Revivable,
+  RevivableBox,
+  RevivableToRevivableType,
+  RevivableVariant,
+  RevivableVariantType,
+  ReviveBoxBase
+} from '../../types'
 import type { ConnectionRevivableContext } from '../connection'
+import type { DeepReplace } from '../replace'
+
+import { OSRA_BOX } from '../../types'
+import {
+  isAlwaysBox,
+  isArrayBuffer,
+  isMessagePort,
+  isReadableStream,
+  isRevivable,
+  isRevivableBox,
+  isTransferable
+} from '../type-guards'
 
 import * as messagePort from './message-port'
 import * as promise from './promise'
@@ -45,22 +65,119 @@ export const findRevivableByType = (
 ): RevivableModule | undefined =>
   revivables[type]
 
-// Box a revivable value using the appropriate module
-export const boxValue = (
-  value: Revivable,
-  context: ConnectionRevivableContext
-): RevivableVariant | undefined => {
-  const module = findRevivableForValue(value, context.revivables)
-  if (!module) return undefined
-  return module.box(value, context)
+export const box = (value: Revivable, context: ConnectionRevivableContext) => {
+  // Types that are always boxed regardless of transport
+  if (
+    isAlwaysBox(value)
+    // WebKit doesn't support transferable streams so we force box them
+    || isReadableStream(value) && !context.platformCapabilities.transferableStream
+  ) {
+    const module = findRevivableForValue(value, context.revivables)
+    if (module) {
+      return {
+        [OSRA_BOX]: 'revivable',
+        ...module.box(value, context)
+      } as RevivableBox
+    }
+  }
+
+  // For JSON transports, we need to box MessagePort, ArrayBuffer, ReadableStream
+  if ('isJson' in context.transport && context.transport.isJson) {
+    if (isMessagePort(value)) {
+      const module = context.revivables.messagePort
+      if (module) {
+        return {
+          [OSRA_BOX]: 'revivable',
+          ...module.box(value, context)
+        } as RevivableBox
+      }
+    }
+    if (isArrayBuffer(value)) {
+      const module = context.revivables.arrayBuffer
+      if (module) {
+        return {
+          [OSRA_BOX]: 'revivable',
+          ...module.box(value, context)
+        } as RevivableBox
+      }
+    }
+    if (isReadableStream(value)) {
+      const module = context.revivables.readableStream
+      if (module) {
+        return {
+          [OSRA_BOX]: 'revivable',
+          ...module.box(value, context)
+        } as RevivableBox
+      }
+    }
+  }
+
+  // For capable transports (or unknown types on JSON transport), just mark the type but pass through the value
+  return {
+    [OSRA_BOX]: 'revivable',
+    ...'isJson' in context.transport && context.transport.isJson
+      ? { type: 'unknown' as const, value }
+      : {
+        type:
+          isMessagePort(value) ? 'messagePort' as const
+          : isArrayBuffer(value) ? 'arrayBuffer' as const
+          : isReadableStream(value) ? 'readableStream' as const
+          : 'unknown' as const,
+        value
+      }
+  } as ReviveBoxBase<RevivableToRevivableType<typeof value>>
 }
 
-// Revive a boxed value using the appropriate module
-export const reviveValue = (
-  box: RevivableBox,
-  context: ConnectionRevivableContext
-): Revivable | undefined => {
+export const recursiveBox = <T extends Capable>(value: T, context: ConnectionRevivableContext): DeepReplace<T, Revivable, RevivableBox> => {
+  const boxedValue = isRevivable(value) ? box(value, context) : value
+  return (
+    Array.isArray(boxedValue) ? boxedValue.map(value => recursiveBox(value, context)) as DeepReplace<T, Revivable, RevivableBox>
+    : boxedValue && typeof boxedValue === 'object' && Object.getPrototypeOf(boxedValue) === Object.prototype ? (
+      Object.fromEntries(
+        Object
+          .entries(boxedValue)
+          .map(([key, value]: [string, Capable]) => [
+            key,
+            isRevivableBox(boxedValue) && boxedValue.type === 'messagePort' && boxedValue.value instanceof MessagePort
+            || isRevivableBox(boxedValue) && boxedValue.type === 'arrayBuffer' && boxedValue.value instanceof ArrayBuffer
+            || isRevivableBox(boxedValue) && boxedValue.type === 'readableStream' && boxedValue.value instanceof ReadableStream
+              ? value
+              : recursiveBox(value, context)
+          ])
+      )
+    ) as DeepReplace<T, Revivable, RevivableBox>
+    : boxedValue as DeepReplace<T, Revivable, RevivableBox>
+  )
+}
+
+export const revive = (box: RevivableBox, context: ConnectionRevivableContext) => {
+  // If the value got properly sent through the protocol as is, we don't need to revive it
+  if (isRevivable(box.value)) return box.value
+
+  // Use dynamic lookup to find the appropriate reviver
   const module = findRevivableByType(box.type, context.revivables)
-  if (!module) return undefined
-  return module.revive(box, context)
+  if (module) {
+    return module.revive(box, context)
+  }
+
+  return box as DeepReplace<RevivableBox, RevivableBox, Revivable>
+}
+
+export const recursiveRevive = <T extends Capable>(value: T, context: ConnectionRevivableContext): DeepReplace<T, RevivableBox, Revivable> => {
+  const recursedValue = (
+    isTransferable(value) ? value
+    : Array.isArray(value) ? value.map(value => recursiveRevive(value, context)) as DeepReplace<T, RevivableBox, Revivable>
+    : value && typeof value === 'object' ? (
+      Object.fromEntries(
+        Object
+          .entries(value)
+          .map(([key, value]: [string, Capable]) => [
+            key,
+            recursiveRevive(value, context)
+          ])
+      )
+    ) as DeepReplace<T, RevivableBox, Revivable>
+    : value as DeepReplace<T, RevivableBox, Revivable>
+  )
+  return (isRevivableBox(recursedValue) ? revive(recursedValue, context) : recursedValue) as DeepReplace<T, RevivableBox, Revivable>
 }
