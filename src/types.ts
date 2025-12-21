@@ -142,13 +142,13 @@ export type RevivableBox =
 
 export type Revivable =
   | MessagePort
-  | Promise<Capable>
+  | Promise<Revivable>
   | TypedArray
   | ArrayBuffer
   | ReadableStream
   | Date
   | Error
-  | ((...args: Capable[]) => Promise<Capable>)
+  | ((...args: Revivable[]) => Promise<Revivable>)
 
 export type RevivableToRevivableType<T extends Revivable> =
   T extends MessagePort ? 'messagePort' :

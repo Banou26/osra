@@ -13,11 +13,11 @@ export const type = 'promise'
 export const is = (value: unknown): value is Promise<any> =>
   value instanceof Promise
 
-export const shouldBox = (_value: Promise<any>, _context: ConnectionRevivableContext): boolean =>
+export const shouldBox = (_value: Promise<Capable>, _context: ConnectionRevivableContext): boolean =>
   true
 
 export const box = (
-  value: Promise<any>,
+  value: Promise<Capable>,
   context: ConnectionRevivableContext
 ): RevivableVariant & { type: 'promise' } => {
   const { port1: localPort, port2: remotePort } = new MessageChannel()
@@ -42,7 +42,7 @@ export const box = (
 export const revive = (
   value: RevivablePromise,
   context: ConnectionRevivableContext
-): Promise<any> => {
+): Promise<Capable> => {
   context.messagePorts.add(value.port)
   return new Promise((resolve, reject) => {
     value.port.addEventListener('message', ({ data }:  MessageEvent<RevivablePromiseContext>) => {
