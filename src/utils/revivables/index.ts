@@ -29,41 +29,59 @@ import * as error from './error'
 import * as readableStream from './readable-stream'
 import * as date from './date'
 
-export type RevivableModule = {
+export type RevivableModuleType = {
   type: string
-  is: (value: unknown) => boolean
-  shouldBox: (value: any, context: ConnectionRevivableContext) => boolean
-  box: (value: any, context: ConnectionRevivableContext) => RevivableVariant
-  revive: (value: any, context: ConnectionRevivableContext) => any
+  is: (value: unknown) => value is Revivable
+  shouldBox: (value: Revivable, context: ConnectionRevivableContext) => boolean
+  box: (value: Revivable, context: ConnectionRevivableContext) => RevivableBox
+  revive: (value: RevivableBox, context: ConnectionRevivableContext) => Revivable
 }
 
-export type RevivablesRegistry = Record<string, RevivableModule>
-
-// Default revivables that ship with osra
-export const defaultRevivables: RevivablesRegistry = {
+export const defaultRevivables = [
   messagePort,
   promise,
-  function: func,
+  func,
   typedArray,
   arrayBuffer,
   error,
   readableStream,
   date
+] satisfies RevivableModuleType[]
+
+export type RevivableModule = typeof defaultRevivables[number]
+export type RevivablesRegistry = RevivableModule[]
+
+// Base interface for calling module methods through the registry
+// Uses generics to preserve type information when the specific module type is known
+export interface RevivableModuleBase<
+  TValue = unknown,
+  TBoxed extends RevivableVariant = RevivableVariant
+> {
+  type: string
+  is: (value: unknown) => value is TValue
+  shouldBox: (value: TValue, context: ConnectionRevivableContext) => boolean
+  box: (value: TValue, context: ConnectionRevivableContext) => TBoxed
+  revive: (value: TBoxed, context: ConnectionRevivableContext) => TValue
 }
 
 // Find the revivable module that can handle a given value
-export const findRevivableForValue = (
-  value: unknown,
+// Returns a generic base interface that allows calling methods with the matched value type
+export function findRevivableForValue<T>(
+  value: T,
   revivables: RevivablesRegistry
-): RevivableModule | undefined =>
-  Object.values(revivables).find(revivable => revivable.is(value))
+): RevivableModuleBase<T> | undefined {
+  const found = revivables.find(revivable => revivable.is(value))
+  return found as RevivableModuleBase<T> | undefined
+}
 
 // Find the revivable module by type name
-export const findRevivableByType = (
+export function findRevivableByType(
   type: RevivableVariantType,
   revivables: RevivablesRegistry
-): RevivableModule | undefined =>
-  revivables[type]
+): RevivableModuleBase | undefined {
+  const found = revivables.find(revivable => revivable.type === type)
+  return found as RevivableModuleBase | undefined
+}
 
 // Determine if a value should be boxed based on its type and context
 export const shouldBox = (value: unknown, context: ConnectionRevivableContext): boolean => {
