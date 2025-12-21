@@ -11,6 +11,7 @@ import type { StrictMessagePort } from './message-channel'
 
 import { recursiveBox, recursiveRevive } from './revivable'
 import { makeMessageChannelAllocator } from './allocator'
+import { DefaultRevivableModules, defaultRevivableModules, RevivableModule } from '../revivables'
 
 export type BidirectionalConnectionContext = {
   type: 'bidirectional'
@@ -32,13 +33,14 @@ export type ConnectionContext =
   | UnidirectionalEmittingConnectionContext
   | UnidirectionalReceivingConnectionContext
 
-export type ConnectionRevivableContext = {
+export type ConnectionRevivableContext<TModules extends RevivableModule[] = DefaultRevivableModules> = {
   platformCapabilities: PlatformCapabilities
   transport: Transport
   remoteUuid: Uuid
   messagePorts: Set<MessagePort>
   messageChannels: MessageChannelAllocator
   sendMessage: (message: ConnectionMessage) => void
+  revivableModules: TModules
   eventTarget: MessageEventTarget
 }
 
@@ -68,7 +70,8 @@ export const startBidirectionalConnection = <T extends Capable>(
     messagePorts: new Set(),
     messageChannels: makeMessageChannelAllocator(),
     sendMessage: send,
-    eventTarget
+    eventTarget,
+    revivableModules: defaultRevivableModules
   } satisfies ConnectionRevivableContext
   let initResolve: ((message: ConnectionMessage & { type: 'init' }) => void)
   const initMessage = new Promise<ConnectionMessage & { type: 'init' }>((resolve, reject) => {
