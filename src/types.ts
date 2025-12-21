@@ -272,11 +272,9 @@ export type ReceiveJsonPlatformTransport =
   | WebExtOnMessage
 
 export type JsonPlatformTransport =
-  { isJson: true }
-  & (
-    | EmitJsonPlatformTransport
-    | ReceiveJsonPlatformTransport
-  )
+  | { isJson: true }
+  | EmitJsonPlatformTransport
+  | ReceiveJsonPlatformTransport
 
 export type EmitPlatformTransport =
   | EmitJsonPlatformTransport

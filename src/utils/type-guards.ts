@@ -208,12 +208,13 @@ export const isReceiveJsonOnlyTransport = (value: any): value is ReceiveJsonPlat
 
 export type IsJsonOnlyTransport<T extends Transport> = T extends JsonPlatformTransport ? true : false
 export const isJsonOnlyTransport = (value: any): value is JsonPlatformTransport =>
-     isEmitJsonOnlyTransport(value)
+    ('isJson' in value && value.isJson)
+  || isEmitJsonOnlyTransport(value)
   || isReceiveJsonOnlyTransport(value)
 
 export type IsEmitTransport<T extends Transport> = T extends EmitTransport ? true : false
 export const isEmitTransport = (value: any): value is EmitTransport =>
-    isEmitJsonOnlyTransport(value)
+     isEmitJsonOnlyTransport(value)
   || isWindow(value)
   || isServiceWorkerContainer(value)
   || isWorker(value)
