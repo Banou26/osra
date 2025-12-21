@@ -1,21 +1,25 @@
-import type {
-  RevivableError,
-  RevivableVariant
-} from '../../types'
 import type { ConnectionRevivableContext } from '../connection'
 
-export const type = 'error'
+export const type = 'error' as const
 
-export const is = (value: unknown): value is Error =>
+export type Source = Error
+
+export type Boxed = {
+  type: typeof type
+  message: string
+  stack: string
+}
+
+export const is = (value: unknown): value is Source =>
   value instanceof Error
 
-export const shouldBox = (_value: Error, _context: ConnectionRevivableContext): boolean =>
+export const shouldBox = (_value: Source, _context: ConnectionRevivableContext): boolean =>
   true
 
 export const box = (
-  value: Error,
+  value: Source,
   _context: ConnectionRevivableContext
-): RevivableVariant & { type: 'error' } => {
+): Boxed => {
   return {
     type,
     message: value.message,
@@ -24,8 +28,8 @@ export const box = (
 }
 
 export const revive = (
-  value: RevivableError,
+  value: Boxed,
   _context: ConnectionRevivableContext
-): Error => {
+): Source => {
   return new Error(value.message, { cause: value.stack })
 }

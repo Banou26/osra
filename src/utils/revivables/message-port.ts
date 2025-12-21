@@ -1,27 +1,29 @@
-import type {
-  Capable,
-  RevivableMessagePort,
-  RevivableVariant,
-  Uuid
-} from '../../types'
+import type { Capable, Uuid } from '../../types'
 import type { ConnectionRevivableContext } from '../connection'
 import type { StrictMessagePort } from '../message-channel'
 
 import { isRevivableBox } from '../type-guards'
 import { getTransferableObjects } from '../transferable'
 
-export const type = 'messagePort'
+export const type = 'messagePort' as const
 
-export const is = (value: unknown): value is MessagePort =>
+export type Source = MessagePort
+
+export type Boxed = {
+  type: typeof type
+  portId: string
+}
+
+export const is = (value: unknown): value is Source =>
   value instanceof MessagePort
 
-export const shouldBox = (_value: MessagePort, context: ConnectionRevivableContext): boolean =>
+export const shouldBox = (_value: Source, context: ConnectionRevivableContext): boolean =>
   'isJson' in context.transport && Boolean(context.transport.isJson)
 
 export const box = (
-  value: MessagePort,
+  value: Source,
   context: ConnectionRevivableContext
-): RevivableVariant & { type: 'messagePort' } => {
+): Boxed => {
   const messagePort = value as StrictMessagePort<Capable>
   const { uuid: portId } = context.messageChannels.alloc(undefined, { port1: messagePort })
   // Since we are in a boxed MessagePort, we want to send a message to the other side through the EmitTransport
@@ -55,7 +57,7 @@ export const box = (
 }
 
 export const revive = (
-  value: RevivableMessagePort,
+  value: Boxed,
   context: ConnectionRevivableContext
 ): StrictMessagePort<Capable> => {
   const { port1: userPort, port2: internalPort } = new MessageChannel()

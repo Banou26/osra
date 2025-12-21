@@ -1,25 +1,32 @@
-import type {
-  Capable,
-  RevivablePromise,
-  RevivablePromiseContext,
-  RevivableVariant
-} from '../../types'
+import type { Capable } from '../../types'
 import type { ConnectionRevivableContext } from '../connection'
 
 import { getTransferableObjects } from '../transferable'
 
-export const type = 'promise'
+export const type = 'promise' as const
 
-export const is = (value: unknown): value is Promise<any> =>
+export type Source = Promise<any>
+
+export type Boxed = {
+  type: typeof type
+  port: MessagePort
+}
+
+// Context type for promise resolution messages
+export type Context =
+  | { type: 'resolve', data: Capable }
+  | { type: 'reject', error: string }
+
+export const is = (value: unknown): value is Source =>
   value instanceof Promise
 
-export const shouldBox = (_value: Promise<Capable>, _context: ConnectionRevivableContext): boolean =>
+export const shouldBox = (_value: Source, _context: ConnectionRevivableContext): boolean =>
   true
 
 export const box = (
-  value: Promise<Capable>,
+  value: Source,
   context: ConnectionRevivableContext
-): RevivableVariant & { type: 'promise' } => {
+): Boxed => {
   const { port1: localPort, port2: remotePort } = new MessageChannel()
   context.messagePorts.add(remotePort)
 
@@ -40,13 +47,13 @@ export const box = (
 }
 
 export const revive = (
-  value: RevivablePromise,
+  value: Boxed,
   context: ConnectionRevivableContext
-): Promise<Capable> => {
+): Source => {
   context.messagePorts.add(value.port)
   return new Promise((resolve, reject) => {
-    value.port.addEventListener('message', ({ data }:  MessageEvent<RevivablePromiseContext>) => {
-      const result = context.recursiveRevive(data, context) as RevivablePromiseContext
+    value.port.addEventListener('message', ({ data }:  MessageEvent<Context>) => {
+      const result = context.recursiveRevive(data, context) as Context
       if (result.type === 'resolve') {
         resolve(result.data)
       } else { // result.type === 'reject'

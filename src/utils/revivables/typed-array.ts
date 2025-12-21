@@ -1,27 +1,32 @@
-import type {
-  RevivableTypedArray,
-  RevivableVariant
-} from '../../types'
 import type { ConnectionRevivableContext } from '../connection'
 import {
   TypedArray,
+  TypeArrayType,
   typedArrayToType,
   typedArrayTypeToTypedArrayConstructor,
   isTypedArray
 } from '../type-guards'
 
-export const type = 'typedArray'
+export const type = 'typedArray' as const
 
-export const is = (value: unknown): value is TypedArray =>
+export type Source = TypedArray
+
+export type Boxed = {
+  type: typeof type
+  typedArrayType: TypeArrayType
+  arrayBuffer: ArrayBuffer
+}
+
+export const is = (value: unknown): value is Source =>
   isTypedArray(value)
 
-export const shouldBox = (_value: TypedArray, _context: ConnectionRevivableContext): boolean =>
+export const shouldBox = (_value: Source, _context: ConnectionRevivableContext): boolean =>
   true
 
 export const box = (
-  value: TypedArray,
+  value: Source,
   _context: ConnectionRevivableContext
-): RevivableVariant & { type: 'typedArray' } => {
+): Boxed => {
   return {
     type,
     typedArrayType: typedArrayToType(value),
@@ -30,9 +35,9 @@ export const box = (
 }
 
 export const revive = (
-  value: RevivableTypedArray,
+  value: Boxed,
   _context: ConnectionRevivableContext
-): TypedArray => {
+): Source => {
   const TypedArrayConstructor = typedArrayTypeToTypedArrayConstructor(value.typedArrayType)
   const result = new TypedArrayConstructor(value.arrayBuffer)
   return result

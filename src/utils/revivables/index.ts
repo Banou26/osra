@@ -1,22 +1,12 @@
-import type {
-  Capable,
-  Revivable,
-  RevivableBox,
-  RevivableToRevivableType,
-  RevivableVariant,
-  RevivableVariantType,
-  ReviveBoxBase
-} from '../../types'
+import type { Capable, OSRA_BOX } from '../../types'
 import type { ConnectionRevivableContext } from '../connection'
 import type { DeepReplace } from '../replace'
 
-import { OSRA_BOX } from '../../types'
+import { OSRA_BOX as OSRA_BOX_VALUE } from '../../types'
 import {
   isArrayBuffer,
   isMessagePort,
   isReadableStream,
-  isRevivable,
-  isRevivableBox,
   isTransferable
 } from '../type-guards'
 
@@ -29,14 +19,61 @@ import * as error from './error'
 import * as readableStream from './readable-stream'
 import * as date from './date'
 
-export type RevivableModuleType = {
-  type: string
-  is: (value: unknown) => value is Revivable
-  shouldBox: (value: Revivable, context: ConnectionRevivableContext) => boolean
-  box: (value: Revivable, context: ConnectionRevivableContext) => RevivableBox
-  revive: (value: RevivableBox, context: ConnectionRevivableContext) => Revivable
+// Re-export individual modules for direct access
+export { messagePort, promise, func, typedArray, arrayBuffer, error, readableStream, date }
+
+// Re-export context types from modules that define them
+export type { Context as PromiseContext } from './promise'
+export type { CallContext as FunctionCallContext } from './function'
+export type { PullContext as ReadableStreamPullContext } from './readable-stream'
+
+// ============================================================================
+// Module Type Definition
+// ============================================================================
+
+/**
+ * Interface that all revivable modules must satisfy.
+ * Each module defines:
+ * - type: A string literal identifying this revivable type
+ * - Source: The original value type (e.g., Promise, Date, Error)
+ * - Boxed: The serialized form (e.g., { type: 'promise', port: MessagePort })
+ *
+ * Note: We use a looser runtime type (RevivableModuleRuntime) for the registry
+ * since TypeScript's variance rules make it hard to use the strongly-typed version
+ * in arrays of different module types.
+ */
+export interface RevivableModule<
+  TType extends string = string,
+  TSource = unknown,
+  TBoxed extends { type: TType } = { type: TType }
+> {
+  readonly type: TType
+  is: (value: unknown) => value is TSource
+  shouldBox: (value: TSource, context: ConnectionRevivableContext) => boolean
+  box: (value: TSource, context: ConnectionRevivableContext) => TBoxed
+  revive: (value: TBoxed, context: ConnectionRevivableContext) => TSource
 }
 
+/**
+ * A looser type for runtime use in the registry.
+ * This allows storing modules with different Source/Boxed types in the same array.
+ */
+export interface RevivableModuleRuntime {
+  readonly type: string
+  is: (value: unknown) => boolean
+  shouldBox: (value: any, context: ConnectionRevivableContext) => boolean
+  box: (value: any, context: ConnectionRevivableContext) => { type: string }
+  revive: (value: any, context: ConnectionRevivableContext) => unknown
+}
+
+// ============================================================================
+// Default Revivables Registry
+// ============================================================================
+
+/**
+ * The default set of revivable modules that Osra supports out of the box.
+ * This array's type is used to infer the Revivable and RevivableVariant types.
+ */
 export const defaultRevivables = [
   messagePort,
   promise,
@@ -46,123 +83,270 @@ export const defaultRevivables = [
   error,
   readableStream,
   date
-] satisfies RevivableModuleType[]
+] as const
 
-export type RevivableModule = typeof defaultRevivables[number]
-export type RevivablesRegistry = RevivableModule[]
+export type DefaultRevivables = typeof defaultRevivables
 
-// Base interface for calling module methods through the registry
-// Uses generics to preserve type information when the specific module type is known
-export interface RevivableModuleBase<
-  TValue = unknown,
-  TBoxed extends RevivableVariant = RevivableVariant
-> {
-  type: string
-  is: (value: unknown) => value is TValue
-  shouldBox: (value: TValue, context: ConnectionRevivableContext) => boolean
-  box: (value: TValue, context: ConnectionRevivableContext) => TBoxed
-  revive: (value: TBoxed, context: ConnectionRevivableContext) => TValue
+// ============================================================================
+// Type Inference Utilities
+// ============================================================================
+
+/**
+ * Given a revivable module, extract its Source type
+ */
+export type ExtractSource<T> = T extends { is: (value: unknown) => value is infer S } ? S : never
+
+/**
+ * Given a revivable module, extract its Boxed type
+ */
+export type ExtractBoxed<T> = T extends { box: (...args: any[]) => infer B } ? B : never
+
+/**
+ * Given a revivable module, extract its type string literal
+ */
+export type ExtractType<T> = T extends { readonly type: infer U } ? U : never
+
+/**
+ * Given an array of revivable modules, extract the union of all Source types
+ */
+export type InferRevivable<TModules extends readonly unknown[]> =
+  ExtractSource<TModules[number]>
+
+/**
+ * Given an array of revivable modules, extract the union of all Boxed types
+ */
+export type InferRevivableVariant<TModules extends readonly unknown[]> =
+  ExtractBoxed<TModules[number]>
+
+/**
+ * Given an array of revivable modules, extract the union of all type string literals
+ */
+export type InferRevivableType<TModules extends readonly unknown[]> =
+  ExtractType<TModules[number]>
+
+// ============================================================================
+// Inferred Types from Default Revivables
+// ============================================================================
+
+/**
+ * The union of all source types that can be revived (inferred from defaultRevivables)
+ */
+export type Revivable = InferRevivable<DefaultRevivables>
+
+/**
+ * The union of all boxed types (inferred from defaultRevivables)
+ */
+export type RevivableVariant = InferRevivableVariant<DefaultRevivables>
+
+/**
+ * The union of all type string literals (inferred from defaultRevivables)
+ */
+export type RevivableVariantType = InferRevivableType<DefaultRevivables>
+
+/**
+ * A boxed revivable value with the OSRA_BOX marker.
+ * Includes an optional `value` field for passthrough cases where the value
+ * doesn't need to be serialized (e.g., MessagePort on capable transports).
+ */
+export type RevivableBox = {
+  [K in typeof OSRA_BOX_VALUE]: 'revivable'
+} & RevivableVariant & {
+  value?: unknown
 }
 
-// Find the revivable module that can handle a given value
-// Returns a generic base interface that allows calling methods with the matched value type
-export function findRevivableForValue<T>(
-  value: T,
+/**
+ * Base type for a revivable box
+ */
+export type ReviveBoxBase<T extends RevivableVariantType = RevivableVariantType> = {
+  [K in typeof OSRA_BOX_VALUE]: 'revivable'
+} & {
+  type: T
+  value?: unknown
+  [Symbol.toPrimitive]?: Function
+  valueOf?: Function
+  toString?: Function
+  toJSON?: Function
+}
+
+// ============================================================================
+// Type Mapping Utilities
+// ============================================================================
+
+/**
+ * Map a revivable type string to its Source type
+ */
+export type RevivableVariantTypeToSource<T extends RevivableVariantType> =
+  T extends 'messagePort' ? messagePort.Source :
+  T extends 'promise' ? promise.Source :
+  T extends 'function' ? func.Source :
+  T extends 'typedArray' ? typedArray.Source :
+  T extends 'arrayBuffer' ? arrayBuffer.Source :
+  T extends 'error' ? error.Source :
+  T extends 'readableStream' ? readableStream.Source :
+  T extends 'date' ? date.Source :
+  never
+
+/**
+ * Map a Source type to its revivable type string
+ */
+export type SourceToRevivableType<T extends Revivable> =
+  T extends messagePort.Source ? 'messagePort' :
+  T extends promise.Source ? 'promise' :
+  T extends func.Source ? 'function' :
+  T extends typedArray.Source ? 'typedArray' :
+  T extends arrayBuffer.Source ? 'arrayBuffer' :
+  T extends readableStream.Source ? 'readableStream' :
+  T extends date.Source ? 'date' :
+  T extends error.Source ? 'error' :
+  never
+
+// ============================================================================
+// Registry Types
+// ============================================================================
+
+export type RevivablesRegistry = readonly RevivableModuleRuntime[]
+
+// ============================================================================
+// Runtime Functions
+// ============================================================================
+
+/**
+ * Check if a value is a revivable (can be handled by any module in the registry)
+ */
+export const isRevivable = (value: unknown, revivables: RevivablesRegistry = defaultRevivables): value is Revivable =>
+  revivables.some(module => module.is(value))
+
+/**
+ * Check if a value is a revivable box
+ */
+export const isRevivableBox = (value: unknown): value is RevivableBox =>
+  value !== null &&
+  typeof value === 'object' &&
+  OSRA_BOX_VALUE in value &&
+  (value as Record<string, unknown>)[OSRA_BOX_VALUE] === 'revivable'
+
+/**
+ * Find the revivable module that can handle a given value
+ */
+export function findRevivableForValue(
+  value: unknown,
   revivables: RevivablesRegistry
-): RevivableModuleBase<T> | undefined {
-  const found = revivables.find(revivable => revivable.is(value))
-  return found as RevivableModuleBase<T> | undefined
+): RevivableModuleRuntime | undefined {
+  return revivables.find(module => module.is(value))
 }
 
-// Find the revivable module by type name
+/**
+ * Find the revivable module by type name
+ */
 export function findRevivableByType(
-  type: RevivableVariantType,
+  type: string,
   revivables: RevivablesRegistry
-): RevivableModuleBase | undefined {
-  const found = revivables.find(revivable => revivable.type === type)
-  return found as RevivableModuleBase | undefined
+): RevivableModuleRuntime | undefined {
+  return revivables.find(module => module.type === type)
 }
 
-// Determine if a value should be boxed based on its type and context
+/**
+ * Determine if a value should be boxed based on its type and context
+ */
 export const shouldBox = (value: unknown, context: ConnectionRevivableContext): boolean => {
   const module = findRevivableForValue(value, context.revivables)
   if (!module) return false
   return module.shouldBox(value, context)
 }
 
-export const box = (value: Revivable, context: ConnectionRevivableContext) => {
+/**
+ * Box a revivable value
+ */
+export const box = (value: Revivable, context: ConnectionRevivableContext): RevivableBox => {
   if (shouldBox(value, context)) {
     const module = findRevivableForValue(value, context.revivables)
     if (module) {
       return {
-        [OSRA_BOX]: 'revivable',
+        [OSRA_BOX_VALUE]: 'revivable',
         ...module.box(value, context)
-      } as RevivableBox
+      } as unknown as RevivableBox
     }
   }
 
   // For capable transports (or unknown types on JSON transport), just mark the type but pass through the value
+  // This creates a passthrough box where the value is included directly
+  const passthroughType =
+    isMessagePort(value) ? 'messagePort' as const
+    : isArrayBuffer(value) ? 'arrayBuffer' as const
+    : isReadableStream(value) ? 'readableStream' as const
+    : 'unknown' as const
+
   return {
-    [OSRA_BOX]: 'revivable',
-    ...'isJson' in context.transport && context.transport.isJson
-      ? { type: 'unknown' as const, value }
-      : {
-        type:
-          isMessagePort(value) ? 'messagePort' as const
-          : isArrayBuffer(value) ? 'arrayBuffer' as const
-          : isReadableStream(value) ? 'readableStream' as const
-          : 'unknown' as const,
-        value
-      }
-  } as ReviveBoxBase<RevivableToRevivableType<typeof value>>
+    [OSRA_BOX_VALUE]: 'revivable',
+    type: passthroughType,
+    value
+  } as unknown as RevivableBox
 }
 
+/**
+ * Recursively box all revivable values in a structure
+ */
 export const recursiveBox = <T extends Capable>(value: T, context: ConnectionRevivableContext): DeepReplace<T, Revivable, RevivableBox> => {
-  const boxedValue = isRevivable(value) ? box(value, context) : value
+  const boxedValue = isRevivable(value, context.revivables) ? box(value, context) : value
   return (
-    Array.isArray(boxedValue) ? boxedValue.map(value => recursiveBox(value, context)) as DeepReplace<T, Revivable, RevivableBox>
+    Array.isArray(boxedValue) ? boxedValue.map(v => recursiveBox(v, context)) as DeepReplace<T, Revivable, RevivableBox>
     : boxedValue && typeof boxedValue === 'object' && Object.getPrototypeOf(boxedValue) === Object.prototype ? (
       Object.fromEntries(
         Object
           .entries(boxedValue)
-          .map(([key, value]: [string, Capable]) => [
-            key,
-            isRevivableBox(boxedValue) && boxedValue.type === 'messagePort' && boxedValue.value instanceof MessagePort
-            || isRevivableBox(boxedValue) && boxedValue.type === 'arrayBuffer' && boxedValue.value instanceof ArrayBuffer
-            || isRevivableBox(boxedValue) && boxedValue.type === 'readableStream' && boxedValue.value instanceof ReadableStream
-              ? value
-              : recursiveBox(value, context)
-          ])
+          .map(([key, v]: [string, Capable]) => {
+            // Skip recursion for passthrough values (where the value is the actual transferable)
+            if (isRevivableBox(boxedValue) && 'value' in boxedValue) {
+              const passthrough = boxedValue.value
+              if (
+                (boxedValue.type === 'messagePort' && passthrough instanceof MessagePort) ||
+                (boxedValue.type === 'arrayBuffer' && passthrough instanceof ArrayBuffer) ||
+                (boxedValue.type === 'readableStream' && passthrough instanceof ReadableStream)
+              ) {
+                return [key, v]
+              }
+            }
+            return [key, recursiveBox(v, context)]
+          })
       )
     ) as DeepReplace<T, Revivable, RevivableBox>
     : boxedValue as DeepReplace<T, Revivable, RevivableBox>
   )
 }
 
-export const revive = (box: RevivableBox, context: ConnectionRevivableContext) => {
+/**
+ * Revive a boxed value back to its original form
+ */
+export const revive = (boxedValue: RevivableBox, context: ConnectionRevivableContext): Revivable => {
   // If the value got properly sent through the protocol as is, we don't need to revive it
-  if (isRevivable(box.value)) return box.value
-
-  // Use dynamic lookup to find the appropriate reviver
-  const module = findRevivableByType(box.type, context.revivables)
-  if (module) {
-    return module.revive(box, context)
+  // (passthrough case for capable transports)
+  if ('value' in boxedValue && isRevivable(boxedValue.value, context.revivables)) {
+    return boxedValue.value as Revivable
   }
 
-  return box as DeepReplace<RevivableBox, RevivableBox, Revivable>
+  // Use dynamic lookup to find the appropriate reviver
+  const module = findRevivableByType(boxedValue.type, context.revivables)
+  if (module) {
+    return module.revive(boxedValue, context) as Revivable
+  }
+
+  return boxedValue as unknown as Revivable
 }
 
+/**
+ * Recursively revive all boxed values in a structure
+ */
 export const recursiveRevive = <T extends Capable>(value: T, context: ConnectionRevivableContext): DeepReplace<T, RevivableBox, Revivable> => {
   const recursedValue = (
     isTransferable(value) ? value
-    : Array.isArray(value) ? value.map(value => recursiveRevive(value, context)) as DeepReplace<T, RevivableBox, Revivable>
+    : Array.isArray(value) ? value.map(v => recursiveRevive(v, context)) as DeepReplace<T, RevivableBox, Revivable>
     : value && typeof value === 'object' ? (
       Object.fromEntries(
         Object
           .entries(value)
-          .map(([key, value]: [string, Capable]) => [
+          .map(([key, v]: [string, Capable]) => [
             key,
-            recursiveRevive(value, context)
+            recursiveRevive(v, context)
           ])
       )
     ) as DeepReplace<T, RevivableBox, Revivable>
