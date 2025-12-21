@@ -3,7 +3,6 @@ import type { ConnectionRevivableContext } from '../connection'
 import type { DeepReplace } from '../replace'
 
 import { OSRA_BOX as OSRA_BOX_VALUE } from '../../types'
-import { isTransferable } from '../type-guards'
 
 import * as messagePort from './message-port'
 import * as promise from './promise'
@@ -252,6 +251,26 @@ export const isRevivableBox = (value: unknown): value is RevivableBox =>
   typeof value === 'object' &&
   OSRA_BOX_VALUE in value &&
   (value as Record<string, unknown>)[OSRA_BOX_VALUE] === 'revivable'
+
+/**
+ * Check if a value is transferable (can be included in postMessage transfer list)
+ * Includes modules with supportsPassthrough plus native transferable types
+ */
+export const isTransferable = (value: unknown): value is Transferable =>
+  // Check revivable modules with supportsPassthrough
+  messagePort.is(value) ||
+  arrayBuffer.is(value) ||
+  readableStream.is(value) ||
+  // Additional native transferable types without revivable modules
+  (globalThis.WritableStream && value instanceof globalThis.WritableStream) ||
+  (globalThis.TransformStream && value instanceof globalThis.TransformStream) ||
+  (globalThis.ImageBitmap && value instanceof globalThis.ImageBitmap)
+
+/**
+ * Check if a value is clonable (can be structured-cloned but not transferred)
+ */
+export const isClonable = (value: unknown): boolean =>
+  globalThis.SharedArrayBuffer && value instanceof globalThis.SharedArrayBuffer
 
 /**
  * Find the revivable module that can handle a given value

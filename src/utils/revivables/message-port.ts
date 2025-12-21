@@ -3,8 +3,14 @@ import type { ConnectionRevivableContext } from '../connection'
 import type { StrictMessagePort } from '../message-channel'
 
 import { OSRA_BOX } from '../../types'
-import { isRevivableBox } from '../type-guards'
 import { getTransferableObjects } from '../transferable'
+
+// Note: isRevivableBox is imported late to avoid circular dependency
+const isRevivableBox = (value: unknown): boolean =>
+  value !== null &&
+  typeof value === 'object' &&
+  OSRA_BOX in value &&
+  (value as Record<string, unknown>)[OSRA_BOX] === 'revivable'
 
 export const type = 'messagePort' as const
 export const supportsPassthrough = true as const
@@ -20,6 +26,9 @@ export type Box = { [OSRA_BOX]: 'revivable' } & Boxed
 
 export const is = (value: unknown): value is Source =>
   value instanceof MessagePort
+
+// MessagePort is transferable
+export const isTransferable = is
 
 export const isBox = (value: unknown): value is Box =>
   value !== null &&

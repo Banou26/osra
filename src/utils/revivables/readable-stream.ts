@@ -2,8 +2,8 @@ import type { Capable } from '../../types'
 import type { ConnectionRevivableContext } from '../connection'
 
 import { OSRA_BOX } from '../../types'
-import { isRevivablePromiseBox } from '../type-guards'
 import { getTransferableObjects } from '../transferable'
+import * as promise from './promise'
 
 export const type = 'readableStream' as const
 export const supportsPassthrough = true as const
@@ -24,6 +24,9 @@ export type PullContext = {
 
 export const is = (value: unknown): value is Source =>
   value instanceof ReadableStream
+
+// ReadableStream is transferable
+export const isTransferable = is
 
 export const isBox = (value: unknown): value is Box =>
   value !== null &&
@@ -75,7 +78,7 @@ export const revive = (
     pull(controller) {
       return new Promise((resolve, reject) => {
         value.port.addEventListener('message', async ({ data }: MessageEvent<Capable>) => {
-          if (!isRevivablePromiseBox(data)) throw new Error(`Proxied function did not return a promise`)
+          if (!promise.isBox(data)) throw new Error(`Proxied function did not return a promise`)
           const result = context.recursiveRevive(data, context) as Promise<ReadableStreamReadResult<any>>
           result
             .then(result => {
