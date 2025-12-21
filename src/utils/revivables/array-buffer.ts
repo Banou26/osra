@@ -1,4 +1,5 @@
 import type { ConnectionRevivableContext } from '../connection'
+import { OSRA_BOX } from '../../types'
 
 export const type = 'arrayBuffer' as const
 
@@ -9,8 +10,17 @@ export type Boxed = {
   base64Buffer: string
 }
 
+export type Box = { [OSRA_BOX]: 'revivable' } & Boxed
+
 export const is = (value: unknown): value is Source =>
   value instanceof ArrayBuffer
+
+export const isBox = (value: unknown): value is Box =>
+  value !== null &&
+  typeof value === 'object' &&
+  OSRA_BOX in value &&
+  (value as Record<string, unknown>)[OSRA_BOX] === 'revivable' &&
+  (value as Record<string, unknown>).type === type
 
 export const shouldBox = (_value: Source, context: ConnectionRevivableContext): boolean =>
   'isJson' in context.transport && Boolean(context.transport.isJson)

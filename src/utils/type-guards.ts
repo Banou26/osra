@@ -320,43 +320,31 @@ export const isTransport = (value: any): value is Transport =>
 // Revivable Box Type Guards
 // ============================================================================
 
-// Import isRevivableBox from revivables for use in the type guards below
-import { isRevivableBox } from './revivables'
+// Import module-based isBox guards
+import * as messagePort from './revivables/message-port'
+import * as promise from './revivables/promise'
+import * as func from './revivables/function'
+import * as typedArray from './revivables/typed-array'
+import * as arrayBuffer from './revivables/array-buffer'
+import * as error from './revivables/error'
+import * as readableStream from './revivables/readable-stream'
+import * as date from './revivables/date'
+import { defaultRevivables, findRevivableForValue } from './revivables'
 
-export const isRevivableMessagePortBox = (value: any): value is RevivableBox & { type: 'messagePort' } =>
-  isRevivableBox(value) && value.type === 'messagePort'
-
-export const isRevivablePromiseBox = (value: any): value is RevivableBox & { type: 'promise' } =>
-  isRevivableBox(value) && value.type === 'promise'
-
-export const isRevivableFunctionBox = (value: any): value is RevivableBox & { type: 'function' } =>
-  isRevivableBox(value) && value.type === 'function'
-
-export const isRevivableTypedArrayBox = (value: any): value is RevivableBox & { type: 'typedArray' } =>
-  isRevivableBox(value) && value.type === 'typedArray'
-
-export const isRevivableArrayBufferBox = (value: any): value is RevivableBox & { type: 'arrayBuffer' } =>
-  isRevivableBox(value) && value.type === 'arrayBuffer'
-
-export const isRevivableReadableStreamBox = (value: any): value is RevivableBox & { type: 'readableStream' } =>
-  isRevivableBox(value) && value.type === 'readableStream'
-
-export const isRevivableErrorBox = (value: any): value is RevivableBox & { type: 'error' } =>
-  isRevivableBox(value) && value.type === 'error'
-
-export const isRevivableDateBox = (value: any): value is RevivableBox & { type: 'date' } =>
-  isRevivableBox(value) && value.type === 'date'
+// Re-export module-based isBox guards with consistent naming
+export const isRevivableMessagePortBox = messagePort.isBox
+export const isRevivablePromiseBox = promise.isBox
+export const isRevivableFunctionBox = func.isBox
+export const isRevivableTypedArrayBox = typedArray.isBox
+export const isRevivableArrayBufferBox = arrayBuffer.isBox
+export const isRevivableErrorBox = error.isBox
+export const isRevivableReadableStreamBox = readableStream.isBox
+export const isRevivableDateBox = date.isBox
 
 export const revivableBoxToType = (value: RevivableBox) => value.type
 
 export const revivableToType = <T extends Revivable>(value: T): SourceToRevivableType<T> => {
-  if (isMessagePort(value)) return 'messagePort' as SourceToRevivableType<T>
-  if (isFunction(value)) return 'function' as SourceToRevivableType<T>
-  if (isPromise(value)) return 'promise' as SourceToRevivableType<T>
-  if (isTypedArray(value)) return 'typedArray' as SourceToRevivableType<T>
-  if (isArrayBuffer(value)) return 'arrayBuffer' as SourceToRevivableType<T>
-  if (isReadableStream(value)) return 'readableStream' as SourceToRevivableType<T>
-  if (isDate(value)) return 'date' as SourceToRevivableType<T>
-  if (isError(value)) return 'error' as SourceToRevivableType<T>
+  const module = findRevivableForValue(value, defaultRevivables)
+  if (module) return module.type as SourceToRevivableType<T>
   throw new Error('Unknown revivable type')
 }

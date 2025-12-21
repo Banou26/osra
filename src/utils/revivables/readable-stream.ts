@@ -1,6 +1,7 @@
 import type { Capable } from '../../types'
 import type { ConnectionRevivableContext } from '../connection'
 
+import { OSRA_BOX } from '../../types'
 import { isRevivablePromiseBox } from '../type-guards'
 import { getTransferableObjects } from '../transferable'
 
@@ -13,6 +14,8 @@ export type Boxed = {
   port: MessagePort
 }
 
+export type Box = { [OSRA_BOX]: 'revivable' } & Boxed
+
 // Context type for pull/cancel messages
 export type PullContext = {
   type: 'pull' | 'cancel'
@@ -20,6 +23,13 @@ export type PullContext = {
 
 export const is = (value: unknown): value is Source =>
   value instanceof ReadableStream
+
+export const isBox = (value: unknown): value is Box =>
+  value !== null &&
+  typeof value === 'object' &&
+  OSRA_BOX in value &&
+  (value as Record<string, unknown>)[OSRA_BOX] === 'revivable' &&
+  (value as Record<string, unknown>).type === type
 
 export const shouldBox = (_value: Source, context: ConnectionRevivableContext): boolean =>
   !context.platformCapabilities.transferableStream

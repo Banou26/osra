@@ -61,6 +61,7 @@ export interface RevivableModule<
 export interface RevivableModuleRuntime {
   readonly type: string
   is: (value: unknown) => boolean
+  isBox: (value: unknown) => boolean
   shouldBox: (value: any, context: ConnectionRevivableContext) => boolean
   box: (value: any, context: ConnectionRevivableContext) => { type: string }
   revive: (value: any, context: ConnectionRevivableContext) => unknown
@@ -97,9 +98,14 @@ export type DefaultRevivables = typeof defaultRevivables
 export type ExtractSource<T> = T extends { is: (value: unknown) => value is infer S } ? S : never
 
 /**
- * Given a revivable module, extract its Boxed type
+ * Given a revivable module, extract its Boxed type (without OSRA_BOX marker)
  */
 export type ExtractBoxed<T> = T extends { box: (...args: any[]) => infer B } ? B : never
+
+/**
+ * Given a revivable module, extract its Box type (with OSRA_BOX marker)
+ */
+export type ExtractBox<T> = T extends { isBox: (value: unknown) => value is infer B } ? B : never
 
 /**
  * Given a revivable module, extract its type string literal
@@ -119,6 +125,12 @@ export type InferRevivableVariant<TModules extends readonly unknown[]> =
   ExtractBoxed<TModules[number]>
 
 /**
+ * Given an array of revivable modules, extract the union of all Box types (with OSRA_BOX marker)
+ */
+export type InferRevivableBox<TModules extends readonly unknown[]> =
+  ExtractBox<TModules[number]>
+
+/**
  * Given an array of revivable modules, extract the union of all type string literals
  */
 export type InferRevivableType<TModules extends readonly unknown[]> =
@@ -134,7 +146,7 @@ export type InferRevivableType<TModules extends readonly unknown[]> =
 export type Revivable = InferRevivable<DefaultRevivables>
 
 /**
- * The union of all boxed types (inferred from defaultRevivables)
+ * The union of all boxed types without OSRA_BOX marker (inferred from defaultRevivables)
  */
 export type RevivableVariant = InferRevivableVariant<DefaultRevivables>
 
@@ -144,15 +156,10 @@ export type RevivableVariant = InferRevivableVariant<DefaultRevivables>
 export type RevivableVariantType = InferRevivableType<DefaultRevivables>
 
 /**
- * A boxed revivable value with the OSRA_BOX marker.
- * Includes an optional `value` field for passthrough cases where the value
- * doesn't need to be serialized (e.g., MessagePort on capable transports).
+ * A boxed revivable value with the OSRA_BOX marker (inferred from defaultRevivables).
+ * Also includes passthrough support with optional `value` field.
  */
-export type RevivableBox = {
-  [K in typeof OSRA_BOX_VALUE]: 'revivable'
-} & RevivableVariant & {
-  value?: unknown
-}
+export type RevivableBox = InferRevivableBox<DefaultRevivables> & { value?: unknown }
 
 /**
  * Base type for a revivable box
@@ -169,36 +176,61 @@ export type ReviveBoxBase<T extends RevivableVariantType = RevivableVariantType>
 }
 
 // ============================================================================
-// Type Mapping Utilities
+// Type Mapping Utilities (Fully Inferred)
 // ============================================================================
 
 /**
- * Map a revivable type string to its Source type
+ * Given a Source type and modules array, find the matching type string.
+ * Iterates over all modules and returns the type of the first module whose Source matches.
  */
-export type RevivableVariantTypeToSource<T extends RevivableVariantType> =
-  T extends 'messagePort' ? messagePort.Source :
-  T extends 'promise' ? promise.Source :
-  T extends 'function' ? func.Source :
-  T extends 'typedArray' ? typedArray.Source :
-  T extends 'arrayBuffer' ? arrayBuffer.Source :
-  T extends 'error' ? error.Source :
-  T extends 'readableStream' ? readableStream.Source :
-  T extends 'date' ? date.Source :
-  never
+export type SourceToRevivableType<
+  TSource,
+  TModules extends readonly unknown[] = DefaultRevivables
+> = {
+  [K in keyof TModules]: TModules[K] extends { is: (v: unknown) => v is infer S, readonly type: infer TType }
+    ? TSource extends S ? TType : never
+    : never
+}[number]
 
 /**
- * Map a Source type to its revivable type string
+ * Given a type string and modules array, find the matching Source type.
+ * Iterates over all modules and returns the Source of the first module whose type matches.
  */
-export type SourceToRevivableType<T extends Revivable> =
-  T extends messagePort.Source ? 'messagePort' :
-  T extends promise.Source ? 'promise' :
-  T extends func.Source ? 'function' :
-  T extends typedArray.Source ? 'typedArray' :
-  T extends arrayBuffer.Source ? 'arrayBuffer' :
-  T extends readableStream.Source ? 'readableStream' :
-  T extends date.Source ? 'date' :
-  T extends error.Source ? 'error' :
-  never
+export type RevivableTypeToSource<
+  TType extends string,
+  TModules extends readonly unknown[] = DefaultRevivables
+> = {
+  [K in keyof TModules]: TModules[K] extends { readonly type: TType, is: (v: unknown) => v is infer S }
+    ? S
+    : never
+}[number]
+
+/**
+ * Given a type string and modules array, find the matching Boxed type.
+ */
+export type RevivableTypeToBoxed<
+  TType extends string,
+  TModules extends readonly unknown[] = DefaultRevivables
+> = {
+  [K in keyof TModules]: TModules[K] extends { readonly type: TType, box: (...args: any[]) => infer B }
+    ? B
+    : never
+}[number]
+
+/**
+ * Given a type string and modules array, find the matching Box type (with OSRA_BOX marker).
+ */
+export type RevivableTypeToBox<
+  TType extends string,
+  TModules extends readonly unknown[] = DefaultRevivables
+> = {
+  [K in keyof TModules]: TModules[K] extends { readonly type: TType, isBox: (v: unknown) => v is infer B }
+    ? B
+    : never
+}[number]
+
+// Backwards compatibility alias
+export type RevivableVariantTypeToSource<T extends RevivableVariantType> = RevivableTypeToSource<T>
 
 // ============================================================================
 // Registry Types

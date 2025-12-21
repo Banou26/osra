@@ -1,19 +1,26 @@
 import type { ConnectionRevivableContext } from '../connection'
+import { OSRA_BOX } from '../../types'
 
-// Type name as a literal type
 export const type = 'date' as const
 
-// Source type - the original value type that this module handles
 export type Source = Date
 
-// Boxed type - the serialized form of the value
 export type Boxed = {
   type: typeof type
   ISOString: string
 }
 
+export type Box = { [OSRA_BOX]: 'revivable' } & Boxed
+
 export const is = (value: unknown): value is Source =>
   value instanceof Date
+
+export const isBox = (value: unknown): value is Box =>
+  value !== null &&
+  typeof value === 'object' &&
+  OSRA_BOX in value &&
+  (value as Record<string, unknown>)[OSRA_BOX] === 'revivable' &&
+  (value as Record<string, unknown>).type === type
 
 export const shouldBox = (_value: Source, _context: ConnectionRevivableContext): boolean =>
   true

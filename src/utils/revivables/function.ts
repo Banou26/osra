@@ -1,6 +1,7 @@
 import type { Capable } from '../../types'
 import type { ConnectionRevivableContext } from '../connection'
 
+import { OSRA_BOX } from '../../types'
 import { isRevivablePromiseBox } from '../type-guards'
 import { getTransferableObjects } from '../transferable'
 
@@ -13,6 +14,8 @@ export type Boxed = {
   port: MessagePort
 }
 
+export type Box = { [OSRA_BOX]: 'revivable' } & Boxed
+
 // Context type for function call messages
 export type CallContext = [
   /** MessagePort that will be used to send the result of the function call */
@@ -23,6 +26,13 @@ export type CallContext = [
 
 export const is = (value: unknown): value is Source =>
   typeof value === 'function'
+
+export const isBox = (value: unknown): value is Box =>
+  value !== null &&
+  typeof value === 'object' &&
+  OSRA_BOX in value &&
+  (value as Record<string, unknown>)[OSRA_BOX] === 'revivable' &&
+  (value as Record<string, unknown>).type === type
 
 export const shouldBox = (_value: Source, _context: ConnectionRevivableContext): boolean =>
   true
