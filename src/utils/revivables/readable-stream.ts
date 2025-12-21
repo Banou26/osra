@@ -6,6 +6,7 @@ import { isRevivablePromiseBox } from '../type-guards'
 import { getTransferableObjects } from '../transferable'
 
 export const type = 'readableStream' as const
+export const supportsPassthrough = true as const
 
 export type Source = ReadableStream
 

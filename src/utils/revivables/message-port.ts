@@ -7,6 +7,7 @@ import { isRevivableBox } from '../type-guards'
 import { getTransferableObjects } from '../transferable'
 
 export const type = 'messagePort' as const
+export const supportsPassthrough = true as const
 
 export type Source = MessagePort
 

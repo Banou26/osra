@@ -2,6 +2,7 @@ import type { ConnectionRevivableContext } from '../connection'
 import { OSRA_BOX } from '../../types'
 
 export const type = 'arrayBuffer' as const
+export const supportsPassthrough = true as const
 
 export type Source = ArrayBuffer
 

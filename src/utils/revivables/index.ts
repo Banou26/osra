@@ -3,12 +3,7 @@ import type { ConnectionRevivableContext } from '../connection'
 import type { DeepReplace } from '../replace'
 
 import { OSRA_BOX as OSRA_BOX_VALUE } from '../../types'
-import {
-  isArrayBuffer,
-  isMessagePort,
-  isReadableStream,
-  isTransferable
-} from '../type-guards'
+import { isTransferable } from '../type-guards'
 
 import * as messagePort from './message-port'
 import * as promise from './promise'
@@ -60,6 +55,7 @@ export interface RevivableModule<
  */
 export interface RevivableModuleRuntime {
   readonly type: string
+  readonly supportsPassthrough?: boolean
   is: (value: unknown) => boolean
   isBox: (value: unknown) => boolean
   shouldBox: (value: any, context: ConnectionRevivableContext) => boolean
@@ -287,6 +283,16 @@ export const shouldBox = (value: unknown, context: ConnectionRevivableContext): 
 }
 
 /**
+ * Find the revivable module that supports passthrough for a given value
+ */
+export function findPassthroughModule(
+  value: unknown,
+  revivables: RevivablesRegistry
+): RevivableModuleRuntime | undefined {
+  return revivables.find(module => module.supportsPassthrough && module.is(value))
+}
+
+/**
  * Box a revivable value
  */
 export const box = (value: Revivable, context: ConnectionRevivableContext): RevivableBox => {
@@ -302,17 +308,23 @@ export const box = (value: Revivable, context: ConnectionRevivableContext): Revi
 
   // For capable transports (or unknown types on JSON transport), just mark the type but pass through the value
   // This creates a passthrough box where the value is included directly
-  const passthroughType =
-    isMessagePort(value) ? 'messagePort' as const
-    : isArrayBuffer(value) ? 'arrayBuffer' as const
-    : isReadableStream(value) ? 'readableStream' as const
-    : 'unknown' as const
+  const passthroughModule = findPassthroughModule(value, context.revivables)
+  const passthroughType = passthroughModule?.type ?? 'unknown'
 
   return {
     [OSRA_BOX_VALUE]: 'revivable',
     type: passthroughType,
     value
   } as unknown as RevivableBox
+}
+
+/**
+ * Check if a boxed value is a passthrough (value transferred directly)
+ */
+const isPassthroughBox = (boxedValue: unknown, revivables: RevivablesRegistry): boolean => {
+  if (!isRevivableBox(boxedValue) || !('value' in boxedValue)) return false
+  const passthroughModule = findRevivableByType(boxedValue.type, revivables)
+  return Boolean(passthroughModule?.supportsPassthrough && passthroughModule.is(boxedValue.value))
 }
 
 /**
@@ -328,15 +340,8 @@ export const recursiveBox = <T extends Capable>(value: T, context: ConnectionRev
           .entries(boxedValue)
           .map(([key, v]: [string, Capable]) => {
             // Skip recursion for passthrough values (where the value is the actual transferable)
-            if (isRevivableBox(boxedValue) && 'value' in boxedValue) {
-              const passthrough = boxedValue.value
-              if (
-                (boxedValue.type === 'messagePort' && passthrough instanceof MessagePort) ||
-                (boxedValue.type === 'arrayBuffer' && passthrough instanceof ArrayBuffer) ||
-                (boxedValue.type === 'readableStream' && passthrough instanceof ReadableStream)
-              ) {
-                return [key, v]
-              }
+            if (isPassthroughBox(boxedValue, context.revivables)) {
+              return [key, v]
             }
             return [key, recursiveBox(v, context)]
           })
