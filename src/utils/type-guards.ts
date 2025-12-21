@@ -10,14 +10,9 @@ import type {
 import { OSRA_BOX, OSRA_KEY } from '../types'
 import { getWebExtensionRuntime } from './platform'
 
-// Import is guards from revivable modules for local use
-import { is as _isMessagePort } from './revivables/message-port'
-import { is as _isPromise } from './revivables/promise'
-import { is as _isFunction } from './revivables/function'
-import { is as _isArrayBuffer } from './revivables/array-buffer'
-import { is as _isReadableStream } from './revivables/readable-stream'
-import { is as _isDate } from './revivables/date'
-import { is as _isError } from './revivables/error'
+// Import revivable modules for type guards
+import * as messagePort from './revivables/message-port'
+import { defaultRevivables, findRevivableForValue } from './revivables'
 
 // Re-export isRevivable and isRevivableBox from revivables module
 // These are now dynamically determined based on the registered modules
@@ -40,83 +35,24 @@ import type {
 } from './revivables'
 
 // ============================================================================
-// TypedArray Utilities
+// TypedArray Utilities (re-exported from typed-array module)
 // ============================================================================
 
-const typedArrayConstructors = [
-  Int8Array,
-  Uint8Array,
-  Uint8ClampedArray,
-  Int16Array,
-  Uint16Array,
-  Int32Array,
-  Uint32Array,
-  Float16Array,
-  Float32Array,
-  Float64Array,
-  BigInt64Array,
-  BigUint64Array
-]
-export type TypedArrayConstructor = typeof typedArrayConstructors[number]
+export type {
+  TypedArray,
+  TypedArrayConstructor,
+  TypeArrayType
+} from './revivables/typed-array'
 
-const typedArrays = [
-  new Int8Array(),
-  new Uint8Array(),
-  new Uint8ClampedArray(),
-  new Int16Array(),
-  new Uint16Array(),
-  new Int32Array(),
-  new Uint32Array(),
-  new Float16Array(),
-  new Float32Array(),
-  new Float64Array(),
-  new BigInt64Array(),
-  new BigUint64Array()
-]
-export type TypedArray = typeof typedArrays[number]
-export const typedArrayToType = <T extends TypedArray>(value: T) => {
-  const type =
-    value instanceof Int8Array ? 'Int8Array' :
-    value instanceof Uint8Array ? 'Uint8Array' :
-    value instanceof Uint8ClampedArray ? 'Uint8ClampedArray' :
-    value instanceof Int16Array ? 'Int16Array' :
-    value instanceof Uint16Array ? 'Uint16Array' :
-    value instanceof Int32Array ? 'Int32Array' :
-    value instanceof Uint32Array ? 'Uint32Array' :
-    value instanceof Float16Array ? 'Float16Array' :
-    value instanceof Float32Array ? 'Float32Array' :
-    value instanceof Float64Array ? 'Float64Array' :
-    value instanceof BigInt64Array ? 'BigInt64Array' :
-    value instanceof BigUint64Array ? 'BigUint64Array' :
-    undefined
-  if (type === undefined) throw new Error('Unknown typed array type')
-  return type
-}
-export type TypeArrayType = ReturnType<typeof typedArrayToType>
-export const typedArrayTypeToTypedArrayConstructor = (value: TypeArrayType): TypedArrayConstructor => {
-  const typedArray =
-    value === 'Int8Array' ? Int8Array :
-    value === 'Uint8Array' ? Uint8Array :
-    value === 'Uint8ClampedArray' ? Uint8ClampedArray :
-    value === 'Int16Array' ? Int16Array :
-    value === 'Uint16Array' ? Uint16Array :
-    value === 'Int32Array' ? Int32Array :
-    value === 'Uint32Array' ? Uint32Array :
-    value === 'Float16Array' ? Float16Array :
-    value === 'Float32Array' ? Float32Array :
-    value === 'Float64Array' ? Float64Array :
-    value === 'BigInt64Array' ? BigInt64Array :
-    value === 'BigUint64Array' ? BigUint64Array :
-    undefined
-  if (typedArray === undefined) throw new Error('Unknown typed array type')
-  return typedArray
-}
+export {
+  typedArrayToType,
+  typedArrayTypeToTypedArrayConstructor,
+  is as isTypedArray
+} from './revivables/typed-array'
 
 // ============================================================================
 // Basic Type Guards
 // ============================================================================
-
-export const isTypedArray = (value: any): value is TypedArray => typedArrayConstructors.some(typedArray => value instanceof typedArray)
 export const isWebSocket = (value: any) => value instanceof WebSocket
 export const isServiceWorkerContainer = (value: any): value is ServiceWorkerContainer => globalThis.ServiceWorkerContainer && value instanceof ServiceWorkerContainer
 export const isWorker = (value: any): value is Worker => globalThis.Worker && value instanceof Worker
@@ -124,14 +60,6 @@ export const isWorker = (value: any): value is Worker => globalThis.Worker && va
 export const isDedicatedWorker = (value: any): value is DedicatedWorkerGlobalScope => globalThis.DedicatedWorkerGlobalScope && value instanceof DedicatedWorkerGlobalScope
 export const isSharedWorker = (value: any): value is SharedWorker => globalThis.SharedWorker && value instanceof SharedWorker
 
-// Re-export is guards from revivable modules
-export const isMessagePort = _isMessagePort
-export const isPromise = _isPromise
-export const isFunction = _isFunction
-export const isArrayBuffer = _isArrayBuffer
-export const isReadableStream = _isReadableStream
-export const isDate = _isDate
-export const isError = _isError
 
 // ============================================================================
 // Osra Message Type Guards
@@ -148,18 +76,8 @@ export const isOsraMessage = (value: any): value is Message =>
 // Clonable and Transferable Type Guards
 // ============================================================================
 
-export const isClonable = (value: any) =>
-    globalThis.SharedArrayBuffer && value instanceof globalThis.SharedArrayBuffer ? true
-  : false
-
-export const isTransferable = (value: any): value is Transferable =>
-    globalThis.ArrayBuffer && value instanceof globalThis.ArrayBuffer ? true
-  : globalThis.MessagePort && value instanceof globalThis.MessagePort ? true
-  : globalThis.ReadableStream && value instanceof globalThis.ReadableStream ? true
-  : globalThis.WritableStream && value instanceof globalThis.WritableStream ? true
-  : globalThis.TransformStream && value instanceof globalThis.TransformStream ? true
-  : globalThis.ImageBitmap && value instanceof globalThis.ImageBitmap ? true
-  : false
+// Re-export from revivables module
+export { isTransferable, isClonable } from './revivables'
 
 export const isTransferBox = (value: any): value is TransferBox<any> =>
   Boolean(
@@ -267,7 +185,7 @@ export const isEmitTransport = (value: any): value is EmitTransport =>
   || isWorker(value)
   || isDedicatedWorker(value)
   || isSharedWorker(value)
-  || isMessagePort(value)
+  || messagePort.is(value)
   || isCustomEmitTransport(value)
 
 export function assertEmitTransport (transport: Transport): asserts transport is EmitTransport {
@@ -283,7 +201,7 @@ export const isReceiveTransport = (value: any): value is ReceiveTransport =>
   || isWorker(value)
   || isDedicatedWorker(value)
   || isSharedWorker(value)
-  || isMessagePort(value)
+  || messagePort.is(value)
   || isCustomReceiveTransport(value)
 
 export function assertReceiveTransport (transport: Transport): asserts transport is ReceiveTransport {
@@ -330,27 +248,6 @@ export const isTransport = (value: any): value is Transport =>
 // ============================================================================
 // Revivable Box Type Guards
 // ============================================================================
-
-// Import module-based isBox guards
-import * as messagePort from './revivables/message-port'
-import * as promise from './revivables/promise'
-import * as func from './revivables/function'
-import * as typedArray from './revivables/typed-array'
-import * as arrayBuffer from './revivables/array-buffer'
-import * as error from './revivables/error'
-import * as readableStream from './revivables/readable-stream'
-import * as date from './revivables/date'
-import { defaultRevivables, findRevivableForValue } from './revivables'
-
-// Re-export module-based isBox guards with consistent naming
-export const isRevivableMessagePortBox = messagePort.isBox
-export const isRevivablePromiseBox = promise.isBox
-export const isRevivableFunctionBox = func.isBox
-export const isRevivableTypedArrayBox = typedArray.isBox
-export const isRevivableArrayBufferBox = arrayBuffer.isBox
-export const isRevivableErrorBox = error.isBox
-export const isRevivableReadableStreamBox = readableStream.isBox
-export const isRevivableDateBox = date.isBox
 
 export const revivableBoxToType = (value: RevivableBox) => value.type
 

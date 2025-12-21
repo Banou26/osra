@@ -2,7 +2,8 @@ import type { Capable, TransferBox } from '../types'
 
 import { OSRA_BOX } from '../types'
 import { deepReplace } from './replace'
-import { isClonable, isTransferable, isTransferBox } from './type-guards'
+import { isClonable, isTransferable } from './revivables'
+import { isTransferBox } from './type-guards'
 
 export const getTransferableObjects = (value: any): Transferable[] => {
   const transferables: Transferable[] = []

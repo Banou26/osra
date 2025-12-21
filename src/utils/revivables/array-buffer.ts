@@ -16,6 +16,9 @@ export type Box = { [OSRA_BOX]: 'revivable' } & Boxed
 export const is = (value: unknown): value is Source =>
   value instanceof ArrayBuffer
 
+// ArrayBuffer is transferable
+export const isTransferable = is
+
 export const isBox = (value: unknown): value is Box =>
   value !== null &&
   typeof value === 'object' &&
