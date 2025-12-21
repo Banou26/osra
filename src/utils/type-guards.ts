@@ -10,6 +10,15 @@ import type {
 import { OSRA_BOX, OSRA_KEY } from '../types'
 import { getWebExtensionRuntime } from './platform'
 
+// Import is guards from revivable modules for local use
+import { is as _isMessagePort } from './revivables/message-port'
+import { is as _isPromise } from './revivables/promise'
+import { is as _isFunction } from './revivables/function'
+import { is as _isArrayBuffer } from './revivables/array-buffer'
+import { is as _isReadableStream } from './revivables/readable-stream'
+import { is as _isDate } from './revivables/date'
+import { is as _isError } from './revivables/error'
+
 // Re-export isRevivable and isRevivableBox from revivables module
 // These are now dynamically determined based on the registered modules
 export { isRevivable, isRevivableBox } from './revivables'
@@ -114,13 +123,15 @@ export const isWorker = (value: any): value is Worker => globalThis.Worker && va
 // @ts-expect-error
 export const isDedicatedWorker = (value: any): value is DedicatedWorkerGlobalScope => globalThis.DedicatedWorkerGlobalScope && value instanceof DedicatedWorkerGlobalScope
 export const isSharedWorker = (value: any): value is SharedWorker => globalThis.SharedWorker && value instanceof SharedWorker
-export const isMessagePort = (value: any) => value instanceof MessagePort
-export const isPromise = (value: any) => value instanceof Promise
-export const isFunction = (value: any): value is Function => typeof value === 'function'
-export const isArrayBuffer = (value: any) => value instanceof ArrayBuffer
-export const isReadableStream = (value: any) => value instanceof ReadableStream
-export const isDate = (value: any) => value instanceof Date
-export const isError = (value: any) => value instanceof Error
+
+// Re-export is guards from revivable modules
+export const isMessagePort = _isMessagePort
+export const isPromise = _isPromise
+export const isFunction = _isFunction
+export const isArrayBuffer = _isArrayBuffer
+export const isReadableStream = _isReadableStream
+export const isDate = _isDate
+export const isError = _isError
 
 // ============================================================================
 // Osra Message Type Guards
