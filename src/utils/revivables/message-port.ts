@@ -2,6 +2,7 @@ import type { Capable, Uuid } from '../../types'
 import type { ConnectionRevivableContext } from '../connection'
 import type { StrictMessagePort } from '../message-channel'
 
+import { OSRA_BOX } from '../../types'
 import { isRevivableBox } from '../type-guards'
 import { getTransferableObjects } from '../transferable'
 
@@ -14,8 +15,17 @@ export type Boxed = {
   portId: string
 }
 
+export type Box = { [OSRA_BOX]: 'revivable' } & Boxed
+
 export const is = (value: unknown): value is Source =>
   value instanceof MessagePort
+
+export const isBox = (value: unknown): value is Box =>
+  value !== null &&
+  typeof value === 'object' &&
+  OSRA_BOX in value &&
+  (value as Record<string, unknown>)[OSRA_BOX] === 'revivable' &&
+  (value as Record<string, unknown>).type === type
 
 export const shouldBox = (_value: Source, context: ConnectionRevivableContext): boolean =>
   'isJson' in context.transport && Boolean(context.transport.isJson)
