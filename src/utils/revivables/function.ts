@@ -1,30 +1,40 @@
-import type {
-  Capable,
-  RevivableFunction,
-  RevivableFunctionCallContext,
-  RevivableVariant
-} from '../../types'
+import type { Capable } from '../../types'
 import type { ConnectionRevivableContext } from '../connection'
 
 import { isRevivablePromiseBox } from '../type-guards'
 import { getTransferableObjects } from '../transferable'
 
-export const type = 'function'
+export const type = 'function' as const
 
-export const is = (value: unknown): value is Function =>
+export type Source = Function
+
+export type Boxed = {
+  type: typeof type
+  port: MessagePort
+}
+
+// Context type for function call messages
+export type CallContext = [
+  /** MessagePort that will be used to send the result of the function call */
+  MessagePort,
+  /** Arguments that will be passed to the function call */
+  Capable[]
+]
+
+export const is = (value: unknown): value is Source =>
   typeof value === 'function'
 
-export const shouldBox = (_value: Function, _context: ConnectionRevivableContext): boolean =>
+export const shouldBox = (_value: Source, _context: ConnectionRevivableContext): boolean =>
   true
 
 export const box = (
-  value: Function,
+  value: Source,
   context: ConnectionRevivableContext
-): RevivableVariant & { type: 'function' } => {
+): Boxed => {
   const { port1: localPort, port2: remotePort } = new MessageChannel()
   context.messagePorts.add(remotePort)
-  localPort.addEventListener('message', ({ data }:  MessageEvent<RevivableFunctionCallContext>) => {
-    const [returnValuePort, args] = context.recursiveRevive(data, context) as RevivableFunctionCallContext
+  localPort.addEventListener('message', ({ data }:  MessageEvent<CallContext>) => {
+    const [returnValuePort, args] = context.recursiveRevive(data, context) as CallContext
     const result = (async () => value(...args))()
     const boxedResult = context.recursiveBox(result, context)
     returnValuePort.postMessage(boxedResult, getTransferableObjects(boxedResult))
@@ -38,9 +48,9 @@ export const box = (
 }
 
 export const revive = (
-  value: RevivableFunction,
+  value: Boxed,
   context: ConnectionRevivableContext
-): Function => {
+): Source => {
   const func = (...args: Capable[]) =>
     new Promise((resolve, reject) => {
       const { port1: returnValueLocalPort, port2: returnValueRemotePort } = new MessageChannel()

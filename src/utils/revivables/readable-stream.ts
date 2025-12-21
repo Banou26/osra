@@ -1,34 +1,41 @@
-import type {
-  Capable,
-  RevivableReadableStream,
-  RevivableReadableStreamPullContext,
-  RevivableVariant
-} from '../../types'
+import type { Capable } from '../../types'
 import type { ConnectionRevivableContext } from '../connection'
 
 import { isRevivablePromiseBox } from '../type-guards'
 import { getTransferableObjects } from '../transferable'
 
-export const type = 'readableStream'
+export const type = 'readableStream' as const
 
-export const is = (value: unknown): value is ReadableStream =>
+export type Source = ReadableStream
+
+export type Boxed = {
+  type: typeof type
+  port: MessagePort
+}
+
+// Context type for pull/cancel messages
+export type PullContext = {
+  type: 'pull' | 'cancel'
+}
+
+export const is = (value: unknown): value is Source =>
   value instanceof ReadableStream
 
-export const shouldBox = (_value: ReadableStream, context: ConnectionRevivableContext): boolean =>
+export const shouldBox = (_value: Source, context: ConnectionRevivableContext): boolean =>
   !context.platformCapabilities.transferableStream
   || ('isJson' in context.transport && Boolean(context.transport.isJson))
 
 export const box = (
-  value: ReadableStream,
+  value: Source,
   context: ConnectionRevivableContext
-): RevivableVariant & { type: 'readableStream' } => {
+): Boxed => {
   const { port1: localPort, port2: remotePort } = new MessageChannel()
   context.messagePorts.add(remotePort)
 
   const reader = value.getReader()
 
-  localPort.addEventListener('message', async ({ data }:  MessageEvent<RevivableReadableStreamPullContext>) => {
-    const { type } = context.recursiveRevive(data, context) as RevivableReadableStreamPullContext
+  localPort.addEventListener('message', async ({ data }:  MessageEvent<PullContext>) => {
+    const { type } = context.recursiveRevive(data, context) as PullContext
     if (type === 'pull') {
       const pullResult = reader.read()
       const boxedResult = context.recursiveBox(pullResult, context)
@@ -47,9 +54,9 @@ export const box = (
 }
 
 export const revive = (
-  value: RevivableReadableStream,
+  value: Boxed,
   context: ConnectionRevivableContext
-): ReadableStream => {
+): Source => {
   context.messagePorts.add(value.port)
   value.port.start()
   return new ReadableStream({

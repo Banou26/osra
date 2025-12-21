@@ -1,21 +1,24 @@
-import type {
-  RevivableArrayBuffer,
-  RevivableVariant
-} from '../../types'
 import type { ConnectionRevivableContext } from '../connection'
 
-export const type = 'arrayBuffer'
+export const type = 'arrayBuffer' as const
 
-export const is = (value: unknown): value is ArrayBuffer =>
+export type Source = ArrayBuffer
+
+export type Boxed = {
+  type: typeof type
+  base64Buffer: string
+}
+
+export const is = (value: unknown): value is Source =>
   value instanceof ArrayBuffer
 
-export const shouldBox = (_value: ArrayBuffer, context: ConnectionRevivableContext): boolean =>
+export const shouldBox = (_value: Source, context: ConnectionRevivableContext): boolean =>
   'isJson' in context.transport && Boolean(context.transport.isJson)
 
 export const box = (
-  value: ArrayBuffer,
+  value: Source,
   _context: ConnectionRevivableContext
-): RevivableVariant & { type: 'arrayBuffer' } => {
+): Boxed => {
   return {
     type,
     base64Buffer: new Uint8Array(value).toBase64() as string
@@ -23,8 +26,8 @@ export const box = (
 }
 
 export const revive = (
-  value: RevivableArrayBuffer,
+  value: Boxed,
   _context: ConnectionRevivableContext
-): ArrayBuffer => {
+): Source => {
   return (Uint8Array.fromBase64(value.base64Buffer) as Uint8Array).buffer as ArrayBuffer
 }

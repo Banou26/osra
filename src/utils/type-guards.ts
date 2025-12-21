@@ -4,11 +4,35 @@ import type {
   CustomTransport, EmitJsonPlatformTransport,
   EmitTransport, JsonPlatformTransport,
   Message, ReceiveJsonPlatformTransport,
-  ReceiveTransport, Revivable, RevivableBox, RevivableToRevivableType, RevivableVariantType, TransferBox, Transport
+  ReceiveTransport, TransferBox, Transport
 } from '../types'
 
 import { OSRA_BOX, OSRA_KEY } from '../types'
 import { getWebExtensionRuntime } from './platform'
+
+// Re-export isRevivable and isRevivableBox from revivables module
+// These are now dynamically determined based on the registered modules
+export { isRevivable, isRevivableBox } from './revivables'
+
+// Re-export types
+export type {
+  Revivable,
+  RevivableBox,
+  RevivableVariant,
+  RevivableVariantType,
+  SourceToRevivableType
+} from './revivables'
+
+import type {
+  Revivable,
+  RevivableBox,
+  RevivableVariantType,
+  SourceToRevivableType
+} from './revivables'
+
+// ============================================================================
+// TypedArray Utilities
+// ============================================================================
 
 const typedArrayConstructors = [
   Int8Array,
@@ -79,6 +103,10 @@ export const typedArrayTypeToTypedArrayConstructor = (value: TypeArrayType): Typ
   return typedArray
 }
 
+// ============================================================================
+// Basic Type Guards
+// ============================================================================
+
 export const isTypedArray = (value: any): value is TypedArray => typedArrayConstructors.some(typedArray => value instanceof typedArray)
 export const isWebSocket = (value: any) => value instanceof WebSocket
 export const isServiceWorkerContainer = (value: any): value is ServiceWorkerContainer => globalThis.ServiceWorkerContainer && value instanceof ServiceWorkerContainer
@@ -94,12 +122,20 @@ export const isReadableStream = (value: any) => value instanceof ReadableStream
 export const isDate = (value: any) => value instanceof Date
 export const isError = (value: any) => value instanceof Error
 
+// ============================================================================
+// Osra Message Type Guards
+// ============================================================================
+
 export const isOsraMessage = (value: any): value is Message =>
   Boolean(
     value
     && typeof value === 'object'
     && (value as Message)[OSRA_KEY]
   )
+
+// ============================================================================
+// Clonable and Transferable Type Guards
+// ============================================================================
 
 export const isClonable = (value: any) =>
     globalThis.SharedArrayBuffer && value instanceof globalThis.SharedArrayBuffer ? true
@@ -120,6 +156,10 @@ export const isTransferBox = (value: any): value is TransferBox<any> =>
     && typeof value === 'object'
     && (value as TransferBox<Transferable>)[OSRA_BOX] === 'transferable'
   )
+
+// ============================================================================
+// WebExtension Type Guards
+// ============================================================================
 
 export type WebExtRuntime = typeof browser.runtime
 export const isWebExtensionRuntime = (value: any): value is WebExtRuntime => {
@@ -186,6 +226,10 @@ export const isWindow = (value: any): value is Window => {
     && (value as Window).history
   )
 }
+
+// ============================================================================
+// Transport Type Guards
+// ============================================================================
 
 export type IsEmitJsonOnlyTransport<T extends Transport> = T extends EmitJsonPlatformTransport ? true : false
 export const isEmitJsonOnlyTransport = (value: any): value is EmitJsonPlatformTransport =>
@@ -272,21 +316,12 @@ export const isTransport = (value: any): value is Transport =>
   || isReceiveTransport(value)
   || isCustomTransport(value)
 
-export const isRevivable = (value: any): value is Revivable =>
-  isMessagePort(value)
-  || isFunction(value)
-  || isPromise(value)
-  || isTypedArray(value)
-  || isArrayBuffer(value)
-  || isReadableStream(value)
-  || isDate(value)
-  || isError(value)
+// ============================================================================
+// Revivable Box Type Guards
+// ============================================================================
 
-export const isRevivableBox = (value: any): value is RevivableBox =>
-  value
-  && typeof value === 'object'
-  && OSRA_BOX in value
-  && value[OSRA_BOX] === 'revivable'
+// Import isRevivableBox from revivables for use in the type guards below
+import { isRevivableBox } from './revivables'
 
 export const isRevivableMessagePortBox = (value: any): value is RevivableBox & { type: 'messagePort' } =>
   isRevivableBox(value) && value.type === 'messagePort'
@@ -314,14 +349,14 @@ export const isRevivableDateBox = (value: any): value is RevivableBox & { type: 
 
 export const revivableBoxToType = (value: RevivableBox) => value.type
 
-export const revivableToType = <T extends Revivable>(value: T): RevivableToRevivableType<T> => {
-  if (isMessagePort(value)) return 'messagePort' as RevivableToRevivableType<T>
-  if (isFunction(value)) return 'function' as RevivableToRevivableType<T>
-  if (isPromise(value)) return 'promise' as RevivableToRevivableType<T>
-  if (isTypedArray(value)) return 'typedArray' as RevivableToRevivableType<T>
-  if (isArrayBuffer(value)) return 'arrayBuffer' as RevivableToRevivableType<T>
-  if (isReadableStream(value)) return 'readableStream' as RevivableToRevivableType<T>
-  if (isDate(value)) return 'date' as RevivableToRevivableType<T>
-  if (isError(value)) return 'error' as RevivableToRevivableType<T>
+export const revivableToType = <T extends Revivable>(value: T): SourceToRevivableType<T> => {
+  if (isMessagePort(value)) return 'messagePort' as SourceToRevivableType<T>
+  if (isFunction(value)) return 'function' as SourceToRevivableType<T>
+  if (isPromise(value)) return 'promise' as SourceToRevivableType<T>
+  if (isTypedArray(value)) return 'typedArray' as SourceToRevivableType<T>
+  if (isArrayBuffer(value)) return 'arrayBuffer' as SourceToRevivableType<T>
+  if (isReadableStream(value)) return 'readableStream' as SourceToRevivableType<T>
+  if (isDate(value)) return 'date' as SourceToRevivableType<T>
+  if (isError(value)) return 'error' as SourceToRevivableType<T>
   throw new Error('Unknown revivable type')
 }
