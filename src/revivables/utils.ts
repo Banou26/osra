@@ -4,16 +4,23 @@ import type { MessageChannelAllocator, PlatformCapabilities } from '../utils'
 
 import { OSRA_BOX } from '../types'
 
-export type RevivableContext<TModules extends RevivableModule[] = DefaultRevivableModules> = {
+// Base context type without the generic - used by module definitions to avoid circular types
+export type RevivableContextBase = {
   platformCapabilities: PlatformCapabilities
   transport: Transport
   remoteUuid: Uuid
   messagePorts: Set<MessagePort>
   messageChannels: MessageChannelAllocator
   sendMessage: (message: ConnectionMessage) => void
-  revivableModules: TModules
+  revivableModules: RevivableModule[]
   eventTarget: MessageEventTarget
 }
+
+// Full context with typed modules - use this when you need the specific module types
+export type RevivableContext<TModules extends RevivableModule[] = DefaultRevivableModules> =
+  Omit<RevivableContextBase, 'revivableModules'> & {
+    revivableModules: TModules
+  }
 
 export type ExtractType<T> = T extends { readonly type: infer U } ? U : never
 
