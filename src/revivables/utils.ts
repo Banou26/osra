@@ -15,16 +15,22 @@ export type RevivableContext<TModules extends RevivableModule[] = DefaultRevivab
   eventTarget: MessageEventTarget
 }
 
-// type ContextRevivableBoxes =
-  
 export type ExtractType<T> = T extends { readonly type: infer U } ? U : never
 
 export type ExtractBox<T> = T extends { box: (...args: any[]) => infer B } ? B : never
 export type InferRevivableBox<TModules extends readonly unknown[]> =
   ExtractBox<TModules[number]>
 
-export const isRevivableBox = <T extends RevivableContext>(value: any, context: T): value is InferRevivableBox<T['revivableModules']> =>
+export const isRevivableBox = <T extends RevivableContext>(value: any, _context: T): value is InferRevivableBox<T['revivableModules']> =>
   value
   && typeof value === 'object'
   && OSRA_BOX in value
   && value[OSRA_BOX] === 'revivable'
+
+const value = new ArrayBuffer()
+
+if (isRevivableBox(value, {} as RevivableContext)) {
+  console.log('is revivable box', value)
+} else {
+  console.log('not revivable box', value)
+}

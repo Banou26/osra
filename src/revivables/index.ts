@@ -25,5 +25,12 @@ export const defaultRevivableModules = [
   error
 ] satisfies RevivableModule[]
 
-export type DefaultRevivableModules = typeof defaultRevivableModules
+export type DefaultRevivableModules = [
+  typeof arrayBuffer,
+  typeof date,
+  typeof error
+]
+
+// export type DefaultRevivableModules = typeof defaultRevivableModules // Cannot do this because of recursive types
+
 export type DefaultRevivableModule = DefaultRevivableModules[number]
