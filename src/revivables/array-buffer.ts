@@ -1,5 +1,5 @@
 import type { IsJsonOnlyTransport } from '../utils'
-import type { RevivableContextBase } from './utils'
+import type { RevivableContext } from './utils'
 
 import { BoxBase } from '.'
 import { isJsonOnlyTransport } from '../utils'
@@ -9,7 +9,7 @@ export const type = 'arrayBuffer' as const
 export const isType = (value: unknown): value is ArrayBuffer =>
   value instanceof ArrayBuffer
 
-export const box = <T extends RevivableContextBase>(
+export const box = <T extends RevivableContext>(
   value: ArrayBuffer,
   _context: T
 ) => ({
@@ -30,7 +30,7 @@ type ArrayBufferBox = ReturnType<typeof box>
 
 export const revive = (
   value: ArrayBufferBox,
-  _context: RevivableContextBase
+  _context: RevivableContext
 ) =>
   'arrayBuffer' in value ? value.arrayBuffer
   : (

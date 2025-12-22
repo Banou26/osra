@@ -1,4 +1,4 @@
-import type { RevivableContextBase } from './utils'
+import type { RevivableContext } from './utils'
 
 import { BoxBase } from '.'
 
@@ -9,7 +9,7 @@ export const isType = (value: unknown): value is Error =>
 
 export const box = (
   value: Error,
-  _context: RevivableContextBase
+  _context: RevivableContext
 ) => ({
   ...BoxBase,
   type,
@@ -21,5 +21,5 @@ type ErrorBox = ReturnType<typeof box>
 
 export const revive = (
   value: ErrorBox,
-  _context: RevivableContextBase
+  _context: RevivableContext
 ) => new Error(value.message, { cause: value.stack })

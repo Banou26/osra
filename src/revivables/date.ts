@@ -1,4 +1,4 @@
-import type { RevivableContextBase } from './utils'
+import type { RevivableContext } from './utils'
 
 import { BoxBase } from '.'
 
@@ -9,7 +9,7 @@ export const isType = (value: unknown): value is Date =>
 
 export const box = (
   value: Date,
-  _context: RevivableContextBase
+  _context: RevivableContext
 ) => ({
   ...BoxBase,
   type,
@@ -20,7 +20,7 @@ type DateBox = ReturnType<typeof box>
 
 export const revive = (
   value: DateBox,
-  _context: RevivableContextBase
+  _context: RevivableContext
 ): Date => {
   return new Date(value.ISOString)
 }
