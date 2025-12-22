@@ -7,9 +7,9 @@ export const type = 'error' as const
 export const isType = (value: unknown): value is Error =>
   value instanceof Error
 
-export const box = (
+export const box = <T extends RevivableContext>(
   value: Error,
-  _context: RevivableContext
+  _context: T
 ) => ({
   ...BoxBase,
   type,
@@ -17,9 +17,7 @@ export const box = (
   stack: value.stack || value.toString()
 })
 
-type ErrorBox = ReturnType<typeof box>
-
-export const revive = (
-  value: ErrorBox,
-  _context: RevivableContext
+export const revive = <T extends RevivableContext>(
+  value: ReturnType<typeof box>,
+  _context: T
 ) => new Error(value.message, { cause: value.stack })
