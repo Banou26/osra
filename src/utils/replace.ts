@@ -12,19 +12,45 @@ type FindMatchingBox<T, M> =
 // Replace T with the corresponding box type from module(s) M
 // If T matches a module's type, returns that module's box type
 // Otherwise returns T unchanged
-export type ReplaceWithModule<T, M> =
+export type ReplaceWithBox<T, M> =
   [FindMatchingBox<T, M>] extends [never]
     ? T
     : FindMatchingBox<T, M>
 
 // Deep replace using module matching - each type maps to its specific box type
-export type DeepReplaceWithModule<T, M> =
+export type DeepReplaceWithBox<T, M> =
   [FindMatchingBox<T, M>] extends [never] ? (
-      T extends Array<infer U> ? Array<DeepReplaceWithModule<U, M>>
-    : T extends object ? { [K in keyof T]: DeepReplaceWithModule<T[K], M> }
+      T extends Array<infer U> ? Array<DeepReplaceWithBox<U, M>>
+      : T extends object ? { [K in keyof T]: DeepReplaceWithBox<T[K], M> }
     : T
   )
   : FindMatchingBox<T, M>
+  
+// Find the matching revive type for T from a union of modules M
+// T should be a box type (return type of box), returns the revive return type
+// Returns never if no module matches
+type FindMatchingRevive<T, M> =
+  M extends { box: (...args: any[]) => infer S, revive: (...args: any[]) => infer R }
+    ? T extends S ? R : never
+    : never
+
+// Replace T with the corresponding box type from module(s) M
+// If T matches a module's type, returns that module's box type
+// Otherwise returns T unchanged
+export type ReplaceWithRevive<T, M> =
+  [FindMatchingRevive<T, M>] extends [never]
+    ? T
+    : FindMatchingRevive<T, M>
+
+// Deep replace using module matching - each type maps to its specific box type
+export type DeepReplaceWithRevive<T, M> =
+  [FindMatchingRevive<T, M>] extends [never] ? (
+      T extends Array<infer U> ? Array<DeepReplaceWithRevive<U, M>>
+      : T extends object ? { [K in keyof T]: DeepReplaceWithRevive<T[K], M> }
+    : T
+  )
+  : FindMatchingRevive<T, M>
+
 
 export type DeepReplace<T, From, To> =
     T extends From ? DeepReplace<To, From, To>
