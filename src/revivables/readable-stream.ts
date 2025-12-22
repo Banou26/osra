@@ -1,58 +1,32 @@
-import type { Capable } from '../../types'
-import type { ConnectionRevivableContext } from '../connection'
+import type { Capable } from '../types'
+import type { RevivableContext } from './utils'
 
-import { OSRA_BOX } from '../types'
-import { getTransferableObjects } from '../transferable'
-import * as promise from './promise'
+import { BoxBase, recursiveBox, recursiveRevive } from '.'
+import { getTransferableObjects } from '../utils'
 
 export const type = 'readableStream' as const
-export const supportsPassthrough = true as const
 
-export type Source = ReadableStream
-
-export type Boxed = {
-  type: typeof type
-  port: MessagePort
-}
-
-export type Box = { [OSRA_BOX]: 'revivable' } & Boxed
-
-// Context type for pull/cancel messages
 export type PullContext = {
   type: 'pull' | 'cancel'
 }
 
-export const is = (value: unknown): value is Source =>
+export const isType = (value: unknown): value is ReadableStream =>
   value instanceof ReadableStream
 
-// ReadableStream is transferable
-export const isTransferable = is
-
-export const isBox = (value: unknown): value is Box =>
-  value !== null &&
-  typeof value === 'object' &&
-  OSRA_BOX in value &&
-  (value as Record<string, unknown>)[OSRA_BOX] === 'revivable' &&
-  (value as Record<string, unknown>).type === type
-
-export const shouldBox = (_value: Source, context: ConnectionRevivableContext): boolean =>
-  !context.platformCapabilities.transferableStream
-  || ('isJson' in context.transport && Boolean(context.transport.isJson))
-
-export const box = (
-  value: Source,
-  context: ConnectionRevivableContext
-): Boxed => {
+export const box = <T extends RevivableContext>(
+  value: ReadableStream,
+  context: T
+) => {
   const { port1: localPort, port2: remotePort } = new MessageChannel()
   context.messagePorts.add(remotePort)
 
   const reader = value.getReader()
 
-  localPort.addEventListener('message', async ({ data }:  MessageEvent<PullContext>) => {
-    const { type } = context.recursiveRevive(data, context) as PullContext
+  localPort.addEventListener('message', async ({ data }: MessageEvent<PullContext>) => {
+    const { type } = recursiveRevive(data, context) as PullContext
     if (type === 'pull') {
       const pullResult = reader.read()
-      const boxedResult = context.recursiveBox(pullResult, context)
+      const boxedResult = recursiveBox(pullResult, context)
       localPort.postMessage(boxedResult, getTransferableObjects(boxedResult))
     } else {
       reader.cancel()
@@ -62,24 +36,25 @@ export const box = (
   localPort.start()
 
   return {
+    ...BoxBase,
     type,
     port: remotePort
   }
 }
 
-export const revive = (
-  value: Boxed,
-  context: ConnectionRevivableContext
-): Source => {
+export const revive = <T extends RevivableContext>(
+  value: ReturnType<typeof box>,
+  context: T
+): ReadableStream => {
   context.messagePorts.add(value.port)
   value.port.start()
+
   return new ReadableStream({
-    start(controller) {},
+    start(_controller) {},
     pull(controller) {
       return new Promise((resolve, reject) => {
         value.port.addEventListener('message', async ({ data }: MessageEvent<Capable>) => {
-          if (!promise.isBox(data)) throw new Error(`Proxied function did not return a promise`)
-          const result = context.recursiveRevive(data, context) as Promise<ReadableStreamReadResult<any>>
+          const result = recursiveRevive(data, context) as Promise<ReadableStreamReadResult<any>>
           result
             .then(result => {
               if (result.done) controller.close()
@@ -88,11 +63,11 @@ export const revive = (
             })
             .catch(reject)
         }, { once: true })
-        value.port.postMessage(context.recursiveBox({ type: 'pull' }, context))
+        value.port.postMessage(recursiveBox({ type: 'pull' }, context))
       })
     },
     cancel() {
-      value.port.postMessage(context.recursiveBox({ type: 'cancel' }, context))
+      value.port.postMessage(recursiveBox({ type: 'cancel' }, context))
       value.port.close()
     }
   })

@@ -33,7 +33,7 @@ export type ConnectionContext =
   | UnidirectionalEmittingConnectionContext
   | UnidirectionalReceivingConnectionContext
 
-export type ConnectionRevivableContext<TModules extends RevivableModule[] = DefaultRevivableModules> = {
+export type ConnectionRevivableContext<TModules extends readonly RevivableModule[] = DefaultRevivableModules> = {
   platformCapabilities: PlatformCapabilities
   transport: Transport
   remoteUuid: Uuid
