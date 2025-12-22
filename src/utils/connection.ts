@@ -9,9 +9,8 @@ import type { MessageChannelAllocator } from './allocator'
 import type { PlatformCapabilities } from './capabilities'
 import type { StrictMessagePort } from './message-channel'
 
-import { recursiveBox, recursiveRevive } from './revivable'
 import { makeMessageChannelAllocator } from './allocator'
-import { DefaultRevivableModules, defaultRevivableModules, RevivableModule } from '../revivables'
+import { DefaultRevivableModules, defaultRevivableModules, recursiveBox, recursiveRevive, RevivableModule } from '../revivables'
 
 export type BidirectionalConnectionContext = {
   type: 'bidirectional'

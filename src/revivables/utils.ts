@@ -29,10 +29,3 @@ export const isRevivableBox = <T extends RevivableContext>(value: any, _context:
   && typeof value === 'object'
   && OSRA_BOX in value
   && value[OSRA_BOX] === 'revivable'
-
-const value = new ArrayBuffer()
-if (isRevivableBox(value, {} as RevivableContext)) {
-  console.log('is revivable box', value)
-} else {
-  console.log('not revivable box', value)
-}

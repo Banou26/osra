@@ -96,7 +96,7 @@ export const box = <T extends RevivableContext>(
   type,
   typedArrayType: typedArrayToType(value),
   ...(
-    isJsonOnlyTransport(_context)
+    isJsonOnlyTransport(_context.transport)
       ? { base64Buffer: new Uint8Array(value.buffer).toBase64() }
       : { arrayBuffer: value.buffer }
   ) as (
