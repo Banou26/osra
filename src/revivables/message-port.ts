@@ -1,18 +1,18 @@
-import type { Capable, Uuid } from '../../types'
-import type { ConnectionRevivableContext } from '../connection'
-import type { StrictMessagePort } from '../message-channel'
+import type { Capable, Uuid } from '../types'
+import type { StrictMessagePort } from '../utils/message-channel'
 
-import { OSRA_BOX } from '../types'
-import { getTransferableObjects } from '../transferable'
+import { getTransferableObjects } from '../utils/transferable'
+import { RevivableContext } from './utils'
+import { recursiveBox } from '../utils'
 
 export const type = 'messagePort' as const
 
 export const isType = (value: unknown): value is MessagePort =>
   value instanceof MessagePort
 
-export const box = (
+export const box = <T extends RevivableContext>(
   value: MessagePort,
-  context: ConnectionRevivableContext
+  context: T
 ) => {
   const messagePort = value as StrictMessagePort<Capable>
   const { uuid: portId } = context.messageChannels.alloc(undefined, { port1: messagePort })
@@ -21,7 +21,7 @@ export const box = (
     context.sendMessage({
       type: 'message',
       remoteUuid: context.remoteUuid,
-      data: isRevivableBox(data) ? data : context.recursiveBox(data, context),
+      data: recursiveBox(data, context),
       portId
     })
   })
@@ -48,9 +48,9 @@ export const box = (
 
 type MessagePortBox = ReturnType<typeof box>
 
-export const revive = (
+export const revive = <T extends RevivableContext>(
   value: MessagePortBox,
-  context: ConnectionRevivableContext
+  context: T
 ): StrictMessagePort<Capable> => {
   const { port1: userPort, port2: internalPort } = new MessageChannel()
   // Since we are in a boxed MessagePort, we want to send a message to the other side through the EmitTransport

@@ -26,11 +26,9 @@ export const box = <T extends RevivableContext>(
   )
 })
 
-type ArrayBufferBox = ReturnType<typeof box>
-
-export const revive = (
-  value: ArrayBufferBox,
-  _context: RevivableContext
+export const revive = <T extends RevivableContext>(
+  value: ReturnType<typeof box>,
+  _context: T
 ) =>
   'arrayBuffer' in value ? value.arrayBuffer
   : (
