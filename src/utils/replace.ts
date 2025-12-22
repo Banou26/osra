@@ -68,7 +68,6 @@ export const deepReplace = <T, From, To>(
     parent?: unknown
   } = {}
 ): DeepReplace<T, From, To> => {
-  console.log('deepReplace', options?.parent, value)
   const { order = 'pre' } = options
   const replacedValue =
     order === 'pre' && predicate(value, options?.parent)
