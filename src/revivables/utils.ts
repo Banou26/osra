@@ -4,7 +4,7 @@ import type { MessageChannelAllocator, PlatformCapabilities } from '../utils'
 
 import { OSRA_BOX } from '../types'
 
-export type RevivableContext<TModules extends RevivableModule[] = DefaultRevivableModules> = {
+export type RevivableContext<TModules extends readonly RevivableModule[] = DefaultRevivableModules> = {
   platformCapabilities: PlatformCapabilities
   transport: Transport
   remoteUuid: Uuid

@@ -1,47 +1,27 @@
-import type { Capable } from '../../types'
-import type { ConnectionRevivableContext } from '../connection'
+import type { Capable } from '../types'
+import type { RevivableContext } from './utils'
 
-import { OSRA_BOX } from '../types'
-import { getTransferableObjects } from '../transferable'
+import { BoxBase, recursiveBox, recursiveRevive } from '.'
+import { getTransferableObjects } from '../utils'
 
 export const type = 'promise' as const
 
-export type Source = Promise<any>
-
-export type Boxed = {
-  type: typeof type
-  port: MessagePort
-}
-
-export type Box = { [OSRA_BOX]: 'revivable' } & Boxed
-
-// Context type for promise resolution messages
 export type Context =
   | { type: 'resolve', data: Capable }
   | { type: 'reject', error: string }
 
-export const is = (value: unknown): value is Source =>
+export const isType = (value: unknown): value is Promise<any> =>
   value instanceof Promise
 
-export const isBox = (value: unknown): value is Box =>
-  value !== null &&
-  typeof value === 'object' &&
-  OSRA_BOX in value &&
-  (value as Record<string, unknown>)[OSRA_BOX] === 'revivable' &&
-  (value as Record<string, unknown>).type === type
-
-export const shouldBox = (_value: Source, _context: ConnectionRevivableContext): boolean =>
-  true
-
-export const box = (
-  value: Source,
-  context: ConnectionRevivableContext
-): Boxed => {
+export const box = <T extends RevivableContext>(
+  value: Promise<any>,
+  context: T
+) => {
   const { port1: localPort, port2: remotePort } = new MessageChannel()
   context.messagePorts.add(remotePort)
 
   const sendResult = (result: { type: 'resolve', data: Capable } | { type: 'reject', error: string }) => {
-    const boxedResult = context.recursiveBox(result, context)
+    const boxedResult = recursiveBox(result, context)
     localPort.postMessage(boxedResult, getTransferableObjects(boxedResult))
     localPort.close()
   }
@@ -51,22 +31,23 @@ export const box = (
     .catch(error => sendResult({ type: 'reject', error: error.stack }))
 
   return {
+    ...BoxBase,
     type,
     port: remotePort
   }
 }
 
-export const revive = (
-  value: Boxed,
-  context: ConnectionRevivableContext
-): Source => {
+export const revive = <T extends RevivableContext>(
+  value: ReturnType<typeof box>,
+  context: T
+): Promise<any> => {
   context.messagePorts.add(value.port)
   return new Promise((resolve, reject) => {
-    value.port.addEventListener('message', ({ data }:  MessageEvent<Context>) => {
-      const result = context.recursiveRevive(data, context) as Context
+    value.port.addEventListener('message', ({ data }: MessageEvent<Context>) => {
+      const result = recursiveRevive(data, context) as Context
       if (result.type === 'resolve') {
         resolve(result.data)
-      } else { // result.type === 'reject'
+      } else {
         reject(result.error)
       }
       value.port.close()

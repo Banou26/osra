@@ -1,4 +1,4 @@
-import type { ExtractBoxInput, ExtractReviveInput, RevivableContext } from './utils'
+import type { RevivableContext } from './utils'
 import type { DeepReplaceWithBox, DeepReplaceWithRevive, ReplaceWithBox, ReplaceWithRevive } from '../utils/replace'
 
 import { Capable, OSRA_BOX } from '../types'
@@ -6,6 +6,11 @@ import { isRevivableBox } from './utils'
 import * as arrayBuffer from './array-buffer'
 import * as date from './date'
 import * as error from './error'
+import * as typedArray from './typed-array'
+import * as promise from './promise'
+import * as func from './function'
+import * as messagePort from './message-port'
+import * as readableStream from './readable-stream'
 
 export const BoxBase = {
   [OSRA_BOX]: 'revivable',
@@ -16,24 +21,25 @@ export type BoxBase<T extends string = string> =
   & typeof BoxBase
   & { type: T }
 
-export type RevivableModule<T extends string = string, T2 extends any = any, T3 extends BoxBase<T> = any> = {
-  type: T
-  isType: (value: unknown) => value is T2
-  box: (value: T2, context: RevivableContext) => T3
-  revive: (value: T3, context: RevivableContext) => T2
+export type RevivableModule<T extends string = string, T2 = any, T3 extends BoxBase<T> = any> = {
+  readonly type: T
+  readonly isType: (value: unknown) => value is T2
+  readonly box: (value: T2, context: RevivableContext) => T3
+  readonly revive: (value: T3, context: RevivableContext) => T2
 }
 
 export const defaultRevivableModules = [
   arrayBuffer,
   date,
-  error
-] satisfies RevivableModule[]
+  error,
+  typedArray,
+  promise,
+  func,
+  messagePort,
+  readableStream
+] as const
 
-export type DefaultRevivableModules = [
-  typeof arrayBuffer,
-  typeof date,
-  typeof error
-]
+export type DefaultRevivableModules = typeof defaultRevivableModules
 
 export type DefaultRevivableModule = DefaultRevivableModules[number]
 
@@ -44,7 +50,7 @@ export const findModuleForValue = <T extends Capable, T2 extends RevivableContex
   type ReturnCastType = ReplaceWithBox<T, T2['revivableModules'][number]>
   const handledByModule = context.revivableModules.find(module => module.isType(value))
   if (handledByModule?.isType(value)) {
-    return handledByModule.box(value as ExtractBoxInput<typeof handledByModule>, context) as ReturnCastType
+    return (handledByModule.box as (v: unknown, c: RevivableContext) => unknown)(value, context) as ReturnCastType
   }
   return value as ReturnCastType
 }
@@ -56,7 +62,7 @@ export const box = <T extends Capable, T2 extends RevivableContext>(
   type ReturnCastType = ReplaceWithBox<T, T2['revivableModules'][number]>
   const handledByModule = context.revivableModules.find(module => module.isType(value))
   if (handledByModule?.isType(value)) {
-    return handledByModule.box(value as ExtractBoxInput<typeof handledByModule>, context) as ReturnCastType
+    return (handledByModule.box as (v: unknown, c: RevivableContext) => unknown)(value, context) as ReturnCastType
   }
   return value as ReturnCastType
 }
@@ -69,7 +75,7 @@ export const recursiveBox = <T extends Capable, T2 extends RevivableContext>(
 
   const handledByModule = context.revivableModules.find(module => module.isType(value))
   if (handledByModule?.isType(value)) {
-    return handledByModule.box(value as ExtractBoxInput<typeof handledByModule>, context) as ReturnCastType
+    return (handledByModule.box as (v: unknown, c: RevivableContext) => unknown)(value, context) as ReturnCastType
   }
 
   return (
@@ -99,7 +105,7 @@ export const revive = <T extends ReturnType<typeof box>, T2 extends RevivableCon
       : undefined
   const handledByModule = context.revivableModules.find(module => module.type === boxType)
   if (handledByModule) {
-    return handledByModule.revive(value as ExtractReviveInput<typeof handledByModule>, context) as ReturnCastType
+    return (handledByModule.revive as (v: unknown, c: RevivableContext) => unknown)(value, context) as ReturnCastType
   }
   return value as ReturnCastType
 }
@@ -114,7 +120,7 @@ export const recursiveRevive = <T extends Capable, T2 extends RevivableContext>(
   if (isRevivableBox(value, context)) {
     const handledByModule = context.revivableModules.find(module => module.type === value.type)
     if (handledByModule) {
-      return handledByModule.revive(value as ExtractReviveInput<typeof handledByModule>, context) as ReturnCastType
+      return (handledByModule.revive as (v: unknown, c: RevivableContext) => unknown)(value, context) as ReturnCastType
     }
   }
 

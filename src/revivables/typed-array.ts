@@ -1,5 +1,8 @@
-import type { ConnectionRevivableContext } from '../connection'
-import { OSRA_BOX } from '../types'
+import type { IsJsonOnlyTransport } from '../utils'
+import type { RevivableContext } from './utils'
+
+import { BoxBase } from '.'
+import { isJsonOnlyTransport } from '../utils'
 
 export const type = 'typedArray' as const
 
@@ -57,9 +60,9 @@ export const typedArrayToType = <T extends TypedArray>(value: T) => {
   if (type === undefined) throw new Error('Unknown typed array type')
   return type
 }
-export type TypeArrayType = ReturnType<typeof typedArrayToType>
+export type TypedArrayType = ReturnType<typeof typedArrayToType>
 
-export const typedArrayTypeToTypedArrayConstructor = (value: TypeArrayType): TypedArrayConstructor => {
+export const typedArrayTypeToTypedArrayConstructor = (value: TypedArrayType): TypedArrayConstructor => {
   const typedArray =
     value === 'Int8Array' ? Int8Array :
     value === 'Uint8Array' ? Uint8Array :
@@ -82,45 +85,35 @@ export const typedArrayTypeToTypedArrayConstructor = (value: TypeArrayType): Typ
 // Revivable Module
 // ============================================================================
 
-export type Source = TypedArray
-
-export type Boxed = {
-  type: typeof type
-  typedArrayType: TypeArrayType
-  arrayBuffer: ArrayBuffer
-}
-
-export type Box = { [OSRA_BOX]: 'revivable' } & Boxed
-
-export const is = (value: unknown): value is Source =>
+export const isType = (value: unknown): value is TypedArray =>
   typedArrayConstructors.some(ctor => value instanceof ctor)
 
-export const isBox = (value: unknown): value is Box =>
-  value !== null &&
-  typeof value === 'object' &&
-  OSRA_BOX in value &&
-  (value as Record<string, unknown>)[OSRA_BOX] === 'revivable' &&
-  (value as Record<string, unknown>).type === type
+export const box = <T extends RevivableContext>(
+  value: TypedArray,
+  _context: T
+) => ({
+  ...BoxBase,
+  type,
+  typedArrayType: typedArrayToType(value),
+  ...(
+    isJsonOnlyTransport(_context)
+      ? { base64Buffer: new Uint8Array(value.buffer).toBase64() }
+      : { arrayBuffer: value.buffer }
+  ) as (
+      IsJsonOnlyTransport<T['transport']> extends true ? { base64Buffer: string }
+    : IsJsonOnlyTransport<T['transport']> extends false ? { arrayBuffer: ArrayBuffer }
+    : { base64Buffer: string } | { arrayBuffer: ArrayBuffer }
+  )
+})
 
-export const shouldBox = (_value: Source, _context: ConnectionRevivableContext): boolean =>
-  true
-
-export const box = (
-  value: Source,
-  _context: ConnectionRevivableContext
-): Boxed => {
-  return {
-    type,
-    typedArrayType: typedArrayToType(value),
-    arrayBuffer: value.buffer
-  }
-}
-
-export const revive = (
-  value: Boxed,
-  _context: ConnectionRevivableContext
-): Source => {
-  const TypedArrayConstructor = typedArrayTypeToTypedArrayConstructor(value.typedArrayType)
-  const result = new TypedArrayConstructor(value.arrayBuffer)
-  return result
+export const revive = <T extends RevivableContext>(
+  value: ReturnType<typeof box>,
+  _context: T
+): TypedArray => {
+  const TypedArrayConstructor = typedArrayTypeToTypedArrayConstructor(value.typedArrayType as TypedArrayType)
+  const arrayBuffer =
+    'arrayBuffer' in value
+      ? value.arrayBuffer
+      : Uint8Array.fromBase64(value.base64Buffer).buffer
+  return new TypedArrayConstructor(arrayBuffer)
 }
