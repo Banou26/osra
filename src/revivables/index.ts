@@ -12,13 +12,15 @@ export const BoxBase = {
   type: '' as string
 } as const
 
-export type BoxBase = typeof BoxBase
+export type BoxBase<T extends string = string> =
+  & typeof BoxBase
+  & { type: T }
 
-export type RevivableModule = {
-  type: string
-  isType: (value: any) => value is any
-  box: (value: any, context: RevivableContext) => BoxBase
-  revive: (value: any, context: RevivableContext) => any
+export type RevivableModule<T extends string = string, T2 extends any = any, T3 extends BoxBase<T> = any> = {
+  type: T
+  isType: (value: unknown) => value is T2
+  box: (value: T2, context: RevivableContext) => T3
+  revive: (value: T3, context: RevivableContext) => T2
 }
 
 export const defaultRevivableModules = [
