@@ -1,10 +1,32 @@
-import type { Capable, Uuid } from '../types'
+import type { Capable, ConnectionMessage, Uuid } from '../types'
 import type { StrictMessagePort } from '../utils/message-channel'
 import type { RevivableContext } from './utils'
 
 import { BoxBase, recursiveBox, recursiveRevive } from '.'
 import { OSRA_BOX } from '../types'
 import { getTransferableObjects } from '../utils'
+
+/**
+ * FinalizationRegistry for automatically cleaning up MessagePorts when they are garbage collected.
+ * This is used in JSON-only mode where MessagePorts can't be transferred directly.
+ */
+type PortCleanupInfo = {
+  sendMessage: (message: ConnectionMessage) => void
+  remoteUuid: Uuid
+  portId: string
+  cleanup: () => void
+}
+
+const messagePortRegistry = new FinalizationRegistry<PortCleanupInfo>((info) => {
+  // Send close message to remote side
+  info.sendMessage({
+    type: 'message-port-close',
+    remoteUuid: info.remoteUuid,
+    portId: info.portId
+  })
+  // Perform local cleanup
+  info.cleanup()
+})
 
 export const type = 'messagePort' as const
 
@@ -24,6 +46,17 @@ export const box = <T extends RevivableContext>(
   const messagePort = value as StrictMessagePort<Capable>
   const { uuid: portId } = context.messageChannels.alloc(undefined, { port1: messagePort })
 
+  // Register the messagePort for automatic cleanup when garbage collected
+  // Use messagePort itself as the unregister token
+  messagePortRegistry.register(messagePort, {
+    sendMessage: context.sendMessage,
+    remoteUuid: context.remoteUuid,
+    portId,
+    cleanup: () => {
+      context.messageChannels.free(portId)
+    }
+  }, messagePort)
+
   // Since we are in a boxed MessagePort, we want to send a message to the other side through the EmitTransport
   messagePort.addEventListener('message', ({ data }) => {
     context.sendMessage({
@@ -39,6 +72,8 @@ export const box = <T extends RevivableContext>(
   context.eventTarget.addEventListener('message', function listener({ detail: message }) {
     if (message.type === 'message-port-close') {
       if (message.portId !== portId) return
+      // Unregister from FinalizationRegistry to prevent double-close
+      messagePortRegistry.unregister(messagePort)
       context.eventTarget.removeEventListener('message', listener)
       messagePort.close()
       context.messageChannels.free(portId)
@@ -61,6 +96,18 @@ export const revive = <T extends RevivableContext>(
 ): StrictMessagePort<Capable> => {
   const { port1: userPort, port2: internalPort } = new MessageChannel()
 
+  // Register the userPort for automatic cleanup when garbage collected
+  // Use userPort itself as the unregister token
+  messagePortRegistry.register(userPort, {
+    sendMessage: context.sendMessage,
+    remoteUuid: context.remoteUuid,
+    portId: value.portId,
+    cleanup: () => {
+      internalPort.close()
+      context.messageChannels.free(value.portId)
+    }
+  }, userPort)
+
   // Since we are in a boxed MessagePort, we want to send a message to the other side through the EmitTransport
   internalPort.addEventListener('message', ({ data }) => {
     context.sendMessage({
@@ -78,15 +125,21 @@ export const revive = <T extends RevivableContext>(
       ? existingChannel
       : context.messageChannels.alloc(value.portId as Uuid)
 
-  // The ReceiveTransport received a message from the other side so we call it on our own side's MessagePort after reviving it
-  port1.addEventListener('message', function listener({ data: message }) {
+  // Listen for close messages from the remote side through the main event target
+  context.eventTarget.addEventListener('message', function closeListener({ detail: message }) {
     if (message.type === 'message-port-close') {
       if (message.portId !== value.portId) return
-      port1.removeEventListener('message', listener)
+      // Unregister from FinalizationRegistry to prevent double-close
+      messagePortRegistry.unregister(userPort)
+      context.eventTarget.removeEventListener('message', closeListener)
       internalPort.close()
       context.messageChannels.free(value.portId)
       return
     }
+  })
+
+  // The ReceiveTransport received a message from the other side so we call it on our own side's MessagePort after reviving it
+  port1.addEventListener('message', function listener({ data: message }) {
     if (message.type !== 'message' || message.portId !== value.portId) return
 
     // if the returned messagePort has been registered as internal message port, then we proxy the data without reviving it
