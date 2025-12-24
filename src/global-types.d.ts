@@ -8,3 +8,7 @@ interface Uint8Array<TArrayBuffer extends ArrayBufferLike> {
 interface Uint8ArrayConstructor {
   fromBase64(base64: string): Uint8Array<ArrayBuffer>
 }
+
+interface MediaSourceHandle {
+  __dummy__: never
+}
