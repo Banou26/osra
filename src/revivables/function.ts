@@ -14,8 +14,8 @@ export type CallContext = [
   Capable[]
 ]
 
-export const isType = <T extends (...args: Capable[]) => any>(value: unknown): value is T =>
-  typeof value === 'function'
+export const isType: <T extends (...args: Capable[]) => Capable>(value: unknown) => value is T =
+  (value): value is any => typeof value === 'function'
 
 export const box = <T extends (...args: Capable[]) => any, T2 extends RevivableContext>(
   value: T,
