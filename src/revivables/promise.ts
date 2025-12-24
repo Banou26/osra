@@ -1,7 +1,8 @@
 import type { Capable, Uuid } from '../types'
 import type { RevivableContext } from './utils'
 
-import { BoxBase, recursiveBox, recursiveRevive } from '.'
+import { BoxBase } from './utils'
+import { recursiveBox, recursiveRevive } from '.'
 import { getTransferableObjects, isJsonOnlyTransport } from '../utils'
 
 export const type = 'promise' as const

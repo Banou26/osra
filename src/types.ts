@@ -1,5 +1,7 @@
 import { TypedEventTarget } from 'typescript-event-target'
 import type { TypedArray, WebExtOnConnect, WebExtOnMessage, WebExtPort, WebExtRuntime, WebExtSender } from './utils/type-guards'
+import { DefaultRevivableModule, DefaultRevivableModules, RevivableModule } from './revivables'
+import { InferRevivables } from './revivables/utils'
 
 export const OSRA_KEY = '__OSRA_KEY__' as const
 export const OSRA_DEFAULT_KEY = '__OSRA_DEFAULT_KEY__' as const
@@ -35,137 +37,10 @@ export type Structurable =
   | Map<Structurable, Structurable>
   | Set<Structurable>
 
-export type TransferBox<T extends Transferable = Transferable> = {
-  [OSRA_BOX]: 'transferable'
-  value: T
-}
-
-export type ReviveBoxBase<T extends RevivableVariant['type'] = RevivableVariant['type']> = {
-  [OSRA_BOX]: 'revivable'
-  type: T
-  value?: RevivableVariantTypeToRevivableVariant<T>
-  [Symbol.toPrimitive]?: Function
-  valueOf?: Function
-  toString?: Function
-  toJSON?: Function
-}
-
-export type RevivableMessagePort = {
-  type: 'messagePort'
-  portId: string
-}
-
-export type RevivablePromiseContext =
-  | {
-    type: 'resolve'
-    data: Capable
-  }
-  | {
-    type: 'reject'
-    error: string
-  }
-
-export type RevivablePromise = {
-  type: 'promise'
-  port: MessagePort
-}
-
-export type RevivableFunctionCallContext = [
-  /** MessagePort that will be used to send the result of the function call */
-  MessagePort,
-  /** Arguments that will be passed to the function call */
-  Capable[]
-]
-
-export type RevivableFunction = {
-  type: 'function'
-  port: MessagePort
-}
-
-export type RevivableTypedArray = {
-  type: 'typedArray'
-  typedArrayType: 'Int8Array' | 'Uint8Array' | 'Uint8ClampedArray' | 'Int16Array' | 'Uint16Array' | 'Int32Array' | 'Uint32Array' | 'Float16Array' | 'Float32Array' | 'Float64Array' | 'BigInt64Array' | 'BigUint64Array'
-  arrayBuffer: ArrayBuffer
-}
-
-export type RevivableArrayBuffer = {
-  type: 'arrayBuffer'
-  base64Buffer: string
-}
-
-export type RevivableReadableStreamPullContext = {
-  type: 'pull' | 'cancel'
-}
-
-export type RevivableReadableStream = {
-  type: 'readableStream'
-  port: MessagePort
-}
-
-export type RevivableDate = {
-  type: 'date'
-  ISOString: string
-}
-
-export type RevivableError = {
-  type: 'error'
-  message: string
-  stack: string
-}
-
-export type RevivableVariant =
-  | RevivableMessagePort
-  | RevivablePromise
-  | RevivableFunction
-  | RevivableTypedArray
-  | RevivableArrayBuffer
-  | RevivableReadableStream
-  | RevivableDate
-  | RevivableError
-
-export type RevivableVariantType = RevivableVariant['type']
-
-export type RevivableVariantTypeToRevivableVariant<T extends RevivableVariantType> =
-  T extends 'messagePort' ? MessagePort :
-  T extends 'promise' ? Promise<any> :
-  T extends 'function' ? Function :
-  T extends 'typedArray' ? TypedArray :
-  T extends 'arrayBuffer' ? ArrayBuffer :
-  T extends 'readableStream' ? ReadableStream :
-  T extends 'date' ? Date :
-  T extends 'error' ? Error :
-  never
-
-export type RevivableBox =
-  | ReviveBoxBase
-  & RevivableVariant
-
-export type Revivable =
-  | MessagePort
-  | Promise<Capable>
-  | TypedArray
-  | ArrayBuffer
-  | ReadableStream
-  | Date
-  | Error
-  | ((...args: Capable[]) => Promise<Capable>)
-
-export type RevivableToRevivableType<T extends Revivable> =
-  T extends MessagePort ? 'messagePort' :
-  T extends Promise<any> ? 'promise' :
-  T extends Function ? 'function' :
-  T extends TypedArray ? 'typedArray' :
-  T extends ArrayBuffer ? 'arrayBuffer' :
-  T extends ReadableStream ? 'readableStream' :
-  T extends Date ? 'date' :
-  T extends Error ? 'error' :
-  never
-
-export type Capable =
+export type Capable<TModules extends readonly RevivableModule[] = DefaultRevivableModules> =
   | Structurable
-  | TransferBox
   | Transferable
-  | Revivable
+  | InferRevivables<TModules>
   | { [key: string]: Capable }
   | Array<Capable>
   | Map<Capable, Capable>

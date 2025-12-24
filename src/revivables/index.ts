@@ -1,4 +1,4 @@
-import type { RevivableContext } from './utils'
+import type { BoxBase, RevivableContext } from './utils'
 import type { DeepReplaceWithBox, DeepReplaceWithRevive, ReplaceWithBox, ReplaceWithRevive } from '../utils/replace'
 
 import { Capable, OSRA_BOX } from '../types'
@@ -11,15 +11,6 @@ import * as promise from './promise'
 import * as func from './function'
 import * as messagePort from './message-port'
 import * as readableStream from './readable-stream'
-
-export const BoxBase = {
-  [OSRA_BOX]: 'revivable',
-  type: '' as string
-} as const
-
-export type BoxBase<T extends string = string> =
-  & typeof BoxBase
-  & { type: T }
 
 export type RevivableModule<T extends string = string, T2 = any, T3 extends BoxBase<T> = any> = {
   readonly type: T

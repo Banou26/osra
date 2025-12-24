@@ -2,7 +2,8 @@ import type { Capable, ConnectionMessage, Uuid } from '../types'
 import type { StrictMessagePort } from '../utils/message-channel'
 import type { RevivableContext } from './utils'
 
-import { BoxBase, recursiveBox, recursiveRevive } from '.'
+import { BoxBase } from './utils'
+import { recursiveBox, recursiveRevive } from '.'
 import { OSRA_BOX } from '../types'
 import { getTransferableObjects } from '../utils'
 
