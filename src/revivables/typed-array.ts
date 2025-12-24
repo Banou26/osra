@@ -1,7 +1,7 @@
 import type { IsJsonOnlyTransport } from '../utils'
 import type { RevivableContext } from './utils'
 
-import { BoxBase } from '.'
+import { BoxBase } from './utils'
 import { isJsonOnlyTransport } from '../utils'
 
 export const type = 'typedArray' as const

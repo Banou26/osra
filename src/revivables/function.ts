@@ -1,7 +1,8 @@
 import type { Capable, Uuid } from '../types'
 import type { RevivableContext } from './utils'
 
-import { BoxBase, recursiveBox, recursiveRevive } from '.'
+import { BoxBase } from './utils'
+import { recursiveBox, recursiveRevive } from '.'
 import { getTransferableObjects, isJsonOnlyTransport } from '../utils'
 
 export const type = 'function' as const
@@ -13,10 +14,10 @@ export type CallContext = [
   Capable[]
 ]
 
-export const isType = <T extends (...args: any[]) => any>(value: unknown): value is T =>
+export const isType = <T extends (...args: Capable[]) => any>(value: unknown): value is T =>
   typeof value === 'function'
 
-export const box = <T extends (...args: any[]) => any, T2 extends RevivableContext>(
+export const box = <T extends (...args: Capable[]) => any, T2 extends RevivableContext>(
   value: T,
   context: T2
 ) => {

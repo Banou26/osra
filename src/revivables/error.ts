@@ -1,6 +1,6 @@
 import type { RevivableContext } from './utils'
 
-import { BoxBase } from '.'
+import { BoxBase } from './utils'
 
 export const type = 'error' as const
 
