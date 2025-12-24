@@ -1,5 +1,5 @@
 import type { Capable, Uuid } from '../types'
-import type { RevivableContext } from './utils'
+import type { RevivableContext, BoxBase as BoxBaseType } from './utils'
 
 import { BoxBase } from './utils'
 import { recursiveBox, recursiveRevive } from '.'
@@ -14,11 +14,16 @@ export type CallContext = [
   Capable[]
 ]
 
+export type BoxedFunction<T extends (...args: any[]) => any = (...args: any[]) => any> =
+  & BoxBaseType<typeof type>
+  & { port: MessagePort }
+  & { __type__: (...args: Parameters<T>) => Promise<Awaited<ReturnType<T>>> }
+
 export const isType: <T extends (...args: Capable[]) => Capable>(value: unknown) => value is T =
   (value): value is any => typeof value === 'function'
 
-export const box = <T extends (...args: Capable[]) => any, T2 extends RevivableContext>(
-  value: T,
+export const box = <T extends (...args: any[]) => any, T2 extends RevivableContext>(
+  value: Parameters<T> extends Capable[] ? T : never,
   context: T2
 ) => {
   const { port1: localPort, port2: remotePort } = new MessageChannel()
@@ -37,11 +42,10 @@ export const box = <T extends (...args: Capable[]) => any, T2 extends RevivableC
     type,
     port: remotePort
   }
-  
   return result as typeof result & { __type__: (...args: Parameters<T>) => Promise<Awaited<ReturnType<T>>> }
 }
 
-export const revive = <T extends ReturnType<typeof box>, T2 extends RevivableContext>(
+export const revive = <T extends BoxedFunction, T2 extends RevivableContext>(
   value: T,
   context: T2
 ): T['__type__'] => {
@@ -64,3 +68,6 @@ export const revive = <T extends ReturnType<typeof box>, T2 extends RevivableCon
 
   return func
 }
+
+const test = box((arg: string, b: number) => 'lol', {} as RevivableContext)
+const revived = revive(test, {} as RevivableContext)
