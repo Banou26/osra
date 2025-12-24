@@ -1,9 +1,9 @@
-import type { Capable, Uuid } from '../types'
+import type { Capable } from '../types'
 import type { RevivableContext, BoxBase as BoxBaseType } from './utils'
 
 import { BoxBase } from './utils'
 import { recursiveBox, recursiveRevive } from '.'
-import { getTransferableObjects, isJsonOnlyTransport } from '../utils'
+import { getTransferableObjects } from '../utils'
 
 export const type = 'function' as const
 
@@ -19,11 +19,17 @@ export type BoxedFunction<T extends (...args: any[]) => any = (...args: any[]) =
   & { port: MessagePort }
   & { __type__: (...args: Parameters<T>) => Promise<Awaited<ReturnType<T>>> }
 
+type CapableFunction<T> = T extends (...args: infer P) => infer R
+  ? P extends Capable[]
+    ? R extends Capable ? T : never
+    : never
+  : never
+
 export const isType: <T extends (...args: Capable[]) => Capable>(value: unknown) => value is T =
   (value): value is any => typeof value === 'function'
 
 export const box = <T extends (...args: any[]) => any, T2 extends RevivableContext>(
-  value: Parameters<T> extends Capable[] ? T : never,
+  value: T & CapableFunction<T>,
   context: T2
 ) => {
   const { port1: localPort, port2: remotePort } = new MessageChannel()
@@ -68,6 +74,3 @@ export const revive = <T extends BoxedFunction, T2 extends RevivableContext>(
 
   return func
 }
-
-const test = box((arg: string, b: number) => 'lol', {} as RevivableContext)
-const revived = revive(test, {} as RevivableContext)

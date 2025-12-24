@@ -15,7 +15,7 @@ import * as readableStream from './readable-stream'
 export type RevivableModule<T extends string = string, T2 = any, T3 extends BoxBase<T> = any> = {
   readonly type: T
   readonly isType: (value: unknown) => value is T2
-  readonly box: (value: T2, context: RevivableContext) => T3
+  readonly box: ((value: T2, context: RevivableContext) => T3) | ((...args: any[]) => any)
   readonly revive: (value: T3, context: RevivableContext) => T2
 }
 
