@@ -1,50 +1,33 @@
-import type { Capable, Uuid } from '../types'
+import type { Capable } from '../types'
 import type { RevivableContext } from './utils'
 
 import { BoxBase } from './utils'
 import { recursiveBox, recursiveRevive } from '.'
-import { getTransferableObjects, isJsonOnlyTransport } from '../utils'
+import { getTransferableObjects } from '../utils'
+import { StrictMessageChannel } from '../utils/message-channel'
+import { box as boxMessagePort, revive as reviveMessagePort } from './message-port'
 
 export const type = 'promise' as const
 
 export type Context =
   | { type: 'resolve', data: Capable }
   | { type: 'reject', error: string }
+  
+
+declare const CapableError: unique symbol
+type CapablePromise<T> = T extends Capable
+  ? Promise<T>
+  : { [CapableError]: 'Message type must extend Capable'; __badType__: T }
+
 
 export const isType = (value: unknown): value is Promise<any> =>
   value instanceof Promise
 
-export const box = <T extends RevivableContext>(
-  value: Promise<any>,
-  context: T
+export const box = <T, T2 extends RevivableContext>(
+  value: CapablePromise<T>,
+  context: T2
 ) => {
-  if (isJsonOnlyTransport(context.transport)) {
-    // JSON transport: use messageChannels/eventTarget pattern
-    const { uuid: portId, port1: localPort } = context.messageChannels.alloc()
-
-    const sendResult = (result: { type: 'resolve', data: Capable } | { type: 'reject', error: string }) => {
-      context.sendMessage({
-        type: 'message',
-        remoteUuid: context.remoteUuid,
-        data: recursiveBox(result, context) as Capable,
-        portId
-      })
-      context.messageChannels.free(portId)
-    }
-
-    value
-      .then(data => sendResult({ type: 'resolve', data }))
-      .catch(error => sendResult({ type: 'reject', error: error?.stack ?? String(error) }))
-
-    return {
-      ...BoxBase,
-      type,
-      portId
-    }
-  }
-
-  // Capable transport: use MessagePort directly
-  const { port1: localPort, port2: remotePort } = new MessageChannel()
+  const { port1: localPort, port2: remotePort } = new MessageChannel() as StrictMessageChannel<T, T>
   context.messagePorts.add(remotePort)
 
   const sendResult = (result: { type: 'resolve', data: Capable } | { type: 'reject', error: string }) => {
@@ -57,52 +40,33 @@ export const box = <T extends RevivableContext>(
     .then(data => sendResult({ type: 'resolve', data }))
     .catch(error => sendResult({ type: 'reject', error: error?.stack ?? String(error) }))
 
-  return {
+  const result = {
     ...BoxBase,
     type,
-    port: remotePort
+    port: boxMessagePort(remotePort, context)
   }
+  return result as typeof result & { __type__: Awaited<T> }
 }
 
-export const revive = <T extends RevivableContext>(
-  value: ReturnType<typeof box>,
-  context: T
-): Promise<any> => {
-  if ('portId' in value) {
-    // JSON transport: use messageChannels/eventTarget pattern
-    const existingChannel = context.messageChannels.get(value.portId)
-    const { port1 } = existingChannel
-      ? existingChannel
-      : context.messageChannels.alloc(value.portId as Uuid)
-
-    return new Promise((resolve, reject) => {
-      port1.addEventListener('message', function listener({ data: message }) {
-        if (message.type !== 'message' || message.portId !== value.portId) return
-        port1.removeEventListener('message', listener)
-        const result = recursiveRevive(message.data, context) as Context
-        if (result.type === 'resolve') {
-          resolve(result.data)
-        } else {
-          reject(result.error)
-        }
-        context.messageChannels.free(value.portId)
-      })
-      port1.start()
-    })
-  }
-
-  // Capable transport: use MessagePort directly
-  context.messagePorts.add(value.port)
-  return new Promise((resolve, reject) => {
-    value.port.addEventListener('message', ({ data }: MessageEvent<Context>) => {
+export const revive = <T extends ReturnType<typeof box>, T2 extends RevivableContext>(
+  value: T,
+  context: T2
+) => {
+  const port = reviveMessagePort(value.port, context)
+  context.messagePorts.add(port)
+  return new Promise<T['__type__']>((resolve, reject) => {
+    port.addEventListener('message', ({ data }: MessageEvent<Context>) => {
       const result = recursiveRevive(data, context) as Context
       if (result.type === 'resolve') {
         resolve(result.data)
       } else {
         reject(result.error)
       }
-      value.port.close()
+      port.close()
     }, { once: true })
-    value.port.start()
+    port.start()
   })
 }
+
+
+const boxed = box(Promise.resolve(Symbol), {} as RevivableContext)
