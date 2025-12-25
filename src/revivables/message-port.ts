@@ -1,4 +1,4 @@
-import type { Capable, ConnectionMessage, Uuid } from '../types'
+import type { Capable, ConnectionMessage, StructurableTransferable, Uuid } from '../types'
 import type { StrictMessagePort } from '../utils/message-channel'
 import type { RevivableContext, BoxBase as BoxBaseType } from './utils'
 
@@ -31,17 +31,17 @@ const messagePortRegistry = new FinalizationRegistry<PortCleanupInfo>((info) => 
 
 export const type = 'messagePort' as const
 
-export type BoxedMessagePort<T extends Capable = Capable> =
+export type BoxedMessagePort<T extends StructurableTransferable = StructurableTransferable> =
   & BoxBaseType<typeof type>
   & { portId: string }
   & { __type__: StrictMessagePort<T> }
 
-declare const CapableError: unique symbol
-type CapablePort<T> = T extends Capable
+declare const StructurableTransferableError: unique symbol
+type StructurableTransferablePort<T> = T extends StructurableTransferable
   ? StrictMessagePort<T>
-  : { [CapableError]: 'Message type must extend Capable'; __badType__: T }
+  : { [StructurableTransferableError]: 'Message type must extend StructurableTransferable'; __badType__: T }
 
-type ExtractCapable<T> = T extends Capable ? T : never
+type ExtractStructurableTransferable<T> = T extends StructurableTransferable ? T : never
 
 export const isType = (value: unknown): value is MessagePort =>
   value instanceof MessagePort
@@ -53,10 +53,10 @@ const isAlreadyBoxed = (value: unknown): boolean =>
   (value as Record<string, unknown>)[OSRA_BOX] === 'revivable'
 
 export const box = <T, T2 extends RevivableContext = RevivableContext>(
-  value: CapablePort<T>,
+  value: StructurableTransferablePort<T>,
   context: T2
 ) => {
-  const messagePort = value as StrictMessagePort<ExtractCapable<T>>
+  const messagePort = value as StrictMessagePort<ExtractStructurableTransferable<T>>
   const { uuid: portId } = context.messageChannels.alloc(undefined, { port1: messagePort as unknown as StrictMessagePort<Capable> })
 
   // Register the messagePort for automatic cleanup when garbage collected
@@ -93,7 +93,7 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
       return
     }
     if (message.type !== 'message' || message.portId !== portId) return
-    messagePort.postMessage(message.data as ExtractCapable<T>, getTransferableObjects(message.data))
+    messagePort.postMessage(message.data as ExtractStructurableTransferable<T>, getTransferableObjects(message.data))
   })
 
   const result = {
@@ -101,10 +101,10 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
     type,
     portId
   }
-  return result as typeof result & { __type__: StrictMessagePort<ExtractCapable<T>> }
+  return result as typeof result & { __type__: StrictMessagePort<ExtractStructurableTransferable<T>> }
 }
 
-export const revive = <T extends Capable, T2 extends RevivableContext>(
+export const revive = <T extends StructurableTransferable, T2 extends RevivableContext>(
   value: BoxedMessagePort<T>,
   context: T2
 ): StrictMessagePort<T> => {
