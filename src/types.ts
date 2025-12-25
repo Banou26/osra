@@ -36,10 +36,17 @@ export type Structurable =
   | Array<Structurable>
   | Map<Structurable, Structurable>
   | Set<Structurable>
-
-export type Capable<TModules extends readonly RevivableModule[] = DefaultRevivableModules> =
+  
+export type StructurableTransferable =
   | Structurable
   | Transferable
+  | { [key: string]: StructurableTransferable }
+  | Array<StructurableTransferable>
+  | Map<StructurableTransferable, StructurableTransferable>
+  | Set<StructurableTransferable>
+
+export type Capable<TModules extends readonly RevivableModule[] = DefaultRevivableModules> =
+  | StructurableTransferable
   | InferRevivables<TModules>
   | { [key: string]: Capable }
   | Array<Capable>

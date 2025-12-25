@@ -1,5 +1,5 @@
-import type { Message, Uuid } from '../types'
-import type { StrictMessagePort } from './message-channel'
+import type { StructurableTransferable, Message, Uuid } from '../types'
+import type { StrictMessageChannel, StrictMessagePort } from './message-channel'
 
 export const makeAllocator = <T>() => {
   const channels = new Map<string, T>()
@@ -57,12 +57,12 @@ export const makeMessageChannelAllocator = () => {
     set: (uuid: Uuid, messagePorts: { port1: MessagePort, port2?: MessagePort }) => {
       channels.set(uuid, { uuid, ...messagePorts })
     },
-    alloc: (uuid: Uuid | undefined = result.getUniqueUuid(), messagePorts?: { port1: MessagePort, port2?: MessagePort }) => {
+    alloc: <T extends StructurableTransferable = StructurableTransferable, T2 extends StructurableTransferable = StructurableTransferable>(uuid: Uuid | undefined = result.getUniqueUuid(), messagePorts?: { port1: MessagePort, port2?: MessagePort }) => {
       if (messagePorts) {
         channels.set(uuid, { uuid, ...messagePorts })
         return { uuid, ...messagePorts }
       }
-      const messageChannel = new MessageChannel()
+      const messageChannel = new MessageChannel() as StrictMessageChannel<T, T2>
       const allocatedMessageChannel = {
         uuid,
         port1: messageChannel.port1,

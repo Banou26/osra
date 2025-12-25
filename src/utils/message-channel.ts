@@ -1,9 +1,9 @@
-interface StrictMessagePortEventMap<T> {
+interface StrictMessagePortEventMap<T = any> {
   "message": MessageEvent<T>
   "messageerror": MessageEvent
 }
 
-export interface StrictMessagePort<T> extends EventTarget {
+export interface StrictMessagePort<T = any> extends EventTarget {
   __type__: T
   onmessage: ((this: MessagePort, ev: MessageEvent<T>) => any) | null
   onmessageerror: ((this: MessagePort, ev: MessageEvent) => any) | null
