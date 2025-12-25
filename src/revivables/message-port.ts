@@ -1,6 +1,6 @@
 import type { Capable, ConnectionMessage, Uuid } from '../types'
 import type { StrictMessagePort } from '../utils/message-channel'
-import type { RevivableContext } from './utils'
+import type { RevivableContext, BoxBase as BoxBaseType } from './utils'
 
 import { BoxBase } from './utils'
 import { recursiveBox, recursiveRevive } from '.'
@@ -31,6 +31,18 @@ const messagePortRegistry = new FinalizationRegistry<PortCleanupInfo>((info) => 
 
 export const type = 'messagePort' as const
 
+export type BoxedMessagePort<T extends Capable = Capable> =
+  & BoxBaseType<typeof type>
+  & { portId: string }
+  & { __type__: StrictMessagePort<T> }
+
+declare const CapableError: unique symbol
+type CapablePort<T> = T extends Capable
+  ? StrictMessagePort<T>
+  : { [CapableError]: 'Message type must extend Capable'; __badType__: T }
+
+type ExtractCapable<T> = T extends Capable ? T : never
+
 export const isType = (value: unknown): value is MessagePort =>
   value instanceof MessagePort
 
@@ -40,12 +52,12 @@ const isAlreadyBoxed = (value: unknown): boolean =>
   OSRA_BOX in value &&
   (value as Record<string, unknown>)[OSRA_BOX] === 'revivable'
 
-export const box = <T extends RevivableContext>(
-  value: MessagePort,
-  context: T
+export const box = <T, T2 extends RevivableContext = RevivableContext>(
+  value: CapablePort<T>,
+  context: T2
 ) => {
-  const messagePort = value as StrictMessagePort<Capable>
-  const { uuid: portId } = context.messageChannels.alloc(undefined, { port1: messagePort })
+  const messagePort = value as StrictMessagePort<ExtractCapable<T>>
+  const { uuid: portId } = context.messageChannels.alloc(undefined, { port1: messagePort as unknown as StrictMessagePort<Capable> })
 
   // Register the messagePort for automatic cleanup when garbage collected
   // Use messagePort itself as the unregister token
@@ -63,7 +75,7 @@ export const box = <T extends RevivableContext>(
     context.sendMessage({
       type: 'message',
       remoteUuid: context.remoteUuid,
-      data: isAlreadyBoxed(data) ? data : recursiveBox(data, context),
+      data: (isAlreadyBoxed(data) ? data : recursiveBox(data as Capable, context)) as Capable,
       portId
     })
   })
@@ -81,20 +93,21 @@ export const box = <T extends RevivableContext>(
       return
     }
     if (message.type !== 'message' || message.portId !== portId) return
-    messagePort.postMessage(message.data, getTransferableObjects(message.data))
+    messagePort.postMessage(message.data as ExtractCapable<T>, getTransferableObjects(message.data))
   })
 
-  return {
+  const result = {
     ...BoxBase,
     type,
     portId
   }
+  return result as typeof result & { __type__: StrictMessagePort<ExtractCapable<T>> }
 }
 
-export const revive = <T extends RevivableContext>(
-  value: ReturnType<typeof box>,
-  context: T
-): StrictMessagePort<Capable> => {
+export const revive = <T extends Capable, T2 extends RevivableContext>(
+  value: BoxedMessagePort<T>,
+  context: T2
+): StrictMessagePort<T> => {
   const { port1: userPort, port2: internalPort } = new MessageChannel()
 
   // Register the userPort for automatic cleanup when garbage collected
@@ -140,7 +153,7 @@ export const revive = <T extends RevivableContext>(
   })
 
   // The ReceiveTransport received a message from the other side so we call it on our own side's MessagePort after reviving it
-  port1.addEventListener('message', function listener({ data: message }) {
+  ;(port1 as MessagePort).addEventListener('message', function listener({ data: message }) {
     if (message.type !== 'message' || message.portId !== value.portId) return
 
     // if the returned messagePort has been registered as internal message port, then we proxy the data without reviving it
@@ -154,5 +167,5 @@ export const revive = <T extends RevivableContext>(
   })
   port1.start()
 
-  return userPort
+  return userPort as StrictMessagePort<T>
 }
