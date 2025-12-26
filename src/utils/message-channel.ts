@@ -1,9 +1,11 @@
+import { StructurableTransferable } from "../types"
+
 interface StrictMessagePortEventMap<T = any> {
   "message": MessageEvent<T>
   "messageerror": MessageEvent
 }
 
-export interface StrictMessagePort<T = any> extends EventTarget {
+export interface StrictMessagePort<T = StructurableTransferable> extends EventTarget {
   __type__: T
   onmessage: ((this: MessagePort, ev: MessageEvent<T>) => any) | null
   onmessageerror: ((this: MessagePort, ev: MessageEvent) => any) | null
@@ -17,7 +19,7 @@ export interface StrictMessagePort<T = any> extends EventTarget {
   removeEventListener(type: string, listener: EventListenerOrEventListenerObject, options?: boolean | EventListenerOptions): void
 }
 
-export interface StrictMessageChannel<T1 = any, T2 = any> {
+export interface StrictMessageChannel<T1 = StructurableTransferable, T2 = StructurableTransferable> {
   readonly port1: StrictMessagePort<T1>
   readonly port2: StrictMessagePort<T2>
 }
