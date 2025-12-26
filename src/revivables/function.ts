@@ -25,8 +25,8 @@ type CapableFunction<T> = T extends (...args: infer P) => infer R
     : never
   : never
 
-export const isType: <T extends (...args: Capable[]) => Capable>(value: unknown) => value is T =
-  (value): value is any => typeof value === 'function'
+export const isType = (value: unknown): value is any =>
+  typeof value === 'function'
 
 export const box = <T extends (...args: any[]) => any, T2 extends RevivableContext>(
   value: T & CapableFunction<T>,
