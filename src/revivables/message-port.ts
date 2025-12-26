@@ -169,7 +169,3 @@ export const revive = <T extends StructurableTransferable, T2 extends RevivableC
 
   return userPort as StrictMessagePort<T>
 }
-
-// const errboxed = box(new MessagePort() as StrictMessagePort<Symbol>, {} as RevivableContext)
-// const boxed = box(new MessagePort() as StrictMessagePort<'lol'>, {} as RevivableContext)
-// const revived = revive(boxed, {} as RevivableContext)
