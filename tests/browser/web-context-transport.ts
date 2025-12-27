@@ -27,3 +27,5 @@ export const userPromiseTypedArray = () => base.userPromiseTypedArray(window)
 export const userDate = () => base.userDate(window)
 
 export const userError = () => base.userError(window)
+
+export const asyncInit = () => base.asyncInit(window)
