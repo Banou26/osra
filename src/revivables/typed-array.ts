@@ -82,13 +82,13 @@ export const isType = (value: unknown): value is TypedArray =>
 
 export const box = <T extends TypedArray, T2 extends RevivableContext>(
   value: T,
-  _context: T2
+  context: T2
 ) => ({
   ...BoxBase,
   type,
   typedArrayType: typedArrayToType(value),
   ...(
-    isJsonOnlyTransport(_context.transport)
+    isJsonOnlyTransport(context.transport)
       ? { base64Buffer: new Uint8Array(value.buffer).toBase64() }
       : { arrayBuffer: value.buffer }
   ) as (
@@ -100,7 +100,7 @@ export const box = <T extends TypedArray, T2 extends RevivableContext>(
 
 export const revive = <T extends ReturnType<typeof box>, T2 extends RevivableContext>(
   value: T,
-  _context: T2
+  context: T2
 ): T[UnderlyingType] => {
   const TypedArrayConstructor = typedArrayTypeToTypedArrayConstructor(value.typedArrayType as TypedArrayType)
   const arrayBuffer =
@@ -109,6 +109,3 @@ export const revive = <T extends ReturnType<typeof box>, T2 extends RevivableCon
       : Uint8Array.fromBase64(value.base64Buffer).buffer
   return new TypedArrayConstructor(arrayBuffer)
 }
-
-const boxed = box(new Uint8Array(), {} as RevivableContext)
-const revived = revive(boxed, {} as RevivableContext)
