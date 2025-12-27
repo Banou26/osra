@@ -5,12 +5,14 @@ import type {
   MessageEventTarget,
   MessageEventMap
 } from './types'
+export type { UnderlyingType } from './revivables/utils'
 import type {
   PlatformCapabilities, ConnectionContext,
   BidirectionalConnectionContext
 } from './utils'
 
 import { OSRA_DEFAULT_KEY, OSRA_KEY } from './types'
+export { BoxBase } from './revivables/utils'
 import {
   probePlatformCapabilities,
   registerOsraMessageListener,

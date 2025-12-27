@@ -6,7 +6,7 @@ interface StrictMessagePortEventMap<T = any> {
 }
 
 export interface StrictMessagePort<T = StructurableTransferable> extends EventTarget {
-  __type__: T
+  [UnderlyingType]: T
   onmessage: ((this: MessagePort, ev: MessageEvent<T>) => any) | null
   onmessageerror: ((this: MessagePort, ev: MessageEvent) => any) | null
   close(): void

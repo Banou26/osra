@@ -1,5 +1,5 @@
 import type { Capable } from '../types'
-import type { RevivableContext } from './utils'
+import type { RevivableContext, UnderlyingType } from './utils'
 import type { StrictMessagePort } from '../utils/message-channel'
 
 import { BoxBase } from './utils'
@@ -24,7 +24,7 @@ export type BoxedPromise<T extends Capable = Capable> = {
   __OSRA_BOX__: 'revivable'
   type: typeof type
   port: ReturnType<typeof boxMessagePort>
-  __type__: T
+  [UnderlyingType]: T
 }
 
 export const isType = (value: unknown): value is Promise<any> =>
@@ -53,7 +53,7 @@ export const box = <T, T2 extends RevivableContext>(
     type,
     port: boxMessagePort(remotePort as unknown as StrictMessagePort<string>, context)
   }
-  return result as typeof result & { __type__: Awaited<ExtractCapable<T>> }
+  return result as typeof result & { [UnderlyingType]: Awaited<ExtractCapable<T>> }
 }
 
 export const revive = <T extends BoxedPromise, T2 extends RevivableContext>(
@@ -62,12 +62,12 @@ export const revive = <T extends BoxedPromise, T2 extends RevivableContext>(
 ) => {
   const port = reviveMessagePort(value.port as unknown as BoxedMessagePort<string>, context)
   context.messagePorts.add(port as MessagePort)
-  return new Promise<T['__type__']>((resolve, reject) => {
+  return new Promise<T[UnderlyingType]>((resolve, reject) => {
     port.addEventListener('message', (event) => {
       const data = (event as unknown as MessageEvent<Context>).data
       const result = recursiveRevive(data, context) as Context
       if (result.type === 'resolve') {
-        resolve(result.data as T['__type__'])
+        resolve(result.data as T[UnderlyingType])
       } else {
         reject(result.error)
       }

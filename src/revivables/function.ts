@@ -1,5 +1,5 @@
 import type { Capable } from '../types'
-import type { RevivableContext, BoxBase as BoxBaseType } from './utils'
+import type { UnderlyingType, RevivableContext, BoxBase as BoxBaseType } from './utils'
 
 import { BoxBase } from './utils'
 import { recursiveBox, recursiveRevive } from '.'
@@ -17,7 +17,7 @@ export type CallContext = [
 export type BoxedFunction<T extends (...args: any[]) => any = (...args: any[]) => any> =
   & BoxBaseType<typeof type>
   & { port: MessagePort }
-  & { __type__: (...args: Parameters<T>) => Promise<Awaited<ReturnType<T>>> }
+  & { [UnderlyingType]: (...args: Parameters<T>) => Promise<Awaited<ReturnType<T>>> }
 
 type CapableFunction<T> = T extends (...args: infer P) => infer R
   ? P extends Capable[]
@@ -48,13 +48,13 @@ export const box = <T extends (...args: any[]) => any, T2 extends RevivableConte
     type,
     port: remotePort
   }
-  return result as typeof result & { __type__: (...args: Parameters<T>) => Promise<Awaited<ReturnType<T>>> }
+  return result as typeof result & { [UnderlyingType]: (...args: Parameters<T>) => Promise<Awaited<ReturnType<T>>> }
 }
 
 export const revive = <T extends BoxedFunction, T2 extends RevivableContext>(
   value: T,
   context: T2
-): T['__type__'] => {
+): T[UnderlyingType] => {
   const func = (...args: Capable[]) =>
     new Promise((resolve, reject) => {
       const { port1: returnValueLocalPort, port2: returnValueRemotePort } = new MessageChannel()

@@ -1,14 +1,10 @@
 import type { IsJsonOnlyTransport } from '../utils'
-import type { RevivableContext } from './utils'
+import type { RevivableContext, UnderlyingType } from './utils'
 
 import { BoxBase } from './utils'
 import { isJsonOnlyTransport } from '../utils'
 
 export const type = 'typedArray' as const
-
-// ============================================================================
-// TypedArray Utilities
-// ============================================================================
 
 const typedArrayConstructors = [
   Int8Array,
@@ -81,10 +77,6 @@ export const typedArrayTypeToTypedArrayConstructor = (value: TypedArrayType): Ty
   return typedArray
 }
 
-// ============================================================================
-// Revivable Module
-// ============================================================================
-
 export const isType = (value: unknown): value is TypedArray =>
   typedArrayConstructors.some(constructor => value instanceof constructor)
 
@@ -103,13 +95,13 @@ export const box = <T extends TypedArray, T2 extends RevivableContext>(
       IsJsonOnlyTransport<T2['transport']> extends true ? { base64Buffer: string }
     : IsJsonOnlyTransport<T2['transport']> extends false ? { arrayBuffer: ArrayBuffer }
     : { base64Buffer: string } | { arrayBuffer: ArrayBuffer }
-  ) & { __type__: T }
+  ) & { [UnderlyingType]: T }
 })
 
 export const revive = <T extends ReturnType<typeof box>, T2 extends RevivableContext>(
   value: T,
   _context: T2
-): T['__type__'] => {
+): T[UnderlyingType] => {
   const TypedArrayConstructor = typedArrayTypeToTypedArrayConstructor(value.typedArrayType as TypedArrayType)
   const arrayBuffer =
     'arrayBuffer' in value
