@@ -5,12 +5,14 @@ import type {
   MessageEventTarget,
   MessageEventMap
 } from './types'
+export type { UnderlyingType } from './revivables/utils'
 import type {
   PlatformCapabilities, ConnectionContext,
   BidirectionalConnectionContext
 } from './utils'
 
 import { OSRA_DEFAULT_KEY, OSRA_KEY } from './types'
+export { BoxBase } from './revivables/utils'
 import {
   probePlatformCapabilities,
   registerOsraMessageListener,
@@ -112,13 +114,13 @@ export const expose = async <T extends Capable>(
         return
       }
       if (message.remoteUuid !== uuid) return
+      // todo: re-add uuid collision handling
       if (connectionContexts.has(message.uuid)) {
-        sendMessage(
-          transport,
-          { type: 'reject-uuid-taken', remoteUuid: message.uuid }
-        )
         return
       }
+      // Send announce back so the other side can also create a connection
+      // (in case they missed our initial announce due to timing)
+      sendMessage(transport, { type: 'announce', remoteUuid: message.uuid })
       const eventTarget = new TypedEventTarget<MessageEventMap>()
       const connectionContext = {
         type: 'bidirectional',

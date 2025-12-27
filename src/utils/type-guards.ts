@@ -4,11 +4,16 @@ import type {
   CustomTransport, EmitJsonPlatformTransport,
   EmitTransport, JsonPlatformTransport,
   Message, ReceiveJsonPlatformTransport,
-  ReceiveTransport, Revivable, RevivableBox, RevivableToRevivableType, RevivableVariantType, TransferBox, Transport
+  ReceiveTransport, Transport
 } from '../types'
 
 import { OSRA_BOX, OSRA_KEY } from '../types'
 import { getWebExtensionRuntime } from './platform'
+
+export type TransferBox<T extends Transferable = Transferable> = {
+  [OSRA_BOX]: 'transferable'
+  value: T
+}
 
 const typedArrayConstructors = [
   Int8Array,
@@ -207,13 +212,14 @@ export const isReceiveJsonOnlyTransport = (value: any): value is ReceiveJsonPlat
   || isWebExtensionOnMessage(value)
 
 export type IsJsonOnlyTransport<T extends Transport> = T extends JsonPlatformTransport ? true : false
-export const isJsonOnlyTransport = (value: any): value is JsonPlatformTransport =>
-     isEmitJsonOnlyTransport(value)
+export const isJsonOnlyTransport = (value: Transport): value is Extract<Transport, JsonPlatformTransport> =>
+    ('isJson' in value && value.isJson === true)
+  || isEmitJsonOnlyTransport(value)
   || isReceiveJsonOnlyTransport(value)
 
 export type IsEmitTransport<T extends Transport> = T extends EmitTransport ? true : false
 export const isEmitTransport = (value: any): value is EmitTransport =>
-    isEmitJsonOnlyTransport(value)
+     isEmitJsonOnlyTransport(value)
   || isWindow(value)
   || isServiceWorkerContainer(value)
   || isWorker(value)
@@ -278,57 +284,3 @@ export const isTransport = (value: any): value is Transport =>
   || isEmitTransport(value)
   || isReceiveTransport(value)
   || isCustomTransport(value)
-
-export const isRevivable = (value: any): value is Revivable =>
-  isMessagePort(value)
-  || isFunction(value)
-  || isPromise(value)
-  || isTypedArray(value)
-  || isArrayBuffer(value)
-  || isReadableStream(value)
-  || isDate(value)
-  || isError(value)
-
-export const isRevivableBox = (value: any): value is RevivableBox =>
-  value
-  && typeof value === 'object'
-  && OSRA_BOX in value
-  && value[OSRA_BOX] === 'revivable'
-
-export const isRevivableMessagePortBox = (value: any): value is RevivableBox & { type: 'messagePort' } =>
-  isRevivableBox(value) && value.type === 'messagePort'
-
-export const isRevivablePromiseBox = (value: any): value is RevivableBox & { type: 'promise' } =>
-  isRevivableBox(value) && value.type === 'promise'
-
-export const isRevivableFunctionBox = (value: any): value is RevivableBox & { type: 'function' } =>
-  isRevivableBox(value) && value.type === 'function'
-
-export const isRevivableTypedArrayBox = (value: any): value is RevivableBox & { type: 'typedArray' } =>
-  isRevivableBox(value) && value.type === 'typedArray'
-
-export const isRevivableArrayBufferBox = (value: any): value is RevivableBox & { type: 'arrayBuffer' } =>
-  isRevivableBox(value) && value.type === 'arrayBuffer'
-
-export const isRevivableReadableStreamBox = (value: any): value is RevivableBox & { type: 'readableStream' } =>
-  isRevivableBox(value) && value.type === 'readableStream'
-
-export const isRevivableErrorBox = (value: any): value is RevivableBox & { type: 'error' } =>
-  isRevivableBox(value) && value.type === 'error'
-
-export const isRevivableDateBox = (value: any): value is RevivableBox & { type: 'date' } =>
-  isRevivableBox(value) && value.type === 'date'
-
-export const revivableBoxToType = (value: RevivableBox) => value.type
-
-export const revivableToType = <T extends Revivable>(value: T): RevivableToRevivableType<T> => {
-  if (isMessagePort(value)) return 'messagePort' as RevivableToRevivableType<T>
-  if (isFunction(value)) return 'function' as RevivableToRevivableType<T>
-  if (isPromise(value)) return 'promise' as RevivableToRevivableType<T>
-  if (isTypedArray(value)) return 'typedArray' as RevivableToRevivableType<T>
-  if (isArrayBuffer(value)) return 'arrayBuffer' as RevivableToRevivableType<T>
-  if (isReadableStream(value)) return 'readableStream' as RevivableToRevivableType<T>
-  if (isDate(value)) return 'date' as RevivableToRevivableType<T>
-  if (isError(value)) return 'error' as RevivableToRevivableType<T>
-  throw new Error('Unknown revivable type')
-}
