@@ -9,8 +9,8 @@ import type { MessageChannelAllocator } from './allocator'
 import type { PlatformCapabilities } from './capabilities'
 import type { StrictMessagePort } from './message-channel'
 
-import { recursiveBox, recursiveRevive } from './revivable'
 import { makeMessageChannelAllocator } from './allocator'
+import { DefaultRevivableModules, defaultRevivableModules, recursiveBox, recursiveRevive, RevivableModule } from '../revivables'
 
 export type BidirectionalConnectionContext = {
   type: 'bidirectional'
@@ -32,13 +32,14 @@ export type ConnectionContext =
   | UnidirectionalEmittingConnectionContext
   | UnidirectionalReceivingConnectionContext
 
-export type ConnectionRevivableContext = {
+export type ConnectionRevivableContext<TModules extends readonly RevivableModule[] = DefaultRevivableModules> = {
   platformCapabilities: PlatformCapabilities
   transport: Transport
   remoteUuid: Uuid
   messagePorts: Set<MessagePort>
   messageChannels: MessageChannelAllocator
   sendMessage: (message: ConnectionMessage) => void
+  revivableModules: TModules
   eventTarget: MessageEventTarget
 }
 
@@ -68,7 +69,8 @@ export const startBidirectionalConnection = <T extends Capable>(
     messagePorts: new Set(),
     messageChannels: makeMessageChannelAllocator(),
     sendMessage: send,
-    eventTarget
+    eventTarget,
+    revivableModules: defaultRevivableModules
   } satisfies ConnectionRevivableContext
   let initResolve: ((message: ConnectionMessage & { type: 'init' }) => void)
   const initMessage = new Promise<ConnectionMessage & { type: 'init' }>((resolve, reject) => {
@@ -81,14 +83,14 @@ export const startBidirectionalConnection = <T extends Capable>(
       return
     } else if (detail.type === 'message') {
       const messageChannel = revivableContext.messageChannels.getOrAlloc(detail.portId)
-      messageChannel.port2?.postMessage(detail)
+      ;(messageChannel.port2 as MessagePort)?.postMessage(detail)
     }
   })
 
   send({
     type: 'init',
     remoteUuid,
-    data: recursiveBox(value, revivableContext)
+    data: recursiveBox(value, revivableContext) as Capable
   })
 
   return {

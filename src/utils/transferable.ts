@@ -1,4 +1,5 @@
-import type { Capable, TransferBox } from '../types'
+import type { Capable } from '../types'
+import type { TransferBox } from './type-guards'
 
 import { OSRA_BOX } from '../types'
 import { deepReplace } from './replace'

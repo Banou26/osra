@@ -235,6 +235,20 @@ export const userError = async (transport: Transport) => {
   await expect(throwError()).to.be.rejectedWith('Thrown error')
 }
 
+
+export const asyncInit = async (transport: Transport) => {
+  const value = {
+    foo: 1
+  }
+  expose(value, { transport })
+  
+  await new Promise(resolve => setTimeout(resolve, 100))
+
+  const { foo } = await expose<typeof value>({}, { transport })
+
+  expect(foo).to.equal(1)
+}
+
 // export const userWritableStream = async (transport: Transport) => {
 //   const writableStream = new WritableStream({
 //     write(chunk) {
@@ -264,5 +278,6 @@ export const base = {
   userReadableStream,
   userPromiseTypedArray,
   userDate,
-  userError
+  userError,
+  asyncInit
 }

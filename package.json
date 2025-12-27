@@ -1,6 +1,6 @@
 {
   "name": "osra",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Easy communication between workers",
   "files": [
     "build"
@@ -15,13 +15,13 @@
     "dev": "concurrently \"npm run build-test-watch\"",
     "_dev": "concurrently \"npm run build-watch\" \"npm run build-test-watch\" \"npm run test-watch\"",
     "dev2": "concurrently \"npm run build-watch\" \"npm run build-test-watch\" \"npm run test-watch-headful\"",
-    "test": "npx playwright test",
+    "test": "npm run build-test && npx playwright test",
     "test-watch": "set PWTEST_WATCH=1 & npx playwright test",
     "test-watch-headful": "nodemon --watch build --exec \"npx playwright test --headed\"",
     "test-with-coverage": "npm run build-test && npx playwright test && npm run print-coverage && npm run clean-coverage",
     "print-coverage": "npx nyc report",
     "clean-coverage": "rimraf .nyc_output coverage",
-    "type-check": "tsc --noEmit",
+    "type-check": "tsgo --noEmit",
     "start-server": "http-server -p 3000",
     "linux-run-playwright": "xhost +local:docker && docker run -it --name playwright -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix:rw --network=host --ipc=host --shm-size=2gb --rm mcr.microsoft.com/playwright:v1.55.1-noble npx npx -y playwright@1.55.1 run-server --port 8010 --host 0.0.0.0",
     "linux-test": "PW_TEST_CONNECT_WS_ENDPOINT=ws://127.0.0.1:8010/ npx playwright test -c playwright.linux.config.ts",
@@ -49,6 +49,7 @@
     "@types/firefox-webext-browser": "^143.0.0",
     "@types/node": "^25.0.2",
     "@types/webextension-polyfill": "^0.12.4",
+    "@typescript/native-preview": "^7.0.0-dev.20251223.1",
     "chai": "^5.3.3",
     "chai-as-promised": "^8.0.1",
     "concurrently": "^9.1.0",

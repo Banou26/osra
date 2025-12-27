@@ -1,3 +1,57 @@
+export type Replace<T, From, To> =
+    T extends From ? To
+  : T
+
+// Find the matching box type for T from a union of modules M
+// Returns never if no module matches
+type FindMatchingBox<T, M> =
+  M extends { isType: (value: unknown) => value is infer S, box: (...args: any[]) => infer B }
+    ? T extends S ? B : never
+    : never
+
+// Replace T with the corresponding box type from module(s) M
+// If T matches a module's type, returns that module's box type
+// Otherwise returns T unchanged
+export type ReplaceWithBox<T, M> =
+  [FindMatchingBox<T, M>] extends [never]
+    ? T
+    : FindMatchingBox<T, M>
+
+// Deep replace using module matching - each type maps to its specific box type
+export type DeepReplaceWithBox<T, M> =
+  [FindMatchingBox<T, M>] extends [never] ? (
+      T extends Array<infer U> ? Array<DeepReplaceWithBox<U, M>>
+      : T extends object ? { [K in keyof T]: DeepReplaceWithBox<T[K], M> }
+    : T
+  )
+  : FindMatchingBox<T, M>
+  
+// Find the matching revive type for T from a union of modules M
+// T should be a box type (return type of box), returns the revive return type
+// Returns never if no module matches
+type FindMatchingRevive<T, M> =
+  M extends { box: (...args: any[]) => infer S, revive: (...args: any[]) => infer R }
+    ? T extends S ? R : never
+    : never
+
+// Replace T with the corresponding box type from module(s) M
+// If T matches a module's type, returns that module's box type
+// Otherwise returns T unchanged
+export type ReplaceWithRevive<T, M> =
+  [FindMatchingRevive<T, M>] extends [never]
+    ? T
+    : FindMatchingRevive<T, M>
+
+// Deep replace using module matching - each type maps to its specific box type
+export type DeepReplaceWithRevive<T, M> =
+  [FindMatchingRevive<T, M>] extends [never] ? (
+      T extends Array<infer U> ? Array<DeepReplaceWithRevive<U, M>>
+      : T extends object ? { [K in keyof T]: DeepReplaceWithRevive<T[K], M> }
+    : T
+  )
+  : FindMatchingRevive<T, M>
+
+
 export type DeepReplace<T, From, To> =
     T extends From ? DeepReplace<To, From, To>
   : T extends Array<infer U> ? Array<DeepReplace<U, From, To>>
@@ -14,7 +68,6 @@ export const deepReplace = <T, From, To>(
     parent?: unknown
   } = {}
 ): DeepReplace<T, From, To> => {
-  console.log('deepReplace', options?.parent, value)
   const { order = 'pre' } = options
   const replacedValue =
     order === 'pre' && predicate(value, options?.parent)
