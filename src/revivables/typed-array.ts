@@ -86,11 +86,11 @@ export const typedArrayTypeToTypedArrayConstructor = (value: TypedArrayType): Ty
 // ============================================================================
 
 export const isType = (value: unknown): value is TypedArray =>
-  typedArrayConstructors.some(ctor => value instanceof ctor)
+  typedArrayConstructors.some(constructor => value instanceof constructor)
 
-export const box = <T extends RevivableContext>(
-  value: TypedArray,
-  _context: T
+export const box = <T extends TypedArray, T2 extends RevivableContext>(
+  value: T,
+  _context: T2
 ) => ({
   ...BoxBase,
   type,
@@ -100,16 +100,16 @@ export const box = <T extends RevivableContext>(
       ? { base64Buffer: new Uint8Array(value.buffer).toBase64() }
       : { arrayBuffer: value.buffer }
   ) as (
-      IsJsonOnlyTransport<T['transport']> extends true ? { base64Buffer: string }
-    : IsJsonOnlyTransport<T['transport']> extends false ? { arrayBuffer: ArrayBuffer }
+      IsJsonOnlyTransport<T2['transport']> extends true ? { base64Buffer: string }
+    : IsJsonOnlyTransport<T2['transport']> extends false ? { arrayBuffer: ArrayBuffer }
     : { base64Buffer: string } | { arrayBuffer: ArrayBuffer }
-  )
+  ) & { __type__: T }
 })
 
-export const revive = <T extends RevivableContext>(
-  value: ReturnType<typeof box>,
-  _context: T
-): TypedArray => {
+export const revive = <T extends ReturnType<typeof box>, T2 extends RevivableContext>(
+  value: T,
+  _context: T2
+): T['__type__'] => {
   const TypedArrayConstructor = typedArrayTypeToTypedArrayConstructor(value.typedArrayType as TypedArrayType)
   const arrayBuffer =
     'arrayBuffer' in value
@@ -117,3 +117,6 @@ export const revive = <T extends RevivableContext>(
       : Uint8Array.fromBase64(value.base64Buffer).buffer
   return new TypedArrayConstructor(arrayBuffer)
 }
+
+const boxed = box(new Uint8Array(), {} as RevivableContext)
+const revived = revive(boxed, {} as RevivableContext)
