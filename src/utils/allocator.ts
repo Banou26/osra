@@ -1,4 +1,4 @@
-import type { StructurableTransferable, Message, Uuid } from '../types'
+import type { StructurableTransferable, Uuid } from '../types'
 import type { StrictMessageChannel, StrictMessagePort } from './message-channel'
 
 export const makeAllocator = <T>() => {
@@ -35,12 +35,15 @@ export const makeAllocator = <T>() => {
 
 export type Allocator<T> = ReturnType<typeof makeAllocator<T>>
 
-type AllocatedMessageChannel = {
+type AllocatedMessageChannel<
+  T extends StructurableTransferable = StructurableTransferable,
+  T2 extends StructurableTransferable = StructurableTransferable
+> = {
   uuid: Uuid
   /** Local port */
-  port1: StrictMessagePort<Message>
+  port1: StrictMessagePort<T>
   /** Remote port that gets transferred, might be undefined if a remote context created the channel */
-  port2?: StrictMessagePort<Message>
+  port2?: StrictMessagePort<T2>
 }
 
 export const makeMessageChannelAllocator = () => {
@@ -54,15 +57,19 @@ export const makeMessageChannelAllocator = () => {
       }
       return uuid
     },
-    set: (uuid: Uuid, messagePorts: { port1: MessagePort, port2?: MessagePort }) => {
+    set: (uuid: Uuid, messagePorts: { port1: StrictMessagePort, port2?: StrictMessagePort }) => {
       channels.set(uuid, { uuid, ...messagePorts })
     },
-    alloc: <T extends StructurableTransferable = StructurableTransferable, T2 extends StructurableTransferable = StructurableTransferable>(uuid: Uuid | undefined = result.getUniqueUuid(), messagePorts?: { port1: MessagePort, port2?: MessagePort }) => {
+    alloc: (
+      uuid: Uuid | undefined = result.getUniqueUuid(),
+      messagePorts?: { port1: StrictMessagePort, port2?: StrictMessagePort }
+    ) => {
       if (messagePorts) {
-        channels.set(uuid, { uuid, ...messagePorts })
-        return { uuid, ...messagePorts }
+        const allocatedMessageChannel = { uuid, ...messagePorts } satisfies AllocatedMessageChannel
+        channels.set(uuid, allocatedMessageChannel)
+        return allocatedMessageChannel
       }
-      const messageChannel = new MessageChannel() as StrictMessageChannel<T, T2>
+      const messageChannel = new MessageChannel() as StrictMessageChannel
       const allocatedMessageChannel = {
         uuid,
         port1: messageChannel.port1,
@@ -74,7 +81,10 @@ export const makeMessageChannelAllocator = () => {
     has: (uuid: string) => channels.has(uuid),
     get: (uuid: string) => channels.get(uuid),
     free: (uuid: string) => channels.delete(uuid),
-    getOrAlloc: (uuid: Uuid | undefined = result.getUniqueUuid(), messagePorts?: { port1: MessagePort, port2?: MessagePort }) => {
+    getOrAlloc: (
+      uuid: Uuid | undefined = result.getUniqueUuid(),
+      messagePorts?: { port1: StrictMessagePort, port2?: StrictMessagePort }
+    ) => {
       const existingChannel = result.get(uuid)
       if (existingChannel) return existingChannel!
       return result.alloc(uuid, messagePorts)
