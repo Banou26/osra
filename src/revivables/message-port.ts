@@ -1,6 +1,6 @@
 import type { Capable, ConnectionMessage, StructurableTransferable, Uuid } from '../types'
 import type { StrictMessagePort } from '../utils/message-channel'
-import type { RevivableContext, BoxBase as BoxBaseType } from './utils'
+import type { RevivableContext, BoxBase as BoxBaseType, UnderlyingType } from './utils'
 
 import { BoxBase } from './utils'
 import { recursiveBox, recursiveRevive } from '.'
@@ -34,7 +34,7 @@ export const type = 'messagePort' as const
 export type BoxedMessagePort<T extends StructurableTransferable = StructurableTransferable> =
   & BoxBaseType<typeof type>
   & { portId: string }
-  & { __type__: StrictMessagePort<T> }
+  & { [UnderlyingType]: StrictMessagePort<T> }
 
 declare const StructurableTransferableError: unique symbol
 type StructurableTransferablePort<T> = T extends StructurableTransferable
@@ -101,7 +101,7 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
     type,
     portId
   }
-  return result as typeof result & { __type__: StrictMessagePort<ExtractStructurableTransferable<T>> }
+  return result as typeof result & { [UnderlyingType]: StrictMessagePort<ExtractStructurableTransferable<T>> }
 }
 
 export const revive = <T extends StructurableTransferable, T2 extends RevivableContext>(

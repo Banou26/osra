@@ -9,9 +9,9 @@ export const type = 'arrayBuffer' as const
 export const isType = (value: unknown): value is ArrayBuffer =>
   value instanceof ArrayBuffer
 
-export const box = <T extends RevivableContext>(
-  value: ArrayBuffer,
-  _context: T
+export const box = <T extends ArrayBuffer, T2 extends RevivableContext>(
+  value: T,
+  _context: T2
 ) => ({
   ...BoxBase,
   type,
@@ -20,15 +20,15 @@ export const box = <T extends RevivableContext>(
       ? { base64Buffer: new Uint8Array(value).toBase64() }
       : { arrayBuffer: value }
   ) as (
-      IsJsonOnlyTransport<T['transport']> extends true ? { base64Buffer: string }
-    : IsJsonOnlyTransport<T['transport']> extends false ? { arrayBuffer: ArrayBuffer }
+      IsJsonOnlyTransport<T2['transport']> extends true ? { base64Buffer: string }
+    : IsJsonOnlyTransport<T2['transport']> extends false ? { arrayBuffer: ArrayBuffer }
     : { base64Buffer: string } | { arrayBuffer: ArrayBuffer }
   )
 })
 
-export const revive = <T extends RevivableContext>(
-  value: ReturnType<typeof box>,
-  _context: T
+export const revive = <T extends ReturnType<typeof box>, T2 extends RevivableContext>(
+  value: T,
+  _context: T2
 ) =>
   'arrayBuffer' in value ? value.arrayBuffer
   : (

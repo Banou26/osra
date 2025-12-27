@@ -4,6 +4,9 @@ import type { MessageChannelAllocator, PlatformCapabilities } from '../utils'
 
 import { OSRA_BOX } from '../types'
 
+export declare const UnderlyingType: unique symbol
+export type UnderlyingType = typeof UnderlyingType
+
 export const BoxBase = {
   [OSRA_BOX]: 'revivable',
   type: '' as string
