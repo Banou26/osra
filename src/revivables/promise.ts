@@ -1,6 +1,7 @@
 import type { Capable } from '../types'
-import type { RevivableContext, UnderlyingType } from './utils'
+import type { RevivableContext } from './utils'
 import type { StrictMessagePort } from '../utils/message-channel'
+import type { UnderlyingType } from '.'
 
 import { BoxBase } from './utils'
 import { recursiveBox, recursiveRevive } from '.'
@@ -33,7 +34,7 @@ export const isType = (value: unknown): value is Promise<any> =>
 export const box = <T, T2 extends RevivableContext>(
   value: CapablePromise<T>,
   context: T2
-) => {
+): BoxedPromise<ExtractCapable<T>> => {
   const promise = value as Promise<ExtractCapable<T>>
   const { port1: localPort, port2: remotePort } = new MessageChannel()
   context.messagePorts.add(remotePort)
@@ -48,12 +49,11 @@ export const box = <T, T2 extends RevivableContext>(
     .then((data: ExtractCapable<T>) => sendResult({ type: 'resolve', data }))
     .catch((error: unknown) => sendResult({ type: 'reject', error: (error as Error)?.stack ?? String(error) }))
 
-  const result = {
+  return {
     ...BoxBase,
     type,
     port: boxMessagePort(remotePort as unknown as StrictMessagePort<string>, context)
-  }
-  return result as typeof result & { [UnderlyingType]: Awaited<ExtractCapable<T>> }
+  } as unknown as BoxedPromise<ExtractCapable<T>>
 }
 
 export const revive = <T extends BoxedPromise, T2 extends RevivableContext>(

@@ -56,7 +56,7 @@ export const registerOsraMessageListener = (
       // WebExtOnConnect
       if (isWebExtensionOnConnect(receiveTransport)) {
         const _listener = (port: WebExtPort) => {
-          listenOnWebExtOnMessage(port.onMessage, port)
+          listenOnWebExtOnMessage(port.onMessage as WebExtOnMessage, port)
         }
         receiveTransport.addListener(_listener)
         if (unregisterSignal) {
@@ -68,7 +68,7 @@ export const registerOsraMessageListener = (
       } else if (isWebExtensionOnMessage(receiveTransport)) {
         listenOnWebExtOnMessage(receiveTransport)
       } else { // WebExtPort
-        listenOnWebExtOnMessage(receiveTransport.onMessage)
+        listenOnWebExtOnMessage(receiveTransport.onMessage as WebExtOnMessage)
       }
     } else { // Window, Worker, WebSocket, ect...
       const _listener = (event: MessageEvent<Message>) => {

@@ -1,6 +1,7 @@
 import type { Capable, StructurableTransferable } from '../types'
-import type { RevivableContext, UnderlyingType } from './utils'
+import type { RevivableContext } from './utils'
 import type { StrictMessageChannel, StrictMessagePort } from '../utils/message-channel'
+import type { UnderlyingType } from '.'
 
 import { BoxBase } from './utils'
 import { recursiveBox, recursiveRevive } from '.'
@@ -13,13 +14,20 @@ export type PullContext = {
   type: 'pull' | 'cancel'
 }
 
+export type BoxedReadableStream<T extends ReadableStream = ReadableStream> = {
+  __OSRA_BOX__: 'revivable'
+  type: typeof type
+  port: BoxedMessagePort
+  [UnderlyingType]: T
+}
+
 export const isType = (value: unknown): value is ReadableStream =>
   value instanceof ReadableStream
 
 export const box = <T extends ReadableStream, T2 extends RevivableContext>(
   value: T,
   context: T2
-) => {
+): BoxedReadableStream<T> => {
   const { port1: localPort, port2: remotePort } = new MessageChannel() as StrictMessageChannel<StructurableTransferable, StructurableTransferable>
   context.messagePorts.add(remotePort as MessagePort)
 
@@ -38,19 +46,17 @@ export const box = <T extends ReadableStream, T2 extends RevivableContext>(
   })
   localPort.start()
 
-  const result = {
-    ...BoxBase,
+  return {
+    __OSRA_BOX__: 'revivable',
     type,
-    // Cast to a record type which is a member of StructurableTransferable
     port: boxMessagePort(remotePort as MessagePort as StrictMessagePort<Record<string, StructurableTransferable>>, context)
-  }
-  return result as typeof result & { [UnderlyingType]: T }
+  } as BoxedReadableStream<T>
 }
 
-export const revive = <T extends ReturnType<typeof box>, T2 extends RevivableContext>(
+export const revive = <T extends BoxedReadableStream, T2 extends RevivableContext>(
   value: T,
   context: T2
-) => {
+): T[UnderlyingType] => {
   const port = reviveMessagePort(value.port as unknown as BoxedMessagePort, context) as MessagePort
   context.messagePorts.add(port as MessagePort)
   port.start()
@@ -60,7 +66,7 @@ export const revive = <T extends ReturnType<typeof box>, T2 extends RevivableCon
     pull(controller) {
       return new Promise((resolve, reject) => {
         port.addEventListener('message', async ({ data }) => {
-          const result = recursiveRevive(data, context) as Promise<ReadableStreamReadResult<T[UnderlyingType]>>
+          const result = recursiveRevive(data, context) as Promise<ReadableStreamReadResult<any>>
           result
             .then(result => {
               if (result.done) controller.close()

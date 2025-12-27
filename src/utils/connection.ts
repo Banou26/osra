@@ -83,14 +83,14 @@ export const startBidirectionalConnection = <T extends Capable>(
       return
     } else if (detail.type === 'message') {
       const messageChannel = revivableContext.messageChannels.getOrAlloc(detail.portId)
-      messageChannel.port2?.postMessage(detail)
+      ;(messageChannel.port2 as MessagePort)?.postMessage(detail)
     }
   })
 
   send({
     type: 'init',
     remoteUuid,
-    data: recursiveBox(value, revivableContext)
+    data: recursiveBox(value, revivableContext) as Capable
   })
 
   return {
