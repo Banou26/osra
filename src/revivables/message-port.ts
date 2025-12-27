@@ -57,7 +57,8 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
   context: T2
 ) => {
   const messagePort = value as StrictMessagePort<ExtractStructurableTransferable<T>>
-  const { uuid: portId } = context.messageChannels.alloc(undefined, { port1: messagePort as unknown as StrictMessagePort<Capable> })
+  // todo: idk why this errors without `as MessagePort`, try to fix whenever possible
+  const { uuid: portId } = context.messageChannels.alloc(undefined, { port1: messagePort as MessagePort as StrictMessagePort })
 
   // Register the messagePort for automatic cleanup when garbage collected
   // Use messagePort itself as the unregister token
