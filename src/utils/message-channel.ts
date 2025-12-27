@@ -1,8 +1,9 @@
-import { StructurableTransferable } from "../types"
+import type { UnderlyingType } from '../revivables/utils'
+import type { StructurableTransferable } from '../types'
 
-interface StrictMessagePortEventMap<T = any> {
-  "message": MessageEvent<T>
-  "messageerror": MessageEvent
+type StrictMessagePortEventMap <T = any> = {
+  'message': MessageEvent<T>
+  'messageerror': MessageEvent
 }
 
 export interface StrictMessagePort<T = StructurableTransferable> extends EventTarget {
@@ -19,7 +20,7 @@ export interface StrictMessagePort<T = StructurableTransferable> extends EventTa
   removeEventListener(type: string, listener: EventListenerOrEventListenerObject, options?: boolean | EventListenerOptions): void
 }
 
-export interface StrictMessageChannel<T1 = StructurableTransferable, T2 = StructurableTransferable> {
+export interface StrictMessageChannel<T1 = StructurableTransferable, T2 = StructurableTransferable> extends MessageChannel {
   readonly port1: StrictMessagePort<T1>
   readonly port2: StrictMessagePort<T2>
 }
