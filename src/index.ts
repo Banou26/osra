@@ -114,13 +114,13 @@ export const expose = async <T extends Capable>(
         return
       }
       if (message.remoteUuid !== uuid) return
+      // todo: re-add uuid collision handling
       if (connectionContexts.has(message.uuid)) {
-        sendMessage(
-          transport,
-          { type: 'reject-uuid-taken', remoteUuid: message.uuid }
-        )
         return
       }
+      // Send announce back so the other side can also create a connection
+      // (in case they missed our initial announce due to timing)
+      sendMessage(transport, { type: 'announce', remoteUuid: message.uuid })
       const eventTarget = new TypedEventTarget<MessageEventMap>()
       const connectionContext = {
         type: 'bidirectional',
