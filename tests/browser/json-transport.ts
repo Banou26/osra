@@ -42,3 +42,5 @@ export const userPromiseTypedArray = () => base.userPromiseTypedArray(jsonTransp
 export const userDate = () => base.userDate(jsonTransport())
 
 export const userError = () => base.userError(jsonTransport())
+
+export const asyncInit = () => base.asyncInit(jsonTransport())
