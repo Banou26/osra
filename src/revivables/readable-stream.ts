@@ -1,9 +1,11 @@
-import type { Capable, Uuid } from '../types'
-import type { RevivableContext } from './utils'
+import type { Capable, StructurableTransferable } from '../types'
+import type { RevivableContext, UnderlyingType } from './utils'
+import type { StrictMessageChannel, StrictMessagePort } from '../utils/message-channel'
 
 import { BoxBase } from './utils'
 import { recursiveBox, recursiveRevive } from '.'
-import { getTransferableObjects, isJsonOnlyTransport } from '../utils'
+import { getTransferableObjects } from '../utils'
+import { box as boxMessagePort, revive as reviveMessagePort, BoxedMessagePort } from './message-port'
 
 export const type = 'readableStream' as const
 
@@ -14,52 +16,21 @@ export type PullContext = {
 export const isType = (value: unknown): value is ReadableStream =>
   value instanceof ReadableStream
 
-export const box = <T extends RevivableContext>(
-  value: ReadableStream,
-  context: T
+export const box = <T extends ReadableStream, T2 extends RevivableContext>(
+  value: T,
+  context: T2
 ) => {
-  if (isJsonOnlyTransport(context.transport)) {
-    // JSON transport: use messageChannels/eventTarget pattern
-    const { uuid: portId } = context.messageChannels.alloc()
-    const reader = value.getReader()
-
-    context.eventTarget.addEventListener('message', async function listener({ detail: message }) {
-      if (message.type !== 'message' || message.portId !== portId) return
-      const { type } = recursiveRevive(message.data, context) as PullContext
-      if (type === 'pull') {
-        const pullResult = reader.read()
-        context.sendMessage({
-          type: 'message',
-          remoteUuid: context.remoteUuid,
-          data: recursiveBox(pullResult, context) as Capable,
-          portId
-        })
-      } else {
-        reader.cancel()
-        context.eventTarget.removeEventListener('message', listener)
-        context.messageChannels.free(portId)
-      }
-    })
-
-    return {
-      ...BoxBase,
-      type,
-      portId
-    }
-  }
-
-  // Capable transport: use MessagePort directly
-  const { port1: localPort, port2: remotePort } = new MessageChannel()
-  context.messagePorts.add(remotePort)
+  const { port1: localPort, port2: remotePort } = new MessageChannel() as StrictMessageChannel<StructurableTransferable, StructurableTransferable>
+  context.messagePorts.add(remotePort as MessagePort)
 
   const reader = value.getReader()
 
-  localPort.addEventListener('message', async ({ data }: MessageEvent<PullContext>) => {
+  ;(localPort as MessagePort).addEventListener('message', async ({ data }) => {
     const { type } = recursiveRevive(data, context) as PullContext
     if (type === 'pull') {
       const pullResult = reader.read()
       const boxedResult = recursiveBox(pullResult, context)
-      localPort.postMessage(boxedResult, getTransferableObjects(boxedResult))
+      ;(localPort as MessagePort).postMessage(boxedResult, getTransferableObjects(boxedResult))
     } else {
       reader.cancel()
       localPort.close()
@@ -67,71 +38,29 @@ export const box = <T extends RevivableContext>(
   })
   localPort.start()
 
-  return {
+  const result = {
     ...BoxBase,
     type,
-    port: remotePort
+    // Cast to a record type which is a member of StructurableTransferable
+    port: boxMessagePort(remotePort as MessagePort as StrictMessagePort<Record<string, StructurableTransferable>>, context)
   }
+  return result as typeof result & { [UnderlyingType]: T }
 }
 
-export const revive = <T extends RevivableContext>(
-  value: ReturnType<typeof box>,
-  context: T
-): ReadableStream => {
-  if ('portId' in value) {
-    // JSON transport: use messageChannels/eventTarget pattern
-    const existingChannel = context.messageChannels.get(value.portId)
-    const { port1 } = existingChannel
-      ? existingChannel
-      : context.messageChannels.alloc(value.portId as Uuid)
-    port1.start()
-
-    return new ReadableStream({
-      start(_controller) {},
-      pull(controller) {
-        return new Promise((resolve, reject) => {
-          port1.addEventListener('message', function listener({ data: message }) {
-            if (message.type !== 'message' || message.portId !== value.portId) return
-            port1.removeEventListener('message', listener)
-            const result = recursiveRevive(message.data, context) as Promise<ReadableStreamReadResult<any>>
-            result
-              .then(result => {
-                if (result.done) controller.close()
-                else controller.enqueue(result.value)
-                resolve()
-              })
-              .catch(reject)
-          })
-          context.sendMessage({
-            type: 'message',
-            remoteUuid: context.remoteUuid,
-            data: recursiveBox({ type: 'pull' }, context) as Capable,
-            portId: value.portId as Uuid
-          })
-        })
-      },
-      cancel() {
-        context.sendMessage({
-          type: 'message',
-          remoteUuid: context.remoteUuid,
-          data: recursiveBox({ type: 'cancel' }, context) as Capable,
-          portId: value.portId as Uuid
-        })
-        context.messageChannels.free(value.portId)
-      }
-    })
-  }
-
-  // Capable transport: use MessagePort directly
-  context.messagePorts.add(value.port)
-  value.port.start()
+export const revive = <T extends ReturnType<typeof box>, T2 extends RevivableContext>(
+  value: T,
+  context: T2
+) => {
+  const port = reviveMessagePort(value.port as unknown as BoxedMessagePort, context) as MessagePort
+  context.messagePorts.add(port as MessagePort)
+  port.start()
 
   return new ReadableStream({
     start(_controller) {},
     pull(controller) {
       return new Promise((resolve, reject) => {
-        value.port.addEventListener('message', async ({ data }: MessageEvent<Capable>) => {
-          const result = recursiveRevive(data, context) as Promise<ReadableStreamReadResult<any>>
+        port.addEventListener('message', async ({ data }) => {
+          const result = recursiveRevive(data, context) as Promise<ReadableStreamReadResult<T[UnderlyingType]>>
           result
             .then(result => {
               if (result.done) controller.close()
@@ -140,12 +69,12 @@ export const revive = <T extends RevivableContext>(
             })
             .catch(reject)
         }, { once: true })
-        value.port.postMessage(recursiveBox({ type: 'pull' }, context))
+        port.postMessage(recursiveBox({ type: 'pull' }, context))
       })
     },
     cancel() {
-      value.port.postMessage(recursiveBox({ type: 'cancel' }, context))
-      value.port.close()
+      port.postMessage(recursiveBox({ type: 'cancel' }, context))
+      port.close()
     }
-  })
+  }) as T[UnderlyingType]
 }
