@@ -4,6 +4,7 @@ import type { UnderlyingType, RevivableContext, BoxBase as BoxBaseType } from '.
 import { BoxBase } from './utils'
 import { recursiveBox, recursiveRevive } from '.'
 import { getTransferableObjects } from '../utils'
+import { box as boxMessagePort, revive as reviveMessagePort, BoxedMessagePort } from './message-port'
 
 export const type = 'function' as const
 
@@ -16,7 +17,7 @@ export type CallContext = [
 
 export type BoxedFunction<T extends (...args: any[]) => any = (...args: any[]) => any> =
   & BoxBaseType<typeof type>
-  & { port: MessagePort }
+  & { port: BoxedMessagePort }
   & { [UnderlyingType]: (...args: Parameters<T>) => Promise<Awaited<ReturnType<T>>> }
 
 type CapableFunction<T> = T extends (...args: infer P) => infer R
@@ -31,7 +32,7 @@ export const isType = (value: unknown): value is (...args: any[]) => any =>
 export const box = <T extends (...args: any[]) => any, T2 extends RevivableContext>(
   value: T & CapableFunction<T>,
   context: T2
-) => {
+): BoxedFunction<T> => {
   const { port1: localPort, port2: remotePort } = new MessageChannel()
   context.messagePorts.add(remotePort)
 
@@ -43,24 +44,25 @@ export const box = <T extends (...args: any[]) => any, T2 extends RevivableConte
   })
   localPort.start()
 
-  const result = {
+  return {
     ...BoxBase,
     type,
-    port: remotePort
-  }
-  return result as typeof result & { [UnderlyingType]: (...args: Parameters<T>) => Promise<Awaited<ReturnType<T>>> }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    port: boxMessagePort(remotePort as any, context)
+  } as BoxedFunction<T>
 }
 
 export const revive = <T extends BoxedFunction, T2 extends RevivableContext>(
   value: T,
   context: T2
 ): T[UnderlyingType] => {
+  const port = reviveMessagePort(value.port as unknown as BoxedMessagePort, context)
   const func = (...args: Capable[]) =>
     new Promise((resolve, reject) => {
       const { port1: returnValueLocalPort, port2: returnValueRemotePort } = new MessageChannel()
       context.messagePorts.add(returnValueRemotePort)
       const callContext = recursiveBox([returnValueRemotePort, args] as const, context)
-      value.port.postMessage(callContext, getTransferableObjects(callContext))
+      ;(port as MessagePort).postMessage(callContext, getTransferableObjects(callContext))
 
       returnValueLocalPort.addEventListener('message', ({ data }: MessageEvent<Capable>) => {
         const result = recursiveRevive(data, context) as Promise<Capable>
