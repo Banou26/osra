@@ -71,15 +71,15 @@ export const registerOsraMessageListener = (
         listenOnWebExtOnMessage(receiveTransport.onMessage as WebExtOnMessage)
       }
     } else { // Window, Worker, WebSocket, ect...
-      const _listener = (event: MessageEvent<Message>) => {
+      const messageListener = (event: MessageEvent<Message>) => {
         if (!checkOsraMessageKey(event.data, key)) return
         if (remoteName && event.data.name !== remoteName) return
         listener(event.data, { receiveTransport, source: event.source })
       }
-      receiveTransport.addEventListener('message', _listener as unknown as EventListener)
+      receiveTransport.addEventListener('message', messageListener as EventListener)
       if (unregisterSignal) {
         unregisterSignal.addEventListener('abort', () =>
-          receiveTransport.removeEventListener('message', _listener as unknown as EventListener)
+          receiveTransport.removeEventListener('message', messageListener as EventListener)
         )
       }
     }

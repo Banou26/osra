@@ -109,3 +109,20 @@ export const revive = <T extends ReturnType<typeof box>, T2 extends RevivableCon
       : Uint8Array.fromBase64(value.base64Buffer).buffer
   return new TypedArrayConstructor(arrayBuffer)
 }
+
+const typeCheck = () => {
+  const uint8Boxed = box(new Uint8Array(10), {} as RevivableContext)
+  const uint8Revived = revive(uint8Boxed, {} as RevivableContext)
+  const expectedUint8: Uint8Array = uint8Revived
+  // @ts-expect-error - wrong typed array type
+  const wrongType: Int32Array = uint8Revived
+
+  const float32Boxed = box(new Float32Array(10), {} as RevivableContext)
+  const float32Revived = revive(float32Boxed, {} as RevivableContext)
+  const expectedFloat32: Float32Array = float32Revived
+  // @ts-expect-error - wrong typed array type
+  const wrongFloat: Uint8Array = float32Revived
+
+  // @ts-expect-error - cannot box non-TypedArray
+  box('not a typed array', {} as RevivableContext)
+}

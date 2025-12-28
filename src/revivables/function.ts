@@ -111,3 +111,17 @@ export const revive = <T extends BoxedFunction, T2 extends RevivableContext>(
 
   return func
 }
+
+const typeCheck = () => {
+  const boxed = box((a: number, b: string) => a + b.length, {} as RevivableContext)
+  const revived = revive(boxed, {} as RevivableContext)
+  const expected: (a: number, b: string) => Promise<number> = revived
+  // @ts-expect-error - wrong return type
+  const wrongReturn: (a: number, b: string) => Promise<string> = revived
+  // @ts-expect-error - wrong parameter types
+  const wrongParams: (a: string, b: number) => Promise<number> = revived
+  // @ts-expect-error - non-Capable parameter type (Set is not directly Capable as parameter)
+  box((a: WeakMap<object, string>) => a, {} as RevivableContext)
+  // @ts-expect-error - non-Capable return type
+  box(() => new WeakMap(), {} as RevivableContext)
+}
