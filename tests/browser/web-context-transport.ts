@@ -1,4 +1,5 @@
 import { base } from './base-tests'
+import { baseMemory } from './base-memory-tests'
 
 export const argsAndResponse = () => base.argsAndResponse(window)
 
@@ -29,3 +30,21 @@ export const userDate = () => base.userDate(window)
 export const userError = () => base.userError(window)
 
 export const asyncInit = () => base.asyncInit(window)
+
+export const MemoryLeaks = {
+  config: {
+    iterations: baseMemory.DEFAULT_ITERATIONS,
+    memoryTreshold: 1_000_000,
+    timeout: 60_000
+  },
+  functionCallsNoLeak: () => baseMemory.functionCallsNoLeak(window),
+  callbacksNoLeak: () => baseMemory.callbacksNoLeak(window),
+  callbackAsArgNoLeak: () => baseMemory.callbackAsArgNoLeak(window),
+  promiseValuesNoLeak: () => baseMemory.promiseValuesNoLeak(window),
+  objectMethodsNoLeak: () => baseMemory.objectMethodsNoLeak(window),
+  largeDataTransferNoLeak: () => baseMemory.largeDataTransferNoLeak(window),
+  rapidConnectionNoLeak: () => baseMemory.rapidConnectionNoLeak(window),
+  errorHandlingNoLeak: () => baseMemory.errorHandlingNoLeak(window),
+  nestedCallbacksNoLeak: () => baseMemory.nestedCallbacksNoLeak(window),
+  concurrentCallsNoLeak: () => baseMemory.concurrentCallsNoLeak(window)
+}

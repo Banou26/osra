@@ -5,4 +5,3 @@ use(chaiAsPromised)
 export * as Web from './web-context-transport'
 export * as JSONTransport from './json-transport'
 // export * as Stateless from './stateless'
-export * as MemoryLeaks from './memory-tests'
