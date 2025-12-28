@@ -43,6 +43,8 @@ export const box = <T, T2 extends RevivableContext>(
     const boxedResult = recursiveBox(result, context)
     localPort.postMessage(boxedResult, getTransferableObjects(boxedResult))
     localPort.close()
+    // Clean up the remote port from the set (it was transferred earlier)
+    context.messagePorts.delete(remotePort)
   }
 
   promise
@@ -71,6 +73,7 @@ export const revive = <T extends BoxedPromise, T2 extends RevivableContext>(
       } else {
         reject(result.error)
       }
+      context.messagePorts.delete(port as MessagePort)
       port.close()
     }, { once: true })
     port.start()
