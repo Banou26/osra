@@ -79,3 +79,13 @@ export const revive = <T extends BoxedPromise, T2 extends RevivableContext>(
     port.start()
   })
 }
+
+const typeCheck = () => {
+  const boxed = box(Promise.resolve(1 as const), {} as RevivableContext)
+  const revived = revive(boxed, {} as RevivableContext)
+  const expected: Promise<1> = revived
+  // @ts-expect-error
+  const notExpected: Promise<string> = revived
+  // @ts-expect-error
+  box(1 as const, {} as RevivableContext)
+}

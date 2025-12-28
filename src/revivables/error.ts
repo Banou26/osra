@@ -21,3 +21,13 @@ export const revive = <T extends ReturnType<typeof box>, T2 extends RevivableCon
   value: T,
   _context: T2
 ) => new Error(value.message, { cause: value.stack })
+
+const typeCheck = () => {
+  const boxed = box(new Error('test'), {} as RevivableContext)
+  const revived = revive(boxed, {} as RevivableContext)
+  const expected: Error = revived
+  // @ts-expect-error - not an Error
+  const notError: string = revived
+  // @ts-expect-error - cannot box non-Error
+  box('not an error', {} as RevivableContext)
+}

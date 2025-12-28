@@ -47,7 +47,7 @@ export const box = <T extends ReadableStream, T2 extends RevivableContext>(
   localPort.start()
 
   return {
-    __OSRA_BOX__: 'revivable',
+    ...BoxBase,
     type,
     port: boxMessagePort(remotePort as MessagePort as StrictMessagePort<Record<string, StructurableTransferable>>, context)
   } as BoxedReadableStream<T>
@@ -83,4 +83,15 @@ export const revive = <T extends BoxedReadableStream, T2 extends RevivableContex
       port.close()
     }
   }) as T[UnderlyingType]
+}
+
+const typeCheck = () => {
+  const stream = new ReadableStream<number>()
+  const boxed = box(stream, {} as RevivableContext)
+  const revived = revive(boxed, {} as RevivableContext)
+  const expected: ReadableStream<number> = revived
+  // @ts-expect-error - wrong stream type
+  const wrongType: ReadableStream<string> = revived
+  // @ts-expect-error - not a ReadableStream
+  box('not a stream', {} as RevivableContext)
 }

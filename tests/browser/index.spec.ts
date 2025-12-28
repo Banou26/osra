@@ -71,11 +71,13 @@ const recurseTests = (tests: TestObject, path: string[] = []) => {
           await test()
         }, [key, path] as const)
         if (initialHeap) {
-          await client.send('HeapProfiler.collectGarbage')
-          // Allow FinalizationRegistry callbacks to run after GC
-          await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 100)))
-          // Run GC again to collect any objects freed by finalization callbacks
-          await client.send('HeapProfiler.collectGarbage')
+          for (let i = 0; i < 10; i++) {
+            await client.send('HeapProfiler.collectGarbage')
+            // Allow FinalizationRegistry callbacks to run after GC
+            await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 100)))
+            // Run GC again to collect any objects freed by finalization callbacks
+            await client.send('HeapProfiler.collectGarbage')
+          }
           const finalMetrics = await client.send('Performance.getMetrics')
           const finalHeap = finalMetrics.metrics.find(m => m.name === 'JSHeapUsedSize')?.value ?? 0
           const memoryGrowth = finalHeap - initialHeap

@@ -46,10 +46,8 @@ export const userError = () => base.userError(jsonTransport())
 
 export const asyncInit = () => base.asyncInit(jsonTransport())
 
-// JSON transport is much slower due to serialization and has higher memory overhead
-// due to virtual port event listeners, so use fewer iterations and higher threshold
-const JSON_ITERATIONS = 1000
-const JSON_MEMORY_THRESHOLD = 10_000_000
+const JSON_ITERATIONS = 2_500
+const JSON_MEMORY_THRESHOLD = 1_000_000
 
 export const MemoryLeaks = {
   config: {

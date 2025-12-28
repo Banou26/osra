@@ -36,3 +36,13 @@ export const revive = <T extends ReturnType<typeof box>, T2 extends RevivableCon
       .fromBase64(value.base64Buffer)
       .buffer
   )
+
+const typeCheck = () => {
+  const boxed = box(new ArrayBuffer(10), {} as RevivableContext)
+  const revived = revive(boxed, {} as RevivableContext)
+  const expected: ArrayBuffer = revived
+  // @ts-expect-error - not an ArrayBuffer
+  const notArrayBuffer: string = revived
+  // @ts-expect-error - cannot box non-ArrayBuffer
+  box('not an array buffer', {} as RevivableContext)
+}
