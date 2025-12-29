@@ -19,7 +19,6 @@ type PortCleanupInfo = {
 }
 
 const messagePortRegistry = new FinalizationRegistry<PortCleanupInfo>((info) => {
-  console.log('cleanup', info.portId)
   // Send close message to remote side
   info.sendMessage({
     type: 'message-port-close',
@@ -73,7 +72,6 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
       if (message.type === 'message-port-close') {
         if (message.portId !== portId) return
         context.messageChannels.free(portId)
-        console.log('free', portId)
         const port = messagePortRef.deref()
         if (port) {
           // Unregister from FinalizationRegistry to prevent double-close
@@ -112,7 +110,6 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
       portId,
       cleanup: () => {
         context.messageChannels.free(portId)
-        console.log('free', portId)
         context.eventTarget.removeEventListener('message', eventTargetListener)
         messagePortRef.deref()?.removeEventListener('message', messagePortListener)
         messagePortRef.deref()?.close()
@@ -211,7 +208,6 @@ export const revive = <T extends StructurableTransferable, T2 extends RevivableC
           allocatedChannel.port2.close()
         }
       }
-      console.log('free', portId)
       context.messageChannels.free(portId)
     }
 
