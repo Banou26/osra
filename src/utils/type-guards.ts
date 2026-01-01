@@ -139,6 +139,11 @@ export const isWebExtensionRuntime = (value: any): value is WebExtRuntime => {
   return Boolean(
     value
     && typeof value === 'object'
+    /**
+     * This is needed to prevent throwing an error when the value is a cross origin iframe window object.
+     * e.g SecurityError: Blocked a frame with origin "http://localhost:8080" from accessing a cross-origin frame.
+     */
+    && !(globalThis.Window && value instanceof globalThis.Window)
     && isWebExtensionOnConnect(runtime.onConnect)
     && runtime.id
   )
@@ -149,6 +154,11 @@ export const isWebExtensionPort = (value: any, connectPort: boolean = false): va
   return Boolean(
     value
     && typeof value === 'object'
+    /**
+     * This is needed to prevent throwing an error when the value is a cross origin iframe window object.
+     * e.g SecurityError: Blocked a frame with origin "http://localhost:8080" from accessing a cross-origin frame.
+     */
+    && !(globalThis.Window && value instanceof globalThis.Window)
     && ('name' in (value as WebExtPort))
     && ('disconnect' in (value as WebExtPort))
     && ('postMessage' in (value as WebExtPort))
@@ -172,6 +182,11 @@ export const isWebExtensionOnConnect = (value: any): value is WebExtOnConnect =>
   Boolean(
     value
     && typeof value === 'object'
+    /**
+     * This is needed to prevent throwing an error when the value is a cross origin iframe window object.
+     * e.g SecurityError: Blocked a frame with origin "http://localhost:8080" from accessing a cross-origin frame.
+     */
+    && !(globalThis.Window && value instanceof globalThis.Window)
     && (value as WebExtOnConnect).addListener
     && (value as WebExtOnConnect).hasListener
     && (value as WebExtOnConnect).removeListener
@@ -182,22 +197,30 @@ export const isWebExtensionOnMessage = (value: any): value is WebExtOnMessage =>
   Boolean(
     value
     && typeof value === 'object'
+    /**
+     * This is needed to prevent throwing an error when the value is a cross origin iframe window object.
+     * e.g SecurityError: Blocked a frame with origin "http://localhost:8080" from accessing a cross-origin frame.
+     */
+    && !(globalThis.Window && value instanceof globalThis.Window)
     && (value as WebExtOnMessage).addListener
     && (value as WebExtOnMessage).hasListener
     && (value as WebExtOnMessage).removeListener
   )
 
-export const isWindow = (value: any): value is Window => {
-  return Boolean(
-    value
-    && typeof value === 'object'
-    && (value as Window).document
-    && (value as Window).location
-    && (value as Window).navigator
-    && (value as Window).screen
-    && (value as Window).history
-  )
-}
+export const isWindow = (value: unknown): value is Window => {
+    if (!value || typeof value !== 'object') return false
+
+    try {
+      return (value as Window).window === value
+    } catch {
+      try {
+        const w = value as Window
+        return typeof w.closed === 'boolean' && typeof w.close === 'function'
+      } catch {
+        return false
+      }
+    }
+  }
 
 export type IsEmitJsonOnlyTransport<T extends Transport> = T extends EmitJsonPlatformTransport ? true : false
 export const isEmitJsonOnlyTransport = (value: any): value is EmitJsonPlatformTransport =>
@@ -219,8 +242,8 @@ export const isJsonOnlyTransport = (value: Transport): value is Extract<Transpor
 
 export type IsEmitTransport<T extends Transport> = T extends EmitTransport ? true : false
 export const isEmitTransport = (value: any): value is EmitTransport =>
-     isEmitJsonOnlyTransport(value)
-  || isWindow(value)
+     isWindow(value)
+  || isEmitJsonOnlyTransport(value)
   || isServiceWorkerContainer(value)
   || isWorker(value)
   || isDedicatedWorker(value)
@@ -235,8 +258,8 @@ export function assertEmitTransport (transport: Transport): asserts transport is
 
 export type IsReceiveTransport<T extends Transport> = T extends ReceiveTransport ? true : false
 export const isReceiveTransport = (value: any): value is ReceiveTransport =>
-    isReceiveJsonOnlyTransport(value)
-  || isWindow(value)
+     isWindow(value)
+  || isReceiveJsonOnlyTransport(value)
   || isServiceWorkerContainer(value)
   || isWorker(value)
   || isDedicatedWorker(value)
@@ -252,6 +275,11 @@ export const isCustomEmitTransport = (value: any): value is CustomEmitTransport 
   Boolean(
     value
     && typeof value === 'object'
+    /**
+     * This is needed to prevent throwing an error when the value is a cross origin iframe window object.
+     * e.g SecurityError: Blocked a frame with origin "http://localhost:8080" from accessing a cross-origin frame.
+     */
+    && !(globalThis.Window && value instanceof globalThis.Window)
     && (
       'emit' in value
       && (
@@ -265,6 +293,11 @@ export const isCustomReceiveTransport = (value: any): value is CustomReceiveTran
   Boolean(
     value
     && typeof value === 'object'
+    /**
+     * This is needed to prevent throwing an error when the value is a cross origin iframe window object.
+     * e.g SecurityError: Blocked a frame with origin "http://localhost:8080" from accessing a cross-origin frame.
+     */
+    && !(globalThis.Window && value instanceof globalThis.Window)
     && (
       'receive' in value
       && (
@@ -276,11 +309,11 @@ export const isCustomReceiveTransport = (value: any): value is CustomReceiveTran
 
 export type IsCustomTransport<T extends Transport> = T extends CustomTransport ? true : false
 export const isCustomTransport = (value: any): value is CustomTransport =>
-    isCustomEmitTransport(value)
+     isCustomEmitTransport(value)
   || isCustomReceiveTransport(value)
 
 export const isTransport = (value: any): value is Transport =>
-     isJsonOnlyTransport(value)
-  || isEmitTransport(value)
+     isEmitTransport(value)
   || isReceiveTransport(value)
   || isCustomTransport(value)
+  || isJsonOnlyTransport(value)
