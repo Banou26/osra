@@ -6,6 +6,7 @@ import { Capable } from '../types'
 import { isRevivableBox } from './utils'
 import * as arrayBuffer from './array-buffer'
 import * as date from './date'
+import * as headers from './headers'
 import * as error from './error'
 import * as typedArray from './typed-array'
 import * as promise from './promise'
@@ -23,6 +24,7 @@ export type RevivableModule<T extends string = string, T2 = any, T3 extends BoxB
 export const defaultRevivableModules = [
   arrayBuffer,
   date,
+  headers,
   error,
   typedArray,
   promise,
