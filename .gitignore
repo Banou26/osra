@@ -4,3 +4,4 @@ tmp/
 test-results
 .nyc_output/
 coverage/
+tests/browser/__screenshots__/
