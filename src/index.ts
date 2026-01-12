@@ -83,8 +83,17 @@ export const expose = async <T extends Capable>(
   })
 
   let uuid = globalThis.crypto.randomUUID()
+  
+  
+  let aborted = false
+  if (unregisterSignal) {
+    unregisterSignal.addEventListener('abort', () => {
+      aborted = true
+    })
+  }
 
   const sendMessage = (transport: EmitTransport, message: MessageVariant) => {
+    if (aborted) return
     const transferables = getTransferableObjects(message)
     sendOsraMessage(
       transport,
