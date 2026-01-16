@@ -6,6 +6,8 @@ import type {
   MessageEventMap
 } from './types'
 export type { UnderlyingType } from './revivables/utils'
+export type { MessageContext } from './types'
+export { OSRA_CONTEXT } from './revivables/context'
 import type {
   PlatformCapabilities, ConnectionContext,
   BidirectionalConnectionContext
@@ -175,7 +177,7 @@ export const expose = async <T extends Capable>(
       if (connection.type !== 'unidirectional-emitting') {
         connection.eventTarget.dispatchTypedEvent(
           'message',
-          new CustomEvent('message', { detail: message })
+          new CustomEvent('message', { detail: { message, messageContext } })
         )
       }
     }

@@ -5,6 +5,7 @@ import type { DeepReplaceWithBox, DeepReplaceWithRevive, ReplaceWithBox, Replace
 import { Capable } from '../types'
 import { isRevivableBox } from './utils'
 import * as arrayBuffer from './array-buffer'
+import * as context from './context'
 import * as date from './date'
 import * as headers from './headers'
 import * as error from './error'
@@ -23,6 +24,7 @@ export type RevivableModule<T extends string = string, T2 = any, T3 extends BoxB
 
 export const defaultRevivableModules = [
   arrayBuffer,
+  context,
   date,
   headers,
   error,

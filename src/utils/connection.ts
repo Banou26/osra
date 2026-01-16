@@ -1,6 +1,7 @@
 import type {
   Capable, ConnectionMessage,
   Message,
+  MessageContext,
   MessageEventTarget,
   Transport,
   Uuid
@@ -72,18 +73,20 @@ export const startBidirectionalConnection = <T extends Capable>(
     eventTarget,
     revivableModules: defaultRevivableModules
   } satisfies ConnectionRevivableContext
-  let initResolve: ((message: ConnectionMessage & { type: 'init' }) => void)
-  const initMessage = new Promise<ConnectionMessage & { type: 'init' }>((resolve, reject) => {
+  type InitMessageWithContext = { message: ConnectionMessage & { type: 'init' }, messageContext: MessageContext }
+  let initResolve: ((data: InitMessageWithContext) => void)
+  const initMessagePromise = new Promise<InitMessageWithContext>((resolve, reject) => {
     initResolve = resolve
   })
 
   eventTarget.addEventListener('message', ({ detail }) => {
-    if (detail.type === 'init') {
-      initResolve(detail)
+    const { message, messageContext } = detail
+    if (message.type === 'init') {
+      initResolve({ message, messageContext })
       return
-    } else if (detail.type === 'message') {
-      const messageChannel = revivableContext.messageChannels.getOrAlloc(detail.portId)
-      ;(messageChannel.port2 as MessagePort)?.postMessage(detail)
+    } else if (message.type === 'message') {
+      const messageChannel = revivableContext.messageChannels.getOrAlloc(message.portId)
+      ;(messageChannel.port2 as MessagePort)?.postMessage(message)
     }
   })
 
@@ -98,8 +101,10 @@ export const startBidirectionalConnection = <T extends Capable>(
     close: () => {
     },
     remoteValue:
-      initMessage
-        .then(initMessage => recursiveRevive(initMessage.data, revivableContext)) as Promise<T>
+      initMessagePromise
+        .then(({ message, messageContext }) =>
+          recursiveRevive(message.data, { ...revivableContext, messageContext })
+        ) as Promise<T>
   } satisfies BidirectionalConnection<T>
 }
 

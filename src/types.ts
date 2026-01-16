@@ -124,8 +124,13 @@ export type MessageContext = {
   source?: MessageEventSource | null // Window, Worker, WebSocket, ect...
 }
 
+export type MessageEventDetail = {
+  message: Message
+  messageContext: MessageContext
+}
+
 export type MessageEventMap = {
-  message: CustomEvent<Message>
+  message: CustomEvent<MessageEventDetail>
 }
 export type MessageEventTarget = TypedEventTarget<MessageEventMap>
 
