@@ -46,6 +46,10 @@ export const userError = () => base.userError(jsonTransport())
 
 export const asyncInit = () => base.asyncInit(jsonTransport())
 
+export const userContext = () => base.userContext(jsonTransport())
+
+export const userContextInNestedObject = () => base.userContextInNestedObject(jsonTransport())
+
 const JSON_ITERATIONS = 2_500
 const JSON_MEMORY_THRESHOLD = 1_000_000
 
