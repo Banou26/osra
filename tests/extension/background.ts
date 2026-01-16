@@ -1,6 +1,6 @@
 import { Resolvers as ContentScriptResolvers } from './background'
 
-import { expose } from '../../src/index'
+import { expose, OSRA_CONTEXT, type MessageContext } from '../../src/index'
 
 const jsonOnlyCapabilities = {
   jsonOnly: true,
@@ -44,6 +44,30 @@ const resolvers = {
       controller.close()
     }
   }),
+  getContext: async (ctx: MessageContext) => {
+    // Return info about the received context
+    return {
+      hasContext: ctx !== null && typeof ctx === 'object',
+      // In extension context, we should NOT have the marker symbol
+      hasMarker: Symbol.for('OSRA_CONTEXT') in (ctx ?? {}),
+      contextKeys: Object.keys(ctx ?? {}),
+      // For extension ports, we should have port and sender
+      hasPort: 'port' in (ctx ?? {}) && ctx?.port !== undefined,
+      hasSender: 'sender' in (ctx ?? {}) && ctx?.sender !== undefined,
+      // Sender should have tab info when coming from content script
+      senderTabId: ctx?.sender?.tab?.id,
+      senderUrl: ctx?.sender?.url ?? ctx?.sender?.tab?.url
+    }
+  },
+  getContextNested: async (data: { ctx: MessageContext, value: number }) => {
+    return {
+      value: data.value,
+      hasContext: data.ctx !== null && typeof data.ctx === 'object',
+      hasMarker: Symbol.for('OSRA_CONTEXT') in (data.ctx ?? {}),
+      hasPort: 'port' in (data.ctx ?? {}) && data.ctx?.port !== undefined,
+      hasSender: 'sender' in (data.ctx ?? {}) && data.ctx?.sender !== undefined
+    }
+  },
 
   // Background->Content via content-initiated connection
   bgToContent: {

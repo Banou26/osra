@@ -8,7 +8,8 @@ const jsonTransport = (): Transport => ({
   receive: (listener) => {
     window.addEventListener('message', event => {
       const data = JSON.parse(event.data)
-      listener(data, {})
+      // Provide proper messageContext for the custom transport
+      listener(data, { receiveTransport: window, source: event.source })
     })
   },
   emit: async (message) => {

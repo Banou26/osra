@@ -1,5 +1,6 @@
 import type { TestAPI } from './types'
 import { expect } from 'chai'
+import { OSRA_CONTEXT } from '../../src/index'
 
 // Content -> Background tests
 export const echo = async (api: TestAPI) => {
@@ -73,6 +74,32 @@ export const getStream = async (api: TestAPI) => {
   expect(chunks.length).to.equal(2)
   expect(Array.from(chunks[0])).to.deep.equal([1, 2, 3])
   expect(Array.from(chunks[1])).to.deep.equal([4, 5, 6])
+}
+
+export const getContext = async (api: TestAPI) => {
+  const result = await api.getContext(OSRA_CONTEXT)
+  expect(result.hasContext).to.be.true
+  // The marker symbol should NOT be present after revival
+  expect(result.hasMarker).to.be.false
+  // For extension connections, port should be present
+  expect(result.hasPort).to.be.true
+  // Sender should be present with tab info from content script
+  expect(result.hasSender).to.be.true
+  // Tab ID should be a number
+  expect(result.senderTabId).to.be.a('number')
+  // URL should contain localhost (our test page)
+  expect(result.senderUrl).to.be.a('string')
+  expect(result.senderUrl).to.include('localhost')
+}
+
+export const getContextNested = async (api: TestAPI) => {
+  const result = await api.getContextNested({ ctx: OSRA_CONTEXT, value: 42 })
+  expect(result.value).to.equal(42)
+  expect(result.hasContext).to.be.true
+  expect(result.hasMarker).to.be.false
+  // For extension connections, port should be present
+  expect(result.hasPort).to.be.true
+  expect(result.hasSender).to.be.true
 }
 
 // Background -> Content tests (via content-initiated connection)
@@ -166,7 +193,9 @@ export const base = {
   processBuffer,
   getBuffer,
   getPromise,
-  getStream
+  getStream,
+  getContext,
+  getContextNested
 }
 
 export const bgToContent = {

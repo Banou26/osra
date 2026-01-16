@@ -268,6 +268,11 @@ export const userContext = async (transport: Transport) => {
   expect(receivedContext).to.be.an('object')
   // The context should have been populated (not the marker object)
   expect(receivedContext).to.not.have.property(Symbol.for('OSRA_CONTEXT'))
+  // For bidirectional connections, receiveTransport should always be present
+  expect(receivedContext).to.have.property('receiveTransport')
+  expect(receivedContext!.receiveTransport).to.exist
+  // source should be present for Window/Worker transports
+  expect(receivedContext).to.have.property('source')
 }
 
 export const userContextInNestedObject = async (transport: Transport) => {
@@ -287,6 +292,9 @@ export const userContextInNestedObject = async (transport: Transport) => {
   expect(result).to.equal('test')
   expect(receivedContext).to.be.an('object')
   expect(receivedContext).to.not.have.property(Symbol.for('OSRA_CONTEXT'))
+  // For bidirectional connections, receiveTransport should always be present
+  expect(receivedContext).to.have.property('receiveTransport')
+  expect(receivedContext!.receiveTransport).to.exist
 }
 
 // export const userWritableStream = async (transport: Transport) => {

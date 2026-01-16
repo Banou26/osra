@@ -63,16 +63,17 @@ export const startBidirectionalConnection = <T extends Capable>(
     close: () => void
   }
 ) => {
-  const revivableContext = {
+  const revivableContext: ConnectionRevivableContext & { messageContext?: MessageContext } = {
     platformCapabilities,
     transport,
     remoteUuid,
-    messagePorts: new Set(),
+    messagePorts: new Set<MessagePort>(),
     messageChannels: makeMessageChannelAllocator(),
     sendMessage: send,
     eventTarget,
-    revivableModules: defaultRevivableModules
-  } satisfies ConnectionRevivableContext
+    revivableModules: defaultRevivableModules,
+    messageContext: undefined
+  }
   type InitMessageWithContext = { message: ConnectionMessage & { type: 'init' }, messageContext: MessageContext }
   let initResolve: ((data: InitMessageWithContext) => void)
   const initMessagePromise = new Promise<InitMessageWithContext>((resolve, reject) => {
@@ -102,9 +103,11 @@ export const startBidirectionalConnection = <T extends Capable>(
     },
     remoteValue:
       initMessagePromise
-        .then(({ message, messageContext }) =>
-          recursiveRevive(message.data, { ...revivableContext, messageContext })
-        ) as Promise<T>
+        .then(({ message, messageContext }) => {
+          // Store the messageContext in revivableContext for use by subsequent function calls
+          revivableContext.messageContext = messageContext
+          return recursiveRevive(message.data, revivableContext)
+        }) as Promise<T>
   } satisfies BidirectionalConnection<T>
 }
 
