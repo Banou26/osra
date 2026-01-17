@@ -1,8 +1,8 @@
-import type { MessageContext, Transport } from '../../src/types'
+import type { Transport } from '../../src/types'
 
 import { expect } from 'chai'
 
-import { expose, OSRA_CONTEXT } from '../../src/index'
+import { expose } from '../../src/index'
 
 export const argsAndResponse = async (transport: Transport) => {
   const value = async (data: { foo: number }, bar: string) => {
@@ -241,60 +241,12 @@ export const asyncInit = async (transport: Transport) => {
     foo: 1
   }
   expose(value, { transport })
-
+  
   await new Promise(resolve => setTimeout(resolve, 100))
 
   const { foo } = await expose<typeof value>({}, { transport })
 
   expect(foo).to.equal(1)
-}
-
-export const userContext = async (transport: Transport) => {
-  let receivedContext: MessageContext | undefined
-  const value = {
-    getContext: (ctx: MessageContext) => {
-      receivedContext = ctx
-      return 'received'
-    }
-  }
-  expose(value, { transport })
-
-  const { getContext } = await expose<typeof value>({}, { transport })
-
-  // OSRA_CONTEXT is typed as MessageContext, so it can be passed directly
-  const result = await getContext(OSRA_CONTEXT)
-
-  expect(result).to.equal('received')
-  expect(receivedContext).to.be.an('object')
-  // The context should have been populated (not the marker object)
-  expect(receivedContext).to.not.have.property(Symbol.for('OSRA_CONTEXT'))
-  // For bidirectional connections, receiveTransport should always be present
-  expect(receivedContext).to.have.property('receiveTransport')
-  expect(receivedContext!.receiveTransport).to.exist
-  // source should be present for Window/Worker transports
-  expect(receivedContext).to.have.property('source')
-}
-
-export const userContextInNestedObject = async (transport: Transport) => {
-  let receivedContext: MessageContext | undefined
-  const value = {
-    process: (data: { ctx: MessageContext, name: string }) => {
-      receivedContext = data.ctx
-      return data.name
-    }
-  }
-  expose(value, { transport })
-
-  const { process } = await expose<typeof value>({}, { transport })
-
-  const result = await process({ ctx: OSRA_CONTEXT, name: 'test' })
-
-  expect(result).to.equal('test')
-  expect(receivedContext).to.be.an('object')
-  expect(receivedContext).to.not.have.property(Symbol.for('OSRA_CONTEXT'))
-  // For bidirectional connections, receiveTransport should always be present
-  expect(receivedContext).to.have.property('receiveTransport')
-  expect(receivedContext!.receiveTransport).to.exist
 }
 
 // export const userWritableStream = async (transport: Transport) => {
@@ -327,7 +279,5 @@ export const base = {
   userPromiseTypedArray,
   userDate,
   userError,
-  asyncInit,
-  userContext,
-  userContextInNestedObject
+  asyncInit
 }

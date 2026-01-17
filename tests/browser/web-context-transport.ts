@@ -31,10 +31,6 @@ export const userError = () => base.userError(window)
 
 export const asyncInit = () => base.asyncInit(window)
 
-export const userContext = () => base.userContext(window)
-
-export const userContextInNestedObject = () => base.userContextInNestedObject(window)
-
 export const MemoryLeaks = {
   config: {
     iterations: baseMemory.DEFAULT_ITERATIONS,

@@ -68,8 +68,7 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
 
     // The ReceiveTransport received a message from the other side so we call it on our own side's MessagePort after reviving it
     // Define listener before registering with FinalizationRegistry so we can remove it in cleanup
-    const eventTargetListener = ({ detail }: CustomEvent<{ message: Message }>) => {
-      const { message } = detail
+    const eventTargetListener = ({ detail: message }: CustomEvent<Message>) => {
       if (message.type === 'message-port-close') {
         if (message.portId !== portId) return
         context.messageChannels.free(portId)
@@ -154,8 +153,7 @@ export const revive = <T extends StructurableTransferable, T2 extends RevivableC
     const userPortRef = new WeakRef(userPort)
 
     // Define all listeners before registering so they can be removed in cleanup
-    const eventTargetListener = ({ detail }: CustomEvent<{ message: Message }>) => {
-      const { message } = detail
+    const eventTargetListener = ({ detail: message }: CustomEvent<Message>) => {
       if (message.type !== 'message-port-close' || message.portId !== portId) return
       const port = userPortRef.deref()
       if (port) {

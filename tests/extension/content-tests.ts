@@ -30,8 +30,6 @@ export const processBuffer = () => base.processBuffer(api)
 export const getBuffer = () => base.getBuffer(api)
 export const getPromise = () => base.getPromise(api)
 export const getStream = () => base.getStream(api)
-export const getContext = () => base.getContext(api)
-export const getContextNested = () => base.getContextNested(api)
 
 // Background -> Content tests (via content-initiated connection)
 export const bgToContentGetInfo = () => bgToContent.bgToContentGetInfo(api)

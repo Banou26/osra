@@ -1,5 +1,5 @@
 import type { DefaultRevivableModules, RevivableModule } from '.'
-import type { ConnectionMessage, MessageContext, MessageEventTarget, Transport, Uuid } from '../types'
+import type { ConnectionMessage, MessageEventTarget, Transport, Uuid } from '../types'
 import type { MessageChannelAllocator, PlatformCapabilities } from '../utils'
 
 import { OSRA_BOX } from '../types'
@@ -25,8 +25,6 @@ export type RevivableContext<TModules extends readonly RevivableModule[] = Defau
   sendMessage: (message: ConnectionMessage) => void
   revivableModules: TModules
   eventTarget: MessageEventTarget
-  /** MessageContext of the message being revived, used by OSRA_CONTEXT revivable */
-  messageContext?: MessageContext
 }
 
 export type ExtractModule<T> = T extends { isType: (value: unknown) => value is infer S } ? S : never

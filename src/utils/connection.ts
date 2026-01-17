@@ -1,7 +1,6 @@
 import type {
   Capable, ConnectionMessage,
   Message,
-  MessageContext,
   MessageEventTarget,
   Transport,
   Uuid
@@ -63,31 +62,28 @@ export const startBidirectionalConnection = <T extends Capable>(
     close: () => void
   }
 ) => {
-  const revivableContext: ConnectionRevivableContext & { messageContext?: MessageContext } = {
+  const revivableContext = {
     platformCapabilities,
     transport,
     remoteUuid,
-    messagePorts: new Set<MessagePort>(),
+    messagePorts: new Set(),
     messageChannels: makeMessageChannelAllocator(),
     sendMessage: send,
     eventTarget,
-    revivableModules: defaultRevivableModules,
-    messageContext: undefined
-  }
-  type InitMessageWithContext = { message: ConnectionMessage & { type: 'init' }, messageContext: MessageContext }
-  let initResolve: ((data: InitMessageWithContext) => void)
-  const initMessagePromise = new Promise<InitMessageWithContext>((resolve, reject) => {
+    revivableModules: defaultRevivableModules
+  } satisfies ConnectionRevivableContext
+  let initResolve: ((message: ConnectionMessage & { type: 'init' }) => void)
+  const initMessage = new Promise<ConnectionMessage & { type: 'init' }>((resolve, reject) => {
     initResolve = resolve
   })
 
   eventTarget.addEventListener('message', ({ detail }) => {
-    const { message, messageContext } = detail
-    if (message.type === 'init') {
-      initResolve({ message, messageContext })
+    if (detail.type === 'init') {
+      initResolve(detail)
       return
-    } else if (message.type === 'message') {
-      const messageChannel = revivableContext.messageChannels.getOrAlloc(message.portId)
-      ;(messageChannel.port2 as MessagePort)?.postMessage(message)
+    } else if (detail.type === 'message') {
+      const messageChannel = revivableContext.messageChannels.getOrAlloc(detail.portId)
+      ;(messageChannel.port2 as MessagePort)?.postMessage(detail)
     }
   })
 
@@ -102,12 +98,8 @@ export const startBidirectionalConnection = <T extends Capable>(
     close: () => {
     },
     remoteValue:
-      initMessagePromise
-        .then(({ message, messageContext }) => {
-          // Store the messageContext in revivableContext for use by subsequent function calls
-          revivableContext.messageContext = messageContext
-          return recursiveRevive(message.data, revivableContext)
-        }) as Promise<T>
+      initMessage
+        .then(initMessage => recursiveRevive(initMessage.data, revivableContext)) as Promise<T>
   } satisfies BidirectionalConnection<T>
 }
 
