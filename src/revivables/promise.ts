@@ -14,12 +14,20 @@ export type Context =
   | { type: 'resolve', data: Capable }
   | { type: 'reject', error: string }
 
-declare const CapableError: unique symbol
-type CapablePromise<T> = T extends Capable
-  ? Promise<T>
-  : { [CapableError]: 'Message type must extend Capable'; __badType__: T }
+declare const ErrorMessage: unique symbol
+declare const BadValueType: unique symbol
+type CapablePromise<T> = T extends Promise<infer U>
+  ? U extends Capable
+    ? T
+    : { [ErrorMessage]: 'Value type must extend a Promise that resolves to a Capable'; [BadValueType]: U }
+  : { [ErrorMessage]: 'Value type must extend a Promise that resolves to a Capable'; [BadValueType]: T }
 
-type ExtractCapable<T> = T extends Capable ? T : never
+type ExtractCapable<T> = T extends Promise<infer U>
+  ? U extends Capable ? U : never
+  : never
+
+const isCapablePromise = <T, U extends Capable = ExtractCapable<T>>(value: T): value is T & Promise<U> =>
+  value instanceof Promise
 
 export type BoxedPromise<T extends Capable = Capable> = {
   __OSRA_BOX__: 'revivable'
@@ -35,7 +43,8 @@ export const box = <T, T2 extends RevivableContext>(
   value: CapablePromise<T>,
   context: T2
 ): BoxedPromise<ExtractCapable<T>> => {
-  const promise = value as Promise<ExtractCapable<T>>
+  if (!isCapablePromise(value)) throw new TypeError('Expected Promise')
+  const promise = value
   const { port1: localPort, port2: remotePort } = new MessageChannel()
   context.messagePorts.add(remotePort)
 
