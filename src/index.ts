@@ -27,6 +27,9 @@ import {
 } from './utils'
 import { TypedEventTarget } from 'typescript-event-target'
 
+export * from './types'
+export * from './revivables'
+
 /**
  * Protocol mode:
  * - Bidirectional mode
