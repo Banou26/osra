@@ -2,7 +2,6 @@ import type {
   EmitTransport, Message,
   MessageContext, MessageVariant,
   Capable, Transport,
-  MessageEventTarget,
   MessageEventMap
 } from './types'
 export type { UnderlyingType } from './revivables/utils'
@@ -23,12 +22,20 @@ import {
   startUnidirectionalEmittingConnection,
   getTransferableObjects,
   isJsonOnlyTransport,
-  isCustomTransport
+  isCustomTransport,
+  DeepReplace,
+  DeepReplaceAsync,
+  AsCapable
 } from './utils'
 import { TypedEventTarget } from 'typescript-event-target'
 
 export * from './types'
 export * from './revivables'
+export {
+  DeepReplace,
+  DeepReplaceAsync,
+  AsCapable
+}
 
 /**
  * Protocol mode:
