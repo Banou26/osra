@@ -53,14 +53,14 @@ export type DeepReplaceWithRevive<T, M> =
 
 export type DeepReplace<T, From, To> =
     T extends From ? DeepReplace<To, From, To>
-  : T extends (...args: infer A) => infer R ? (...args: { [K in keyof A]: DeepReplace<A[K], From, To> }) => DeepReplace<R, From, To>
+  : T extends (...args: infer A) => infer R ? (...args: A) => DeepReplace<R, From, To>
   : T extends Array<infer U> ? Array<DeepReplace<U, From, To>>
   : T extends object ? { [K in keyof T]: DeepReplace<T[K], From, To> }
   : T
-  
+
 export type DeepReplaceAsync<T, From, To> =
     T extends From ? DeepReplaceAsync<To, From, To>
-  : T extends (...args: infer A) => infer R ? (...args: { [K in keyof A]: DeepReplaceAsync<A[K], From, To> }) => Promise<Awaited<DeepReplaceAsync<R, From, To>>>
+  : T extends (...args: infer A) => infer R ? (...args: A) => Promise<Awaited<DeepReplaceAsync<R, From, To>>>
   : T extends Array<infer U> ? Array<DeepReplaceAsync<U, From, To>>
   : T extends object ? { [K in keyof T]: DeepReplaceAsync<T[K], From, To> }
   : T
