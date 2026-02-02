@@ -143,7 +143,7 @@ export const isWebExtensionRuntime = (value: any): value is WebExtRuntime => {
      * This is needed to prevent throwing an error when the value is a cross origin iframe window object.
      * e.g SecurityError: Blocked a frame with origin "http://localhost:8080" from accessing a cross-origin frame.
      */
-    && !(globalThis.Window && value instanceof globalThis.Window)
+    && !isIframeWindow(value)
     && isWebExtensionOnConnect(runtime.onConnect)
     && runtime.id
   )
@@ -158,7 +158,7 @@ export const isWebExtensionPort = (value: any, connectPort: boolean = false): va
      * This is needed to prevent throwing an error when the value is a cross origin iframe window object.
      * e.g SecurityError: Blocked a frame with origin "http://localhost:8080" from accessing a cross-origin frame.
      */
-    && !(globalThis.Window && value instanceof globalThis.Window)
+    && !isIframeWindow(value)
     && ('name' in (value as WebExtPort))
     && ('disconnect' in (value as WebExtPort))
     && ('postMessage' in (value as WebExtPort))
@@ -175,6 +175,15 @@ export const isWebExtensionPort = (value: any, connectPort: boolean = false): va
   )
 }
 
+export const isIframeWindow = (value: any): value is WindowProxy =>
+  'frames' in globalThis
+  && (
+    Array
+      .prototype
+      .includes
+      .call(globalThis.frames, value)
+  )
+
 export type WebExtSender = NonNullable<WebExtPort['sender']>
 
 export type WebExtOnConnect = WebExtRuntime['onConnect']
@@ -186,7 +195,7 @@ export const isWebExtensionOnConnect = (value: any): value is WebExtOnConnect =>
      * This is needed to prevent throwing an error when the value is a cross origin iframe window object.
      * e.g SecurityError: Blocked a frame with origin "http://localhost:8080" from accessing a cross-origin frame.
      */
-    && !(globalThis.Window && value instanceof globalThis.Window)
+    && !isIframeWindow(value)
     && (value as WebExtOnConnect).addListener
     && (value as WebExtOnConnect).hasListener
     && (value as WebExtOnConnect).removeListener
@@ -201,7 +210,7 @@ export const isWebExtensionOnMessage = (value: any): value is WebExtOnMessage =>
      * This is needed to prevent throwing an error when the value is a cross origin iframe window object.
      * e.g SecurityError: Blocked a frame with origin "http://localhost:8080" from accessing a cross-origin frame.
      */
-    && !(globalThis.Window && value instanceof globalThis.Window)
+    && !isIframeWindow(value)
     && (value as WebExtOnMessage).addListener
     && (value as WebExtOnMessage).hasListener
     && (value as WebExtOnMessage).removeListener
@@ -279,7 +288,7 @@ export const isCustomEmitTransport = (value: any): value is CustomEmitTransport 
      * This is needed to prevent throwing an error when the value is a cross origin iframe window object.
      * e.g SecurityError: Blocked a frame with origin "http://localhost:8080" from accessing a cross-origin frame.
      */
-    && !(globalThis.Window && value instanceof globalThis.Window)
+    && !isIframeWindow(value)
     && (
       'emit' in value
       && (
@@ -297,7 +306,7 @@ export const isCustomReceiveTransport = (value: any): value is CustomReceiveTran
      * This is needed to prevent throwing an error when the value is a cross origin iframe window object.
      * e.g SecurityError: Blocked a frame with origin "http://localhost:8080" from accessing a cross-origin frame.
      */
-    && !(globalThis.Window && value instanceof globalThis.Window)
+    && !isIframeWindow(value)
     && (
       'receive' in value
       && (
