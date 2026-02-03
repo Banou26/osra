@@ -100,10 +100,10 @@ export const sendOsraMessage = (
   const sendToEmitTransport = (emitTransport: Extract<EmitTransport, { emit: any }>['emit']) => {
     if (typeof emitTransport === 'function') {
       emitTransport(message, transferables)
+    } else if (isWindow(emitTransport)) { // Should be kept first, since if this is a CORS window, other checks will throw.
+      emitTransport.postMessage(message, origin, transferables)
     } else if (isWebExtensionPort(emitTransport)) {
       emitTransport.postMessage(message)
-    } else if (isWindow(emitTransport)) {
-      emitTransport.postMessage(message, origin, transferables)
     } else if (isWebSocket(emitTransport)) {
       emitTransport.send(JSON.stringify(message))
     } else if (isSharedWorker(emitTransport)) {
