@@ -13,6 +13,7 @@ import * as promise from './promise'
 import * as func from './function'
 import * as messagePort from './message-port'
 import * as readableStream from './readable-stream'
+import * as abortSignal from './abort-signal'
 
 export type RevivableModule<T extends string = string, T2 = any, T3 extends BoxBase<T> = any> = {
   readonly type: T
@@ -30,7 +31,8 @@ export const defaultRevivableModules = [
   promise,
   func,
   messagePort,
-  readableStream
+  readableStream,
+  abortSignal,
 ] as const
 
 export type DefaultRevivableModules = typeof defaultRevivableModules

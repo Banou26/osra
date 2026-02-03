@@ -264,6 +264,46 @@ export const asyncInit = async (transport: Transport) => {
 //   resultWritableStream.write(new Uint8Array([1, 2, 3]))
 // }
 
+export const userAbortSignal = async (transport: Transport) => {
+  const controller = new AbortController()
+  const value = {
+    signal: controller.signal
+  }
+  expose(value, { transport })
+
+  const { signal } = await expose<typeof value>({}, { transport })
+
+  expect(signal).to.be.instanceOf(AbortSignal)
+  expect(signal.aborted).to.be.false
+
+  let abortedReason: unknown
+  signal.addEventListener('abort', () => {
+    abortedReason = signal.reason
+  })
+
+  controller.abort('test reason')
+
+  // Wait for the abort to propagate
+  await new Promise(resolve => setTimeout(resolve, 50))
+
+  expect(signal.aborted).to.be.true
+  expect(abortedReason).to.equal('test reason')
+}
+
+export const userAbortSignalAlreadyAborted = async (transport: Transport) => {
+  const controller = new AbortController()
+  controller.abort('pre-aborted')
+  const value = {
+    signal: controller.signal
+  }
+  expose(value, { transport })
+
+  const { signal } = await expose<typeof value>({}, { transport })
+
+  expect(signal).to.be.instanceOf(AbortSignal)
+  expect(signal.aborted).to.be.true
+}
+
 export const base = {
   argsAndResponse,
   callback,
@@ -279,5 +319,7 @@ export const base = {
   userPromiseTypedArray,
   userDate,
   userError,
-  asyncInit
+  asyncInit,
+  userAbortSignal,
+  userAbortSignalAlreadyAborted,
 }

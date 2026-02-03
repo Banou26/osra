@@ -31,6 +31,10 @@ export const userError = () => base.userError(window)
 
 export const asyncInit = () => base.asyncInit(window)
 
+export const userAbortSignal = () => base.userAbortSignal(window)
+
+export const userAbortSignalAlreadyAborted = () => base.userAbortSignalAlreadyAborted(window)
+
 export const MemoryLeaks = {
   config: {
     iterations: baseMemory.DEFAULT_ITERATIONS,
