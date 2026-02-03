@@ -372,6 +372,72 @@ export const userResponseNoBody = async (transport: Transport) => {
   expect(response.body).to.be.null
 }
 
+export const userRequest = async (transport: Transport) => {
+  const _request = new Request('https://example.com/api', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Custom': 'test' }
+  })
+  const value = {
+    request: _request
+  }
+  expose(value, { transport })
+
+  const { request } = await expose<typeof value>({}, { transport })
+
+  expect(request).to.be.instanceOf(Request)
+  expect(request.method).to.equal('POST')
+  expect(request.url).to.equal('https://example.com/api')
+  expect(request.headers.get('Content-Type')).to.equal('application/json')
+  expect(request.headers.get('X-Custom')).to.equal('test')
+}
+
+export const userRequestWithBody = async (transport: Transport) => {
+  const bodyContent = 'test request body'
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode(bodyContent))
+      controller.close()
+    }
+  })
+  const _request = new Request('https://example.com/api', {
+    method: 'POST',
+    body: stream,
+    headers: { 'Content-Type': 'text/plain' },
+    // @ts-expect-error - duplex is required for streaming bodies
+    duplex: 'half'
+  })
+  const value = {
+    request: _request
+  }
+  expose(value, { transport })
+
+  const { request } = await expose<typeof value>({}, { transport })
+
+  expect(request).to.be.instanceOf(Request)
+  expect(request.method).to.equal('POST')
+  expect(request.headers.get('Content-Type')).to.equal('text/plain')
+
+  const body = await request.text()
+  expect(body).to.equal(bodyContent)
+}
+
+export const userRequestNoBody = async (transport: Transport) => {
+  const _request = new Request('https://example.com/resource', {
+    method: 'GET'
+  })
+  const value = {
+    request: _request
+  }
+  expose(value, { transport })
+
+  const { request } = await expose<typeof value>({}, { transport })
+
+  expect(request).to.be.instanceOf(Request)
+  expect(request.method).to.equal('GET')
+  expect(request.url).to.equal('https://example.com/resource')
+  expect(request.body).to.be.null
+}
+
 export const base = {
   argsAndResponse,
   callback,
@@ -392,5 +458,8 @@ export const base = {
   userAbortSignalAlreadyAborted,
   userResponse,
   userResponseWithStreamBody,
-  userResponseNoBody
+  userResponseNoBody,
+  userRequest,
+  userRequestWithBody,
+  userRequestNoBody
 }

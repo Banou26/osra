@@ -15,6 +15,7 @@ import * as messagePort from './message-port'
 import * as readableStream from './readable-stream'
 import * as abortSignal from './abort-signal'
 import * as response from './response'
+import * as request from './request'
 
 export type RevivableModule<T extends string = string, T2 = any, T3 extends BoxBase<T> = any> = {
   readonly type: T
@@ -34,7 +35,8 @@ export const defaultRevivableModules = [
   messagePort,
   readableStream,
   abortSignal,
-  response
+  response,
+  request
 ] as const
 
 export type DefaultRevivableModules = typeof defaultRevivableModules

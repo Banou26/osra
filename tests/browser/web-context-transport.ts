@@ -41,6 +41,12 @@ export const userResponseWithStreamBody = () => base.userResponseWithStreamBody(
 
 export const userResponseNoBody = () => base.userResponseNoBody(window)
 
+export const userRequest = () => base.userRequest(window)
+
+export const userRequestWithBody = () => base.userRequestWithBody(window)
+
+export const userRequestNoBody = () => base.userRequestNoBody(window)
+
 export const MemoryLeaks = {
   config: {
     iterations: baseMemory.DEFAULT_ITERATIONS,

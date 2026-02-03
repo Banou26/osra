@@ -56,6 +56,12 @@ export const userResponseWithStreamBody = () => base.userResponseWithStreamBody(
 
 export const userResponseNoBody = () => base.userResponseNoBody(jsonTransport())
 
+export const userRequest = () => base.userRequest(jsonTransport())
+
+export const userRequestWithBody = () => base.userRequestWithBody(jsonTransport())
+
+export const userRequestNoBody = () => base.userRequestNoBody(jsonTransport())
+
 const JSON_ITERATIONS = 2_500
 const JSON_MEMORY_THRESHOLD = 1_000_000
 
