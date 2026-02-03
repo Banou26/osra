@@ -304,6 +304,74 @@ export const userAbortSignalAlreadyAborted = async (transport: Transport) => {
   expect(signal.aborted).to.be.true
 }
 
+export const userResponse = async (transport: Transport) => {
+  const _response = new Response('test body', {
+    status: 201,
+    statusText: 'Created',
+    headers: { 'X-Custom': 'header-value' }
+  })
+  const value = {
+    response: _response
+  }
+  expose(value, { transport })
+
+  const { response } = await expose<typeof value>({}, { transport })
+
+  expect(response).to.be.instanceOf(Response)
+  expect(response.status).to.equal(201)
+  expect(response.statusText).to.equal('Created')
+  expect(response.headers.get('X-Custom')).to.equal('header-value')
+
+  const body = await response.text()
+  expect(body).to.equal('test body')
+}
+
+export const userResponseWithStreamBody = async (transport: Transport) => {
+  const chunks = ['chunk1', 'chunk2', 'chunk3']
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const chunk of chunks) {
+        controller.enqueue(new TextEncoder().encode(chunk))
+      }
+      controller.close()
+    }
+  })
+  const _response = new Response(stream, {
+    status: 200,
+    headers: { 'Content-Type': 'text/plain' }
+  })
+  const value = {
+    response: _response
+  }
+  expose(value, { transport })
+
+  const { response } = await expose<typeof value>({}, { transport })
+
+  expect(response).to.be.instanceOf(Response)
+  expect(response.status).to.equal(200)
+
+  const body = await response.text()
+  expect(body).to.equal('chunk1chunk2chunk3')
+}
+
+export const userResponseNoBody = async (transport: Transport) => {
+  const _response = new Response(null, {
+    status: 204,
+    statusText: 'No Content'
+  })
+  const value = {
+    response: _response
+  }
+  expose(value, { transport })
+
+  const { response } = await expose<typeof value>({}, { transport })
+
+  expect(response).to.be.instanceOf(Response)
+  expect(response.status).to.equal(204)
+  expect(response.statusText).to.equal('No Content')
+  expect(response.body).to.be.null
+}
+
 export const base = {
   argsAndResponse,
   callback,
@@ -322,4 +390,7 @@ export const base = {
   asyncInit,
   userAbortSignal,
   userAbortSignalAlreadyAborted,
+  userResponse,
+  userResponseWithStreamBody,
+  userResponseNoBody
 }

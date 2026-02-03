@@ -35,6 +35,12 @@ export const userAbortSignal = () => base.userAbortSignal(window)
 
 export const userAbortSignalAlreadyAborted = () => base.userAbortSignalAlreadyAborted(window)
 
+export const userResponse = () => base.userResponse(window)
+
+export const userResponseWithStreamBody = () => base.userResponseWithStreamBody(window)
+
+export const userResponseNoBody = () => base.userResponseNoBody(window)
+
 export const MemoryLeaks = {
   config: {
     iterations: baseMemory.DEFAULT_ITERATIONS,

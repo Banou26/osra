@@ -50,6 +50,12 @@ export const userAbortSignal = () => base.userAbortSignal(jsonTransport())
 
 export const userAbortSignalAlreadyAborted = () => base.userAbortSignalAlreadyAborted(jsonTransport())
 
+export const userResponse = () => base.userResponse(jsonTransport())
+
+export const userResponseWithStreamBody = () => base.userResponseWithStreamBody(jsonTransport())
+
+export const userResponseNoBody = () => base.userResponseNoBody(jsonTransport())
+
 const JSON_ITERATIONS = 2_500
 const JSON_MEMORY_THRESHOLD = 1_000_000
 
