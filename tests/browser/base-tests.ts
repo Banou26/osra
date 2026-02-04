@@ -327,18 +327,18 @@ export const userResponse = async (transport: Transport) => {
 }
 
 export const userResponseWithStreamBody = async (transport: Transport) => {
-  const chunks = ['chunk1', 'chunk2', 'chunk3']
+  const chunks = [new Uint8Array([1, 2, 3]), new Uint8Array([4, 5, 6]), new Uint8Array([7, 8, 9])]
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       for (const chunk of chunks) {
-        controller.enqueue(new TextEncoder().encode(chunk))
+        controller.enqueue(chunk)
       }
       controller.close()
     }
   })
   const _response = new Response(stream, {
     status: 200,
-    headers: { 'Content-Type': 'text/plain' }
+    headers: { 'Content-Type': 'application/octet-stream' }
   })
   const value = {
     response: _response
@@ -350,8 +350,9 @@ export const userResponseWithStreamBody = async (transport: Transport) => {
   expect(response).to.be.instanceOf(Response)
   expect(response.status).to.equal(200)
 
-  const body = await response.text()
-  expect(body).to.equal('chunk1chunk2chunk3')
+  const body = await response.arrayBuffer()
+  const uint8Array = new Uint8Array(body)
+  expect(Array.from(uint8Array)).to.deep.equal([1, 2, 3, 4, 5, 6, 7, 8, 9])
 }
 
 export const userResponseNoBody = async (transport: Transport) => {
