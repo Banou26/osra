@@ -45,4 +45,25 @@ chrome.runtime.onConnect.addListener(async (port) => {
   }
 })
 
-globalThis.tests = { Content: contentTests }
+// Runtime transport connection (sendMessage-based, alongside the port-based one)
+import * as runtimeContentTests from './runtime-content-tests'
+import { setApi as setRuntimeApi } from './runtime-content-tests'
+
+const runtimeTransport = {
+  isJson: true,
+  emit: (message: any) => chrome.runtime.sendMessage(message),
+  receive: (listener: (message: any, context: any) => void) => {
+    chrome.runtime.onMessage.addListener((message: any, sender: any) => {
+      listener(message, { sender })
+    })
+  }
+}
+
+const runtimeApi = await expose<BackgroundResolvers>(resolvers, {
+  transport: runtimeTransport,
+  platformCapabilities: jsonOnlyCapabilities
+})
+
+setRuntimeApi(runtimeApi)
+
+globalThis.tests = { Content: contentTests, RuntimeContent: runtimeContentTests }

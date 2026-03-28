@@ -146,12 +146,14 @@ export type CustomReceiveTransport = Extract<CustomTransport, { receive: any }>
 export type EmitJsonPlatformTransport =
   | WebSocket
   | WebExtPort
+  | WebExtRuntime
 
 export type ReceiveJsonPlatformTransport =
   | WebSocket
   | WebExtPort
   | WebExtOnConnect
   | WebExtOnMessage
+  | WebExtRuntime
 
 export type JsonPlatformTransport =
   | { isJson: true }

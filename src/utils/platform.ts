@@ -9,7 +9,7 @@ import { OSRA_KEY } from '../types'
 import {
   isOsraMessage, isCustomTransport,
   isWebExtensionOnConnect, isWebExtensionOnMessage,
-  isWebExtensionPort, isWebSocket, isWindow, isSharedWorker
+  isWebExtensionPort, isWebExtensionRuntime, isWebSocket, isWindow, isSharedWorker
 } from './type-guards'
 
 export const getWebExtensionGlobal = () => globalThis.browser ?? globalThis.chrome
@@ -35,7 +35,8 @@ export const registerOsraMessageListener = (
       receiveTransport(listener)
       // WebExtension handler
     } else if (
-      isWebExtensionPort(receiveTransport)
+      isWebExtensionRuntime(receiveTransport)
+      || isWebExtensionPort(receiveTransport)
       || isWebExtensionOnConnect(receiveTransport)
       || isWebExtensionOnMessage(receiveTransport)
     ) {
@@ -53,8 +54,10 @@ export const registerOsraMessageListener = (
         }
       }
 
+      if (isWebExtensionRuntime(receiveTransport)) {
+        listenOnWebExtOnMessage(receiveTransport.onMessage as WebExtOnMessage)
       // WebExtOnConnect
-      if (isWebExtensionOnConnect(receiveTransport)) {
+      } else if (isWebExtensionOnConnect(receiveTransport)) {
         const _listener = (port: WebExtPort) => {
           listenOnWebExtOnMessage(port.onMessage as WebExtOnMessage, port)
         }
@@ -104,6 +107,8 @@ export const sendOsraMessage = (
       emitTransport.postMessage(message, origin, transferables)
     } else if (isWebExtensionPort(emitTransport)) {
       emitTransport.postMessage(message)
+    } else if (isWebExtensionRuntime(emitTransport)) {
+      emitTransport.sendMessage(message)
     } else if (isWebSocket(emitTransport)) {
       emitTransport.send(JSON.stringify(message))
     } else if (isSharedWorker(emitTransport)) {

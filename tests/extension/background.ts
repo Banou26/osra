@@ -121,7 +121,7 @@ const resolvers = {
 
 export type Resolvers = typeof resolvers
 
-// Listen for content-initiated connections
+// Listen for content-initiated connections (port-based)
 chrome.runtime.onConnect.addListener(async (port) => {
   if (port.name.startsWith('content-')) {
     // Track the tab ID for background-initiated connections
@@ -131,4 +131,73 @@ chrome.runtime.onConnect.addListener(async (port) => {
       platformCapabilities: jsonOnlyCapabilities
     })
   }
+})
+
+// Listen for content-initiated connections (runtime sendMessage-based)
+let runtimeContentApi: ContentAPI | null = null
+
+chrome.runtime.onMessage.addListener(function runtimeInitialListener(message, sender) {
+  if (!message?.__OSRA_KEY__ || message.type !== 'announce') return
+  if (sender.tab?.id === undefined || sender.frameId === undefined) return
+
+  chrome.runtime.onMessage.removeListener(runtimeInitialListener)
+
+  const tabId = sender.tab.id
+  const frameId = sender.frameId
+
+  const buffer: { message: any, sender: any }[] = [{ message, sender }]
+  const bufferListener = (msg: any, sdr: any) => { buffer.push({ message: msg, sender: sdr }) }
+  chrome.runtime.onMessage.addListener(bufferListener)
+
+  const transport = {
+    isJson: true,
+    emit: (msg: any) => chrome.tabs.sendMessage(tabId, msg, { frameId }),
+    receive: (listener: (message: any, context: any) => void) => {
+      chrome.runtime.onMessage.removeListener(bufferListener)
+      for (const item of buffer) {
+        listener(item.message, { sender: item.sender })
+      }
+      buffer.length = 0
+      chrome.runtime.onMessage.addListener((msg: any, sdr: any) => {
+        listener(msg, { sender: sdr })
+      })
+    }
+  }
+
+  expose<ContentScriptResolvers>({
+    ...resolvers,
+    bgToContent: {
+      getInfo: async () => {
+        if (!runtimeContentApi) throw new Error('Runtime content not connected')
+        return runtimeContentApi.getContentInfo()
+      },
+      process: async (data: string) => {
+        if (!runtimeContentApi) throw new Error('Runtime content not connected')
+        return runtimeContentApi.processInContent(data)
+      },
+      getCallback: async () => {
+        if (!runtimeContentApi) throw new Error('Runtime content not connected')
+        return runtimeContentApi.contentCallback()
+      },
+      getDate: async () => {
+        if (!runtimeContentApi) throw new Error('Runtime content not connected')
+        return runtimeContentApi.getContentDate()
+      },
+      getError: async () => {
+        if (!runtimeContentApi) throw new Error('Runtime content not connected')
+        return runtimeContentApi.getContentError()
+      },
+      throwError: async () => {
+        if (!runtimeContentApi) throw new Error('Runtime content not connected')
+        return runtimeContentApi.throwContentError()
+      },
+      processBuffer: async (data: Uint8Array) => {
+        if (!runtimeContentApi) throw new Error('Runtime content not connected')
+        return runtimeContentApi.processContentBuffer(data)
+      },
+    },
+  }, {
+    transport,
+    platformCapabilities: jsonOnlyCapabilities
+  }).then(api => { runtimeContentApi = api })
 })

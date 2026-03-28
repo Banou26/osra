@@ -226,6 +226,7 @@ export type IsEmitJsonOnlyTransport<T extends Transport> = T extends EmitJsonPla
 export const isEmitJsonOnlyTransport = (value: any): value is EmitJsonPlatformTransport =>
      isWebSocket(value)
   || isWebExtensionPort(value)
+  || isWebExtensionRuntime(value)
 
 export type IsReceiveJsonOnlyTransport<T extends Transport> = T extends ReceiveJsonPlatformTransport ? true : false
 export const isReceiveJsonOnlyTransport = (value: any): value is ReceiveJsonPlatformTransport =>
@@ -233,6 +234,7 @@ export const isReceiveJsonOnlyTransport = (value: any): value is ReceiveJsonPlat
   || isWebExtensionPort(value)
   || isWebExtensionOnConnect(value)
   || isWebExtensionOnMessage(value)
+  || isWebExtensionRuntime(value)
 
 export type IsJsonOnlyTransport<T extends Transport> = T extends JsonPlatformTransport ? true : false
 export const isJsonOnlyTransport = (value: Transport): value is Extract<Transport, JsonPlatformTransport> =>
