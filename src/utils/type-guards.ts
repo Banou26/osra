@@ -136,6 +136,7 @@ export const isTransferBox = (value: any): value is TransferBox<any> =>
 export type WebExtRuntime = typeof browser.runtime
 export const isWebExtensionRuntime = (value: any): value is WebExtRuntime => {
   const runtime = getWebExtensionRuntime()
+  if (!runtime) return false
   return Boolean(
     value
     && typeof value === 'object'

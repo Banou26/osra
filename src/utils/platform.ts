@@ -13,7 +13,7 @@ import {
 } from './type-guards'
 
 export const getWebExtensionGlobal = () => globalThis.browser ?? globalThis.chrome
-export const getWebExtensionRuntime = () => getWebExtensionGlobal().runtime
+export const getWebExtensionRuntime = () => getWebExtensionGlobal()?.runtime
 
 export const checkOsraMessageKey = (message: any, key: string): message is Message =>
   isOsraMessage(message)
