@@ -31,6 +31,7 @@ import { TypedEventTarget } from 'typescript-event-target'
 
 export * from './types'
 export * from './revivables'
+export * from './utils'
 export type {
   DeepReplace,
   DeepReplaceAsync,

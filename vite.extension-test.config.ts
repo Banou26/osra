@@ -1,14 +1,12 @@
 import { defineConfig, build as viteBuild } from 'vite'
 import { resolve } from 'path'
 import { copyFile, mkdir, rm } from 'fs/promises'
-import topLevelAwait from 'vite-plugin-top-level-await'
 
 const outDir = resolve(__dirname, 'build/extension-test')
 
 const buildEntry = (name: string, entry: string) =>
   viteBuild({
     configFile: false,
-    plugins: [topLevelAwait()],
     build: {
       target: 'esnext',
       outDir,
@@ -21,7 +19,7 @@ const buildEntry = (name: string, entry: string) =>
         fileName: () => `${name}.js`,
         formats: ['es'],
       },
-      rollupOptions: {
+      rolldownOptions: {
         output: {
           inlineDynamicImports: true,
         },

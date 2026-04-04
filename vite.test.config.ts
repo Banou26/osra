@@ -17,10 +17,6 @@ export default defineConfig({
     emptyOutDir: false,
     sourcemap: true,
     minify: false,
-    terserOptions: {
-      compress: false,
-      mangle: false,
-    },
     lib: {
       name: 'osra',
       fileName: 'test',
