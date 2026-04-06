@@ -1,5 +1,3 @@
-import { getTransferableObjects } from './transferable'
-
 export type PlatformCapabilities = {
   jsonOnly: boolean
   messagePort: boolean
@@ -8,59 +6,60 @@ export type PlatformCapabilities = {
   transferableStream: boolean
 }
 
-const probePlatformCapabilityUtil = <T>(value: T, transfer = false): Promise<T> => {
-  const { port1, port2 } = new MessageChannel()
-  const result = new Promise<T>(resolve =>
-    port1.addEventListener('message', message =>
-      resolve(message.data)
-    )
-  )
-  port1.start()
-  port2.postMessage(value, transfer ? getTransferableObjects(value) : [])
-  return result
+const canTransferMessagePort = () => {
+  try {
+    const { port1, port2 } = new MessageChannel()
+    port2.postMessage(port1, [port1])
+    port2.close()
+    return true
+  } catch {
+    return false
+  }
 }
 
-const probeMessagePortTransfer = async () => {
-  const { port1 } = new MessageChannel()
-  const port = await probePlatformCapabilityUtil(port1, true)
-  return port instanceof MessagePort
+const canCloneArrayBuffer = () => {
+  try {
+    const { port1, port2 } = new MessageChannel()
+    port2.postMessage(new ArrayBuffer(1))
+    port2.close()
+    port1.close()
+    return true
+  } catch {
+    return false
+  }
 }
 
-const probeArrayBufferClone = async () => {
-  const buffer = new ArrayBuffer(1)
-  const arrayBuffer = await probePlatformCapabilityUtil(buffer)
-  return arrayBuffer instanceof ArrayBuffer
+const canTransferArrayBuffer = () => {
+  try {
+    const buf = new ArrayBuffer(1)
+    const { port1, port2 } = new MessageChannel()
+    port2.postMessage(buf, [buf])
+    port2.close()
+    port1.close()
+    return true
+  } catch {
+    return false
+  }
 }
 
-const probeArrayBufferTransfer = async () => {
-  const buffer = new ArrayBuffer(1)
-  const arrayBuffer = await probePlatformCapabilityUtil(buffer, true)
-  return arrayBuffer instanceof ArrayBuffer
+const canTransferStream = () => {
+  try {
+    const stream = new ReadableStream()
+    const { port1, port2 } = new MessageChannel()
+    port2.postMessage(stream, [stream])
+    port2.close()
+    port1.close()
+    return true
+  } catch {
+    return false
+  }
 }
 
-const probeTransferableStream = async () => {
-  const stream = new ReadableStream({
-    start(controller) {
-      controller.enqueue(new Uint8Array(1))
-      controller.close()
-    }
-  })
-  const transferableStream = await probePlatformCapabilityUtil(stream, true)
-  return transferableStream instanceof ReadableStream
-}
-
-export const probePlatformCapabilities = async (): Promise<PlatformCapabilities> => {
-  const [
-    messagePort,
-    arrayBuffer,
-    transferable,
-    transferableStream,
-  ] = await Promise.all([
-    probeMessagePortTransfer().catch(() => false),
-    probeArrayBufferClone().catch(() => false),
-    probeArrayBufferTransfer().catch(() => false),
-    probeTransferableStream().catch(() => false)
-  ])
+export const probePlatformCapabilities = (): PlatformCapabilities => {
+  const messagePort = canTransferMessagePort()
+  const arrayBuffer = canCloneArrayBuffer()
+  const transferable = canTransferArrayBuffer()
+  const transferableStream = canTransferStream()
   return {
     jsonOnly:
       !messagePort

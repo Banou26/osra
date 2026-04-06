@@ -85,7 +85,7 @@ export const expose = async <T extends Capable>(
         }
     )
   } satisfies Transport
-  const platformCapabilities = _platformCapabilities ?? await probePlatformCapabilities()
+  const platformCapabilities = _platformCapabilities ?? probePlatformCapabilities()
   const connectionContexts = new Map<string, ConnectionContext>()
 
   let resolveRemoteValue: (connection: T) => void
