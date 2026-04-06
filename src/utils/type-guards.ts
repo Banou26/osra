@@ -137,17 +137,7 @@ export type WebExtRuntime = typeof browser.runtime
 export const isWebExtensionRuntime = (value: any): value is WebExtRuntime => {
   const runtime = getWebExtensionRuntime()
   if (!runtime) return false
-  return Boolean(
-    value
-    && typeof value === 'object'
-    /**
-     * This is needed to prevent throwing an error when the value is a cross origin iframe window object.
-     * e.g SecurityError: Blocked a frame with origin "http://localhost:8080" from accessing a cross-origin frame.
-     */
-    && !isWindow(value)
-    && isWebExtensionOnConnect(runtime.onConnect)
-    && runtime.id
-  )
+  return value === runtime
 }
 
 export type WebExtPort = ReturnType<WebExtRuntime['connect']> | Runtime.Port

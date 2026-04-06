@@ -11,6 +11,7 @@ import type { StrictMessagePort } from './message-channel'
 
 import { makeMessageChannelAllocator } from './allocator'
 import { DefaultRevivableModules, defaultRevivableModules, recursiveBox, recursiveRevive, RevivableModule } from '../revivables'
+import { getTransferableObjects } from './transferable'
 
 export type BidirectionalConnectionContext = {
   type: 'bidirectional'
@@ -83,7 +84,8 @@ export const startBidirectionalConnection = <T extends Capable>(
       return
     } else if (detail.type === 'message') {
       const messageChannel = revivableContext.messageChannels.getOrAlloc(detail.portId)
-      ;(messageChannel.port2 as MessagePort)?.postMessage(detail)
+      const transferables = getTransferableObjects(detail)
+      ;(messageChannel.port2 as MessagePort)?.postMessage(detail, { transfer: transferables })
     }
   })
 
