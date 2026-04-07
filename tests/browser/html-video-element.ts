@@ -142,3 +142,25 @@ export const eventDeltaUpdatesState = async (transport: Transport) => {
   }
   expect(local.currentTime).to.equal(5)
 }
+
+export const addEventListenerFires = async (transport: Transport) => {
+  const { local, remote } = await setupVideoRoundTrip(transport)
+
+  // Give subscribe() a turn to register listeners on the remote.
+  await new Promise(resolve => setTimeout(resolve, 50))
+
+  const observed: Array<{ type: string, targetIsProxy: boolean }> = []
+  local.addEventListener('volumechange', (e) => {
+    observed.push({ type: e.type, targetIsProxy: e.target === local })
+  })
+
+  remote.volume = 0.25 // triggers volumechange on remote
+  remote.dispatchEvent(new Event('volumechange'))
+
+  await new Promise(resolve => setTimeout(resolve, 100))
+
+  expect(observed.length).to.be.greaterThan(0)
+  expect(observed[0].type).to.equal('volumechange')
+  expect(observed[0].targetIsProxy).to.equal(true)
+  expect(local.volume).to.equal(0.25)
+}

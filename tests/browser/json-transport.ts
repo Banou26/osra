@@ -102,3 +102,5 @@ export const htmlVideoElementMethodCallCanPlayType = () => htmlVideoElementTests
 export const htmlVideoElementPlayPauseRoundTrip = () => htmlVideoElementTests.playPauseRoundTrip(jsonTransport())
 
 export const htmlVideoElementEventDeltaUpdatesState = () => htmlVideoElementTests.eventDeltaUpdatesState(jsonTransport())
+
+export const htmlVideoElementAddEventListenerFires = () => htmlVideoElementTests.addEventListenerFires(jsonTransport())
