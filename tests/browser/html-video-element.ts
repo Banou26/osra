@@ -164,3 +164,20 @@ export const addEventListenerFires = async (transport: Transport) => {
   expect(observed[0].targetIsProxy).to.equal(true)
   expect(local.volume).to.equal(0.25)
 }
+
+export const removeEventListenerDetaches = async (transport: Transport) => {
+  const { local, remote } = await setupVideoRoundTrip(transport)
+
+  await new Promise(resolve => setTimeout(resolve, 50))
+
+  let firedCount = 0
+  const listener = () => { firedCount++ }
+  local.addEventListener('volumechange', listener)
+  local.removeEventListener('volumechange', listener)
+
+  remote.volume = 0.1
+  remote.dispatchEvent(new Event('volumechange'))
+  await new Promise(resolve => setTimeout(resolve, 100))
+
+  expect(firedCount).to.equal(0)
+}

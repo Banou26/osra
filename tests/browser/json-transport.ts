@@ -104,3 +104,5 @@ export const htmlVideoElementPlayPauseRoundTrip = () => htmlVideoElementTests.pl
 export const htmlVideoElementEventDeltaUpdatesState = () => htmlVideoElementTests.eventDeltaUpdatesState(jsonTransport())
 
 export const htmlVideoElementAddEventListenerFires = () => htmlVideoElementTests.addEventListenerFires(jsonTransport())
+
+export const htmlVideoElementRemoveEventListenerDetaches = () => htmlVideoElementTests.removeEventListenerDetaches(jsonTransport())

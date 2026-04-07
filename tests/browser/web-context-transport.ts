@@ -86,3 +86,5 @@ export const htmlVideoElementPlayPauseRoundTrip = () => htmlVideoElementTests.pl
 export const htmlVideoElementEventDeltaUpdatesState = () => htmlVideoElementTests.eventDeltaUpdatesState(window)
 
 export const htmlVideoElementAddEventListenerFires = () => htmlVideoElementTests.addEventListenerFires(window)
+
+export const htmlVideoElementRemoveEventListenerDetaches = () => htmlVideoElementTests.removeEventListenerDetaches(window)
