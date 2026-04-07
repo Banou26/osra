@@ -77,3 +77,14 @@ export const writablePropPropagation = async (transport: Transport) => {
   expect(remote.loop).to.equal(true)
   expect(remote.playbackRate).to.equal(2)
 }
+
+export const methodCallCanPlayType = async (transport: Transport) => {
+  const { local } = await setupVideoRoundTrip(transport)
+
+  const result = await (local.canPlayType as (type: string) => Promise<CanPlayTypeResult>)('video/mp4')
+  // Chrome returns 'probably' or 'maybe' for mp4; Firefox may return 'maybe'.
+  // Any of the three valid enum values is acceptable; we just assert it's a string.
+  expect(result).to.be.a('string')
+  // Assert it's one of the valid enum values for CanPlayTypeResult.
+  expect(['', 'maybe', 'probably']).to.include(result)
+}

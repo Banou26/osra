@@ -96,3 +96,5 @@ export const htmlVideoElementInstanceOfCheck = () => htmlVideoElementTests.insta
 export const htmlVideoElementInitialStateMirrored = () => htmlVideoElementTests.initialStateMirrored(jsonTransport())
 
 export const htmlVideoElementWritablePropPropagation = () => htmlVideoElementTests.writablePropPropagation(jsonTransport())
+
+export const htmlVideoElementMethodCallCanPlayType = () => htmlVideoElementTests.methodCallCanPlayType(jsonTransport())

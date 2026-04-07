@@ -78,3 +78,5 @@ export const htmlVideoElementInstanceOfCheck = () => htmlVideoElementTests.insta
 export const htmlVideoElementInitialStateMirrored = () => htmlVideoElementTests.initialStateMirrored(window)
 
 export const htmlVideoElementWritablePropPropagation = () => htmlVideoElementTests.writablePropPropagation(window)
+
+export const htmlVideoElementMethodCallCanPlayType = () => htmlVideoElementTests.methodCallCanPlayType(window)
