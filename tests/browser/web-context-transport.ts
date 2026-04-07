@@ -1,6 +1,7 @@
 import { base } from './base-tests'
 import { baseMemory } from './base-memory-tests'
 import * as customRevivables from './custom-revivables'
+import * as htmlVideoElementTests from './html-video-element'
 
 export const argsAndResponse = () => base.argsAndResponse(window)
 
@@ -71,3 +72,5 @@ export const userPoint = () => customRevivables.userPoint(window)
 export const userPointReturn = () => customRevivables.userPointReturn(window)
 
 export const userPointDefaultsStillWork = () => customRevivables.userPointDefaultsStillWork(window)
+
+export const htmlVideoElementInstanceOfCheck = () => htmlVideoElementTests.instanceOfCheck(window)

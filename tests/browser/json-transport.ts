@@ -3,6 +3,7 @@ import type { Transport } from '../../src/types'
 import { base } from './base-tests'
 import { baseMemory } from './base-memory-tests'
 import * as customRevivables from './custom-revivables'
+import * as htmlVideoElementTests from './html-video-element'
 
 const jsonTransport = (): Transport => ({
   isJson: true,
@@ -89,3 +90,5 @@ export const userPoint = () => customRevivables.userPoint(jsonTransport())
 export const userPointReturn = () => customRevivables.userPointReturn(jsonTransport())
 
 export const userPointDefaultsStillWork = () => customRevivables.userPointDefaultsStillWork(jsonTransport())
+
+export const htmlVideoElementInstanceOfCheck = () => htmlVideoElementTests.instanceOfCheck(jsonTransport())

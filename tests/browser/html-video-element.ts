@@ -28,3 +28,8 @@ const setupVideoRoundTrip = async (transport: Transport) => {
 /** A one-microtask flush — the Proxy `set` trap fires `controller.set` without
  *  awaiting it, so tests need a short yield before observing the remote side. */
 const flush = () => new Promise(resolve => queueMicrotask(() => resolve(undefined)))
+
+export const instanceOfCheck = async (transport: Transport) => {
+  const { local } = await setupVideoRoundTrip(transport)
+  expect(local).to.be.instanceOf(HTMLVideoElement)
+}
