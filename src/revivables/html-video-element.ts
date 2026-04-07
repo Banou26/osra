@@ -154,16 +154,74 @@ export type BoxedHTMLVideoElement =
       [UnderlyingType]: HTMLVideoElement
     }
 
-// ---- Module API (stubbed) ----
+// ---- Module API ----
+
+const snapshot = (v: HTMLVideoElement): VideoState => ({
+  src: v.src,
+  currentTime: v.currentTime,
+  volume: v.volume,
+  muted: v.muted,
+  playbackRate: v.playbackRate,
+  autoplay: v.autoplay,
+  loop: v.loop,
+  controls: v.controls,
+  preload: v.preload,
+  crossOrigin: v.crossOrigin,
+  playsInline: v.playsInline,
+  defaultPlaybackRate: v.defaultPlaybackRate,
+  defaultMuted: v.defaultMuted,
+  poster: v.poster,
+  paused: v.paused,
+  ended: v.ended,
+  duration: v.duration,
+  readyState: v.readyState,
+  networkState: v.networkState,
+  seeking: v.seeking,
+  videoWidth: v.videoWidth,
+  videoHeight: v.videoHeight,
+  currentSrc: v.currentSrc,
+  error: serializeMediaError(v.error),
+  buffered: serializeRanges(v.buffered),
+  played: serializeRanges(v.played),
+  seekable: serializeRanges(v.seekable),
+})
 
 export const isType = (value: unknown): value is HTMLVideoElement =>
   typeof HTMLVideoElement !== 'undefined' && value instanceof HTMLVideoElement
 
 export const box = <T extends HTMLVideoElement, T2 extends RevivableContext>(
-  _value: T,
-  _context: T2,
+  value: T,
+  context: T2,
 ): BoxedHTMLVideoElement => {
-  throw new Error('html-video-element box: not implemented')
+  const controller: Controller = {
+    call: async (method, args) => {
+      return (value as unknown as Record<string, (...a: unknown[]) => unknown>)[method]!(...args)
+    },
+    set: async (prop, v) => {
+      ;(value as unknown as Record<string, unknown>)[prop] = v
+    },
+    subscribe: async (onDelta) => {
+      const disposers: Array<() => void> = []
+      for (const eventName of EVENT_NAMES) {
+        const listener = () => { onDelta(eventName, EVENT_DELTAS[eventName](value)) }
+        value.addEventListener(eventName, listener)
+        disposers.push(() => value.removeEventListener(eventName, listener))
+      }
+      return () => { for (const d of disposers) d() }
+    },
+  }
+
+  const boxedController = recursiveBox(
+    controller as unknown as Capable,
+    context,
+  )
+
+  return {
+    ...BoxBase,
+    type,
+    initialState: snapshot(value),
+    controller: boxedController,
+  } as BoxedHTMLVideoElement
 }
 
 export const revive = <T extends BoxedHTMLVideoElement, T2 extends RevivableContext>(
