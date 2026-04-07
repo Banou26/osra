@@ -225,8 +225,149 @@ export const box = <T extends HTMLVideoElement, T2 extends RevivableContext>(
 }
 
 export const revive = <T extends BoxedHTMLVideoElement, T2 extends RevivableContext>(
-  _value: T,
-  _context: T2,
+  value: T,
+  context: T2,
 ): HTMLVideoElement => {
-  throw new Error('html-video-element revive: not implemented')
+  const controller = recursiveRevive(
+    value.controller as Capable,
+    context,
+  ) as unknown as Controller
+
+  const state: VideoState = { ...value.initialState }
+
+  const listeners = new Map<string, Set<EventListenerOrEventListenerObject>>()
+  const onHandlers = new Map<string, EventListener | null>()
+
+  // Forward declaration so the trap handlers can reference the Proxy itself.
+  // `proxy` is assigned before any trap runs (synchronously below).
+  let proxy!: HTMLVideoElement
+
+  const dispatchEvent = (event: Event): boolean => {
+    Object.defineProperty(event, 'target',        { value: proxy, configurable: true })
+    Object.defineProperty(event, 'currentTarget', { value: proxy, configurable: true })
+    Object.defineProperty(event, 'srcElement',    { value: proxy, configurable: true })
+
+    const onHandler = onHandlers.get(`on${event.type}`)
+    if (onHandler) {
+      try { onHandler.call(proxy, event) }
+      catch (e) { queueMicrotask(() => { throw e }) }
+    }
+
+    const entries = listeners.get(event.type)
+    if (entries) {
+      for (const l of [...entries]) {
+        try {
+          if (typeof l === 'function') l.call(proxy, event)
+          else (l as EventListenerObject).handleEvent?.call(proxy, event)
+        } catch (e) { queueMicrotask(() => { throw e }) }
+      }
+    }
+
+    return !event.defaultPrevented
+  }
+
+  const addEventListener = (
+    kind: string,
+    listener: EventListenerOrEventListenerObject | null,
+    options?: boolean | AddEventListenerOptions,
+  ) => {
+    if (listener == null) return
+    let bucket = listeners.get(kind)
+    if (!bucket) { bucket = new Set(); listeners.set(kind, bucket) }
+
+    // Handle `once` and `signal` by wrapping the listener before insertion.
+    let actual = listener
+    if (typeof options === 'object' && options != null) {
+      if (options.once) {
+        const inner = actual
+        const wrapper: EventListener = (e) => {
+          bucket!.delete(wrapper)
+          if (typeof inner === 'function') inner.call(proxy, e)
+          else (inner as EventListenerObject).handleEvent?.call(proxy, e)
+        }
+        actual = wrapper
+      }
+      if (options.signal) {
+        const target = actual
+        options.signal.addEventListener('abort', () => { bucket!.delete(target) }, { once: true })
+      }
+    }
+
+    bucket.add(actual)
+  }
+
+  const removeEventListener = (
+    kind: string,
+    listener: EventListenerOrEventListenerObject | null,
+  ) => {
+    if (listener == null) return
+    listeners.get(kind)?.delete(listener)
+  }
+
+  const target = Object.create(HTMLVideoElement.prototype) as HTMLVideoElement
+
+  proxy = new Proxy(target, {
+    get(t, prop, receiver) {
+      if (prop === 'addEventListener')    return addEventListener
+      if (prop === 'removeEventListener') return removeEventListener
+      if (prop === 'dispatchEvent')       return dispatchEvent
+
+      if (typeof prop === 'string' && ON_HANDLER_NAMES.has(prop)) {
+        return onHandlers.get(prop) ?? null
+      }
+
+      if (typeof prop === 'string' && METHOD_NAMES_SET.has(prop)) {
+        return (...args: unknown[]) => controller.call(prop as MethodName, args)
+      }
+
+      if (typeof prop === 'string' && prop in state) {
+        const raw = (state as Record<string, unknown>)[prop]
+        if (prop === 'buffered' || prop === 'played' || prop === 'seekable') {
+          return reviveRanges(raw as SerializedTimeRanges)
+        }
+        if (prop === 'error') {
+          return reviveMediaError(raw as SerializedMediaError)
+        }
+        return raw
+      }
+
+      return Reflect.get(t, prop, receiver)
+    },
+    set(t, prop, value, receiver) {
+      if (typeof prop === 'string' && ON_HANDLER_NAMES.has(prop)) {
+        onHandlers.set(prop, typeof value === 'function' ? value as EventListener : null)
+        return true
+      }
+
+      if (typeof prop === 'string' && WRITABLE_PROPS_SET.has(prop)) {
+        ;(state as Record<string, unknown>)[prop] = value
+        void controller.set(prop as WritableProp, value)
+        return true
+      }
+
+      return Reflect.set(t, prop, value, receiver)
+    },
+  }) as unknown as HTMLVideoElement
+
+  // Start the event stream. The returned disposer is intentionally not captured:
+  // teardown is handled by function.ts's FinalizationRegistry when `controller`
+  // is GC'd along with the proxy.
+  void controller.subscribe((type, delta) => {
+    Object.assign(state, delta)
+    dispatchEvent(new Event(type))
+  })
+
+  return proxy
+}
+
+const typeCheck = () => {
+  const video = document.createElement('video')
+  const boxed = box(video, {} as RevivableContext)
+  const revived = revive(boxed, {} as RevivableContext)
+  const expected: HTMLVideoElement = revived
+  // @ts-expect-error — not an HTMLVideoElement
+  const notVideo: string = revived
+  // @ts-expect-error — cannot box a non-HTMLVideoElement
+  box('not a video' as unknown as string, {} as RevivableContext)
+  void expected; void notVideo; void typeCheck
 }
