@@ -1,5 +1,6 @@
 import { base } from './base-tests'
 import { baseMemory } from './base-memory-tests'
+import * as customRevivables from './custom-revivables'
 
 export const argsAndResponse = () => base.argsAndResponse(window)
 
@@ -64,3 +65,9 @@ export const MemoryLeaks = {
   nestedCallbacksNoLeak: () => baseMemory.nestedCallbacksNoLeak(window),
   concurrentCallsNoLeak: () => baseMemory.concurrentCallsNoLeak(window)
 }
+
+export const userPoint = () => customRevivables.userPoint(window)
+
+export const userPointReturn = () => customRevivables.userPointReturn(window)
+
+export const userPointDefaultsStillWork = () => customRevivables.userPointDefaultsStillWork(window)

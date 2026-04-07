@@ -37,7 +37,7 @@ export type InferRevivables<TModules extends readonly unknown[]> =
 export type InferRevivableBox<TModules extends readonly unknown[]> =
   ExtractBox<TModules[number]>
 
-export const isRevivableBox = <T extends RevivableContext>(value: any, _context: T): value is InferRevivableBox<T['revivableModules']> =>
+export const isRevivableBox = <T extends RevivableContext<readonly RevivableModule[]>>(value: any, _context: T): value is InferRevivableBox<T['revivableModules']> =>
   value
   && typeof value === 'object'
   && OSRA_BOX in value
