@@ -88,3 +88,25 @@ export const methodCallCanPlayType = async (transport: Transport) => {
   // Assert it's one of the valid enum values for CanPlayTypeResult.
   expect(['', 'maybe', 'probably']).to.include(result)
 }
+
+export const playPauseRoundTrip = async (transport: Transport) => {
+  const { local, remote } = await setupVideoRoundTrip(transport)
+
+  // play() on a source-less element rejects, which is fine — we're only
+  // verifying the proxied call returns a Promise. Swallow the rejection.
+  const playResult = (local.play as () => Promise<void>)()
+  expect(playResult).to.be.instanceOf(Promise)
+  // Race with a 500ms timeout so that browsers that never settle play() don't hang.
+  try { await Promise.race([playResult, new Promise(resolve => setTimeout(resolve, 500))]) } catch { /* no source */ }
+
+  // pause() always resolves; it also proves the method-call path for a
+  // Promise<void> return.
+  const pauseResult = (local.pause as () => Promise<void>)()
+  expect(pauseResult).to.be.instanceOf(Promise)
+  await pauseResult
+
+  await new Promise(resolve => setTimeout(resolve, 50))
+
+  expect(remote.paused).to.equal(true)
+  expect(local.paused).to.equal(true)
+}

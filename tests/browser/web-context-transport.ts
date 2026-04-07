@@ -80,3 +80,5 @@ export const htmlVideoElementInitialStateMirrored = () => htmlVideoElementTests.
 export const htmlVideoElementWritablePropPropagation = () => htmlVideoElementTests.writablePropPropagation(window)
 
 export const htmlVideoElementMethodCallCanPlayType = () => htmlVideoElementTests.methodCallCanPlayType(window)
+
+export const htmlVideoElementPlayPauseRoundTrip = () => htmlVideoElementTests.playPauseRoundTrip(window)
