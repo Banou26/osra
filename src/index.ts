@@ -10,7 +10,10 @@ import type {
   BidirectionalConnectionContext
 } from './utils'
 
+import type { RevivableModule } from './revivables'
+
 import { OSRA_DEFAULT_KEY, OSRA_KEY } from './types'
+import { defaultRevivableModules } from './revivables'
 export { BoxBase } from './revivables/utils'
 import {
   probePlatformCapabilities,
@@ -47,7 +50,10 @@ export type {
  * - Capable mode
  * - Jsonable mode
  */
-export const expose = async <T extends Capable>(
+export const expose = async <
+  T extends Capable,
+  const TUserModules extends readonly RevivableModule[] = readonly RevivableModule[]
+>(
   value: Capable,
   {
     transport: _transport,
@@ -58,7 +64,8 @@ export const expose = async <T extends Capable>(
     unregisterSignal,
     platformCapabilities: _platformCapabilities,
     transferAll,
-    logger
+    logger,
+    revivableModules: _userRevivableModules
   }: {
     transport: Transport
     name?: string
@@ -69,6 +76,7 @@ export const expose = async <T extends Capable>(
     platformCapabilities?: PlatformCapabilities
     transferAll?: boolean
     logger?: {}
+    revivableModules?: TUserModules
   }
 ): Promise<T> => {
   const transport = {
@@ -85,6 +93,13 @@ export const expose = async <T extends Capable>(
         }
     )
   } satisfies Transport
+  const userRevivableModules = _userRevivableModules ?? []
+  const mergedRevivableModules = [
+    ...defaultRevivableModules.filter(
+      d => !userRevivableModules.some(u => u.type === d.type),
+    ),
+    ...userRevivableModules,
+  ] as const
   const platformCapabilities = _platformCapabilities ?? probePlatformCapabilities()
   const connectionContexts = new Map<string, ConnectionContext>()
 
@@ -154,7 +169,8 @@ export const expose = async <T extends Capable>(
             platformCapabilities,
             eventTarget,
             send: (message: MessageVariant) => sendMessage(transport, message),
-            close: () => void connectionContexts.delete(message.uuid)
+            close: () => void connectionContexts.delete(message.uuid),
+            revivableModules: mergedRevivableModules
           })
       } satisfies BidirectionalConnectionContext
       connectionContexts.set(message.uuid, connectionContext)

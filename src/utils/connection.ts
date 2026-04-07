@@ -10,7 +10,7 @@ import type { PlatformCapabilities } from './capabilities'
 import type { StrictMessagePort } from './message-channel'
 
 import { makeMessageChannelAllocator } from './allocator'
-import { DefaultRevivableModules, defaultRevivableModules, recursiveBox, recursiveRevive, RevivableModule } from '../revivables'
+import { DefaultRevivableModules, recursiveBox, recursiveRevive, RevivableModule } from '../revivables'
 import { getTransferableObjects } from './transferable'
 
 export type BidirectionalConnectionContext = {
@@ -45,13 +45,16 @@ export type ConnectionRevivableContext<TModules extends readonly RevivableModule
 }
 
 export type BidirectionalConnection<T extends Capable = Capable> = {
-  revivableContext: ConnectionRevivableContext
+  revivableContext: ConnectionRevivableContext<readonly RevivableModule[]>
   close: () => void
   remoteValue: Promise<T>
 }
 
-export const startBidirectionalConnection = <T extends Capable>(
-  { transport, value, uuid, remoteUuid, platformCapabilities, eventTarget, send, close }:
+export const startBidirectionalConnection = <
+  T extends Capable,
+  TModules extends readonly RevivableModule[] = DefaultRevivableModules
+>(
+  { transport, value, uuid, remoteUuid, platformCapabilities, eventTarget, send, close, revivableModules }:
   {
     transport: Transport
     value: Capable
@@ -61,6 +64,7 @@ export const startBidirectionalConnection = <T extends Capable>(
     eventTarget: MessageEventTarget
     send: (message: ConnectionMessage) => void
     close: () => void
+    revivableModules: TModules
   }
 ) => {
   const revivableContext = {
@@ -71,8 +75,8 @@ export const startBidirectionalConnection = <T extends Capable>(
     messageChannels: makeMessageChannelAllocator(),
     sendMessage: send,
     eventTarget,
-    revivableModules: defaultRevivableModules
-  } satisfies ConnectionRevivableContext
+    revivableModules
+  } satisfies ConnectionRevivableContext<TModules>
   let initResolve: ((message: ConnectionMessage & { type: 'init' }) => void)
   const initMessage = new Promise<ConnectionMessage & { type: 'init' }>((resolve, reject) => {
     initResolve = resolve
