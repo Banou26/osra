@@ -219,3 +219,25 @@ export const multipleDeltaFields = async (transport: Transport) => {
   expect(local.volume).to.equal(0.7)
   expect(local.muted).to.equal(true)
 }
+
+export const errorListenerIsolation = async (transport: Transport) => {
+  const { local, remote } = await setupVideoRoundTrip(transport)
+  await new Promise(resolve => setTimeout(resolve, 50))
+
+  // Install a global error swallower so the queueMicrotask rethrow doesn't
+  // fail the test. Playwright reports unhandled errors to the test runner.
+  const onError = (e: ErrorEvent) => { e.preventDefault() }
+  window.addEventListener('error', onError)
+
+  let goodRan = false
+  local.addEventListener('volumechange', () => { throw new Error('bad listener') })
+  local.addEventListener('volumechange', () => { goodRan = true })
+
+  remote.volume = 0.2
+  remote.dispatchEvent(new Event('volumechange'))
+  await new Promise(resolve => setTimeout(resolve, 100))
+
+  window.removeEventListener('error', onError)
+
+  expect(goodRan).to.equal(true)
+}
