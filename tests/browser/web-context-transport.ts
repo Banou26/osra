@@ -82,3 +82,5 @@ export const htmlVideoElementWritablePropPropagation = () => htmlVideoElementTes
 export const htmlVideoElementMethodCallCanPlayType = () => htmlVideoElementTests.methodCallCanPlayType(window)
 
 export const htmlVideoElementPlayPauseRoundTrip = () => htmlVideoElementTests.playPauseRoundTrip(window)
+
+export const htmlVideoElementEventDeltaUpdatesState = () => htmlVideoElementTests.eventDeltaUpdatesState(window)

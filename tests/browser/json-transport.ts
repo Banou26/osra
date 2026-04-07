@@ -100,3 +100,5 @@ export const htmlVideoElementWritablePropPropagation = () => htmlVideoElementTes
 export const htmlVideoElementMethodCallCanPlayType = () => htmlVideoElementTests.methodCallCanPlayType(jsonTransport())
 
 export const htmlVideoElementPlayPauseRoundTrip = () => htmlVideoElementTests.playPauseRoundTrip(jsonTransport())
+
+export const htmlVideoElementEventDeltaUpdatesState = () => htmlVideoElementTests.eventDeltaUpdatesState(jsonTransport())

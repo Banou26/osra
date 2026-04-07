@@ -110,3 +110,35 @@ export const playPauseRoundTrip = async (transport: Transport) => {
   expect(remote.paused).to.equal(true)
   expect(local.paused).to.equal(true)
 }
+
+export const eventDeltaUpdatesState = async (transport: Transport) => {
+  const { local, remote } = await setupVideoRoundTrip(transport)
+
+  // Give subscribe() a turn to register on the remote side before we mutate.
+  await new Promise(resolve => setTimeout(resolve, 50))
+
+  const seen: Array<{ type: string, currentTime: number }> = []
+  local.addEventListener('seeked', () => {
+    seen.push({ type: 'seeked', currentTime: local.currentTime })
+  })
+  local.addEventListener('timeupdate', () => {
+    seen.push({ type: 'timeupdate', currentTime: local.currentTime })
+  })
+
+  // Dispatch a synthetic seeked event on the remote element. This is the most
+  // reliable way to force a state change without needing media to actually load
+  // and play in a headless test browser.
+  remote.currentTime = 5
+  remote.dispatchEvent(new Event('seeked'))
+  remote.dispatchEvent(new Event('timeupdate'))
+
+  // Wait for the event stream round-trip.
+  await new Promise(resolve => setTimeout(resolve, 100))
+
+  expect(seen.length).to.be.greaterThan(0)
+  // Each observed event should have seen currentTime === 5 at the moment of dispatch.
+  for (const entry of seen) {
+    expect(entry.currentTime).to.equal(5)
+  }
+  expect(local.currentTime).to.equal(5)
+}
