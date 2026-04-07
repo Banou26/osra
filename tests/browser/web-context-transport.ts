@@ -76,3 +76,5 @@ export const userPointDefaultsStillWork = () => customRevivables.userPointDefaul
 export const htmlVideoElementInstanceOfCheck = () => htmlVideoElementTests.instanceOfCheck(window)
 
 export const htmlVideoElementInitialStateMirrored = () => htmlVideoElementTests.initialStateMirrored(window)
+
+export const htmlVideoElementWritablePropPropagation = () => htmlVideoElementTests.writablePropPropagation(window)

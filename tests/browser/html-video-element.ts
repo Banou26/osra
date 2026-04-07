@@ -55,3 +55,25 @@ export const initialStateMirrored = async (transport: Transport) => {
   expect(local.loop).to.equal(true)
   expect(local.paused).to.equal(true) // default for a freshly created <video>
 }
+
+export const writablePropPropagation = async (transport: Transport) => {
+  const { local, remote } = await setupVideoRoundTrip(transport)
+
+  local.autoplay = true
+  local.loop = true
+  local.playbackRate = 2
+
+  // Optimistic local read — sync, no await.
+  expect(local.autoplay).to.equal(true)
+  expect(local.loop).to.equal(true)
+  expect(local.playbackRate).to.equal(2)
+
+  // The remote side is updated after the controller.set RPC resolves.
+  // Wait for one turn of the event loop before asserting on the remote.
+  await flush()
+  await new Promise(resolve => setTimeout(resolve, 50))
+
+  expect(remote.autoplay).to.equal(true)
+  expect(remote.loop).to.equal(true)
+  expect(remote.playbackRate).to.equal(2)
+}
