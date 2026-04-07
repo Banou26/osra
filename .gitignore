@@ -4,3 +4,4 @@ tmp/
 test-results
 .nyc_output/
 coverage/
+.worktrees/
