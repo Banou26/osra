@@ -114,3 +114,5 @@ export const htmlVideoElementMultipleDeltaFields = () => htmlVideoElementTests.m
 export const htmlVideoElementErrorListenerIsolation = () => htmlVideoElementTests.errorListenerIsolation(jsonTransport())
 
 export const htmlVideoElementCustomPropertyPassthrough = () => htmlVideoElementTests.customPropertyPassthrough(jsonTransport())
+
+export const htmlVideoElementDefaultsStillWork = () => htmlVideoElementTests.defaultsStillWork(jsonTransport())

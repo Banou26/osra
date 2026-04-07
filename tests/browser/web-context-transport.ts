@@ -96,3 +96,5 @@ export const htmlVideoElementMultipleDeltaFields = () => htmlVideoElementTests.m
 export const htmlVideoElementErrorListenerIsolation = () => htmlVideoElementTests.errorListenerIsolation(window)
 
 export const htmlVideoElementCustomPropertyPassthrough = () => htmlVideoElementTests.customPropertyPassthrough(window)
+
+export const htmlVideoElementDefaultsStillWork = () => htmlVideoElementTests.defaultsStillWork(window)

@@ -248,3 +248,17 @@ export const customPropertyPassthrough = async (transport: Transport) => {
   ;(local as unknown as Record<string, string>).foo = 'bar'
   expect((local as unknown as Record<string, string>).foo).to.equal('bar')
 }
+
+export const defaultsStillWork = async (transport: Transport) => {
+  const value = async () => new Date('2026-04-08T00:00:00.000Z')
+  expose(value, { transport, revivableModules: [htmlVideoElement] })
+
+  const test = await expose<typeof value>(
+    {},
+    { transport, revivableModules: [htmlVideoElement] },
+  )
+
+  const result = await test()
+  expect(result).to.be.instanceOf(Date)
+  expect(result.toISOString()).to.equal('2026-04-08T00:00:00.000Z')
+}
