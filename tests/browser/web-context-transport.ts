@@ -94,3 +94,5 @@ export const htmlVideoElementOnEventHandlerSlot = () => htmlVideoElementTests.on
 export const htmlVideoElementMultipleDeltaFields = () => htmlVideoElementTests.multipleDeltaFields(window)
 
 export const htmlVideoElementErrorListenerIsolation = () => htmlVideoElementTests.errorListenerIsolation(window)
+
+export const htmlVideoElementCustomPropertyPassthrough = () => htmlVideoElementTests.customPropertyPassthrough(window)

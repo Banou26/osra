@@ -112,3 +112,5 @@ export const htmlVideoElementOnEventHandlerSlot = () => htmlVideoElementTests.on
 export const htmlVideoElementMultipleDeltaFields = () => htmlVideoElementTests.multipleDeltaFields(jsonTransport())
 
 export const htmlVideoElementErrorListenerIsolation = () => htmlVideoElementTests.errorListenerIsolation(jsonTransport())
+
+export const htmlVideoElementCustomPropertyPassthrough = () => htmlVideoElementTests.customPropertyPassthrough(jsonTransport())

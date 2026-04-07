@@ -241,3 +241,10 @@ export const errorListenerIsolation = async (transport: Transport) => {
 
   expect(goodRan).to.equal(true)
 }
+
+export const customPropertyPassthrough = async (transport: Transport) => {
+  const { local } = await setupVideoRoundTrip(transport)
+
+  ;(local as unknown as Record<string, string>).foo = 'bar'
+  expect((local as unknown as Record<string, string>).foo).to.equal('bar')
+}
