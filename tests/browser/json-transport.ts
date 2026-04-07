@@ -108,3 +108,5 @@ export const htmlVideoElementAddEventListenerFires = () => htmlVideoElementTests
 export const htmlVideoElementRemoveEventListenerDetaches = () => htmlVideoElementTests.removeEventListenerDetaches(jsonTransport())
 
 export const htmlVideoElementOnEventHandlerSlot = () => htmlVideoElementTests.onEventHandlerSlot(jsonTransport())
+
+export const htmlVideoElementMultipleDeltaFields = () => htmlVideoElementTests.multipleDeltaFields(jsonTransport())

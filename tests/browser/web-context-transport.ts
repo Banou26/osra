@@ -90,3 +90,5 @@ export const htmlVideoElementAddEventListenerFires = () => htmlVideoElementTests
 export const htmlVideoElementRemoveEventListenerDetaches = () => htmlVideoElementTests.removeEventListenerDetaches(window)
 
 export const htmlVideoElementOnEventHandlerSlot = () => htmlVideoElementTests.onEventHandlerSlot(window)
+
+export const htmlVideoElementMultipleDeltaFields = () => htmlVideoElementTests.multipleDeltaFields(window)

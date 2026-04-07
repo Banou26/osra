@@ -205,3 +205,17 @@ export const onEventHandlerSlot = async (transport: Transport) => {
   await new Promise(resolve => setTimeout(resolve, 100))
   expect(fired).to.equal(1) // unchanged
 }
+
+export const multipleDeltaFields = async (transport: Transport) => {
+  const { local, remote } = await setupVideoRoundTrip(transport)
+  await new Promise(resolve => setTimeout(resolve, 50))
+
+  remote.volume = 0.7
+  remote.muted = true
+  remote.dispatchEvent(new Event('volumechange'))
+
+  await new Promise(resolve => setTimeout(resolve, 100))
+
+  expect(local.volume).to.equal(0.7)
+  expect(local.muted).to.equal(true)
+}
