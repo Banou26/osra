@@ -181,3 +181,27 @@ export const removeEventListenerDetaches = async (transport: Transport) => {
 
   expect(firedCount).to.equal(0)
 }
+
+export const onEventHandlerSlot = async (transport: Transport) => {
+  const { local, remote } = await setupVideoRoundTrip(transport)
+  await new Promise(resolve => setTimeout(resolve, 50))
+
+  let fired = 0
+  ;(local as HTMLVideoElement).onvolumechange = () => { fired++ }
+  expect((local as HTMLVideoElement).onvolumechange).to.be.a('function')
+
+  // Dispatching a synthetic event without changing volume avoids the real
+  // browser volumechange that would otherwise fire from `remote.volume = ...`,
+  // which would cause a double-fire and make the count assertion unreliable.
+  remote.dispatchEvent(new Event('volumechange'))
+  await new Promise(resolve => setTimeout(resolve, 100))
+  expect(fired).to.equal(1)
+
+  // Assigning null should clear the slot.
+  ;(local as HTMLVideoElement).onvolumechange = null
+  expect((local as HTMLVideoElement).onvolumechange).to.equal(null)
+
+  remote.dispatchEvent(new Event('volumechange'))
+  await new Promise(resolve => setTimeout(resolve, 100))
+  expect(fired).to.equal(1) // unchanged
+}

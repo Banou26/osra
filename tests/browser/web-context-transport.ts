@@ -88,3 +88,5 @@ export const htmlVideoElementEventDeltaUpdatesState = () => htmlVideoElementTest
 export const htmlVideoElementAddEventListenerFires = () => htmlVideoElementTests.addEventListenerFires(window)
 
 export const htmlVideoElementRemoveEventListenerDetaches = () => htmlVideoElementTests.removeEventListenerDetaches(window)
+
+export const htmlVideoElementOnEventHandlerSlot = () => htmlVideoElementTests.onEventHandlerSlot(window)
