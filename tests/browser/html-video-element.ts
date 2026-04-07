@@ -33,3 +33,25 @@ export const instanceOfCheck = async (transport: Transport) => {
   const { local } = await setupVideoRoundTrip(transport)
   expect(local).to.be.instanceOf(HTMLVideoElement)
 }
+
+export const initialStateMirrored = async (transport: Transport) => {
+  const remote = document.createElement('video')
+  remote.volume = 0.5
+  remote.muted = true
+  remote.loop = true
+
+  const exposed = { getVideo: async () => remote }
+  expose(exposed, { transport, revivableModules: [htmlVideoElement] })
+
+  const client = await expose<typeof exposed>(
+    {},
+    { transport, revivableModules: [htmlVideoElement] },
+  )
+  const local = await client.getVideo()
+
+  // Synchronous reads — no await.
+  expect(local.volume).to.equal(0.5)
+  expect(local.muted).to.equal(true)
+  expect(local.loop).to.equal(true)
+  expect(local.paused).to.equal(true) // default for a freshly created <video>
+}

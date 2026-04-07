@@ -92,3 +92,5 @@ export const userPointReturn = () => customRevivables.userPointReturn(jsonTransp
 export const userPointDefaultsStillWork = () => customRevivables.userPointDefaultsStillWork(jsonTransport())
 
 export const htmlVideoElementInstanceOfCheck = () => htmlVideoElementTests.instanceOfCheck(jsonTransport())
+
+export const htmlVideoElementInitialStateMirrored = () => htmlVideoElementTests.initialStateMirrored(jsonTransport())
