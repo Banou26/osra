@@ -19,6 +19,7 @@ import * as request from './request'
 
 export * from './utils'
 export * as htmlVideoElement from './html-video-element'
+export * as eventTarget from './event-target'
 
 export type RevivableModule<T extends string = string, T2 = any, T3 extends BoxBase<T> = any> = {
   readonly type: T
