@@ -235,14 +235,61 @@ export const revive = <T extends BoxedHTMLVideoElement, T2 extends RevivableCont
 
   const state: VideoState = { ...value.initialState }
 
-  const listeners = new Map<string, Set<EventListenerOrEventListenerObject>>()
+  // A real EventTarget handles listener storage, dedup, `once`, `signal`,
+  // and the `removeEventListener` round-trip natively. We just wrap each user
+  // listener so that, when invoked, `this` is the proxy and `event.target` /
+  // `currentTarget` / `srcElement` point at the proxy instead of `inner`.
+  const inner = new EventTarget()
+  const wrapperByListener = new WeakMap<object, EventListener>()
   const onHandlers = new Map<string, EventListener | null>()
 
-  // Forward declaration so the trap handlers can reference the Proxy itself.
-  // `proxy` is assigned before any trap runs (synchronously below).
+  // Forward declaration so the wrappers and dispatchEvent can reference the
+  // Proxy itself. `proxy` is assigned synchronously below before any wrapper
+  // can possibly run.
   let proxy!: HTMLVideoElement
 
+  const wrapListener = (listener: EventListenerOrEventListenerObject): EventListener => {
+    const existing = wrapperByListener.get(listener as object)
+    if (existing) return existing
+
+    const handle: EventListener = typeof listener === 'function'
+      ? listener
+      : (e) => { (listener as EventListenerObject).handleEvent?.(e) }
+
+    const wrapped: EventListener = (event) => {
+      Object.defineProperty(event, 'target',        { value: proxy, configurable: true })
+      Object.defineProperty(event, 'currentTarget', { value: proxy, configurable: true })
+      Object.defineProperty(event, 'srcElement',    { value: proxy, configurable: true })
+      try { handle.call(proxy, event) }
+      catch (e) { queueMicrotask(() => { throw e }) }
+    }
+    wrapperByListener.set(listener as object, wrapped)
+    return wrapped
+  }
+
+  const addEventListener = (
+    kind: string,
+    listener: EventListenerOrEventListenerObject | null,
+    options?: boolean | AddEventListenerOptions,
+  ) => {
+    if (listener == null) return
+    inner.addEventListener(kind, wrapListener(listener), options)
+  }
+
+  const removeEventListener = (
+    kind: string,
+    listener: EventListenerOrEventListenerObject | null,
+    options?: boolean | EventListenerOptions,
+  ) => {
+    if (listener == null) return
+    const wrapped = wrapperByListener.get(listener as object)
+    if (wrapped) inner.removeEventListener(kind, wrapped, options)
+  }
+
   const dispatchEvent = (event: Event): boolean => {
+    // Override target/currentTarget/srcElement up-front so the on<event> slot
+    // (which we fire ourselves) and any addEventListener wrappers (which redo
+    // the same defineProperty idempotently) all see the proxy as the source.
     Object.defineProperty(event, 'target',        { value: proxy, configurable: true })
     Object.defineProperty(event, 'currentTarget', { value: proxy, configurable: true })
     Object.defineProperty(event, 'srcElement',    { value: proxy, configurable: true })
@@ -253,55 +300,7 @@ export const revive = <T extends BoxedHTMLVideoElement, T2 extends RevivableCont
       catch (e) { queueMicrotask(() => { throw e }) }
     }
 
-    const entries = listeners.get(event.type)
-    if (entries) {
-      for (const l of [...entries]) {
-        try {
-          if (typeof l === 'function') l.call(proxy, event)
-          else (l as EventListenerObject).handleEvent?.call(proxy, event)
-        } catch (e) { queueMicrotask(() => { throw e }) }
-      }
-    }
-
-    return !event.defaultPrevented
-  }
-
-  const addEventListener = (
-    kind: string,
-    listener: EventListenerOrEventListenerObject | null,
-    options?: boolean | AddEventListenerOptions,
-  ) => {
-    if (listener == null) return
-    let bucket = listeners.get(kind)
-    if (!bucket) { bucket = new Set(); listeners.set(kind, bucket) }
-
-    // Handle `once` and `signal` by wrapping the listener before insertion.
-    let actual = listener
-    if (typeof options === 'object' && options != null) {
-      if (options.once) {
-        const inner = actual
-        const wrapper: EventListener = (e) => {
-          bucket!.delete(wrapper)
-          if (typeof inner === 'function') inner.call(proxy, e)
-          else (inner as EventListenerObject).handleEvent?.call(proxy, e)
-        }
-        actual = wrapper
-      }
-      if (options.signal) {
-        const target = actual
-        options.signal.addEventListener('abort', () => { bucket!.delete(target) }, { once: true })
-      }
-    }
-
-    bucket.add(actual)
-  }
-
-  const removeEventListener = (
-    kind: string,
-    listener: EventListenerOrEventListenerObject | null,
-  ) => {
-    if (listener == null) return
-    listeners.get(kind)?.delete(listener)
+    return inner.dispatchEvent(event)
   }
 
   const target = Object.create(HTMLVideoElement.prototype) as HTMLVideoElement
