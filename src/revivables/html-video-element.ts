@@ -141,9 +141,6 @@ const reviveMediaError = (data: SerializedMediaError): MediaError | null =>
 type Controller = {
   call: (method: MethodName, args: unknown[]) => Promise<unknown>
   set: (prop: WritableProp, value: unknown) => Promise<void>
-  subscribe: (
-    onDelta: (type: EventName, delta: Partial<VideoState>) => void
-  ) => Promise<() => void>
 }
 
 export type BoxedHTMLVideoElement =
@@ -151,6 +148,7 @@ export type BoxedHTMLVideoElement =
   & {
       initialState: VideoState
       controller: unknown // actual shape is recursiveBox(Controller); opaque at the type layer
+      eventProxy: unknown // facade EventTarget boxed via the eventTarget revivable
       [UnderlyingType]: HTMLVideoElement
     }
 
@@ -193,6 +191,17 @@ export const box = <T extends HTMLVideoElement, T2 extends RevivableContext>(
   value: T,
   context: T2,
 ): BoxedHTMLVideoElement => {
+  // Create a facade EventTarget that re-broadcasts each known media event as a
+  // CustomEvent whose `detail` carries the state delta. The eventTarget
+  // revivable proxies the facade across the wire — that's the entire
+  // remote→local event flow now.
+  const facade = new EventTarget()
+  for (const eventName of EVENT_NAMES) {
+    value.addEventListener(eventName, () => {
+      facade.dispatchEvent(new CustomEvent(eventName, { detail: EVENT_DELTAS[eventName](value) }))
+    })
+  }
+
   const controller: Controller = {
     call: async (method, args) => {
       return (value as unknown as Record<string, (...a: unknown[]) => unknown>)[method]!(...args)
@@ -200,27 +209,14 @@ export const box = <T extends HTMLVideoElement, T2 extends RevivableContext>(
     set: async (prop, v) => {
       ;(value as unknown as Record<string, unknown>)[prop] = v
     },
-    subscribe: async (onDelta) => {
-      const disposers: Array<() => void> = []
-      for (const eventName of EVENT_NAMES) {
-        const listener = () => { onDelta(eventName, EVENT_DELTAS[eventName](value)) }
-        value.addEventListener(eventName, listener)
-        disposers.push(() => value.removeEventListener(eventName, listener))
-      }
-      return () => { for (const d of disposers) d() }
-    },
   }
-
-  const boxedController = recursiveBox(
-    controller as unknown as Capable,
-    context,
-  )
 
   return {
     ...BoxBase,
     type,
     initialState: snapshot(value),
-    controller: boxedController,
+    controller: recursiveBox(controller as unknown as Capable, context),
+    eventProxy: recursiveBox(facade as unknown as Capable, context),
   } as BoxedHTMLVideoElement
 }
 
@@ -233,22 +229,26 @@ export const revive = <T extends BoxedHTMLVideoElement, T2 extends RevivableCont
     context,
   ) as unknown as Controller
 
-  const state: VideoState = { ...value.initialState }
+  // The eventProxy is the local mirror of the box-side facade EventTarget.
+  // All event traffic (state-update deltas, on<event> handlers, user
+  // addEventListener) flows through it.
+  const eventProxy = recursiveRevive(
+    value.eventProxy as Capable,
+    context,
+  ) as EventTarget
 
-  // A real EventTarget handles listener storage, dedup, `once`, `signal`,
-  // and the `removeEventListener` round-trip natively. We just wrap each user
-  // listener so that, when invoked, `this` is the proxy and `event.target` /
-  // `currentTarget` / `srcElement` point at the proxy instead of `inner`.
-  const inner = new EventTarget()
-  const wrapperByListener = new WeakMap<object, EventListener>()
+  const state: VideoState = { ...value.initialState }
   const onHandlers = new Map<string, EventListener | null>()
 
-  // Forward declaration so the wrappers and dispatchEvent can reference the
-  // Proxy itself. `proxy` is assigned synchronously below before any wrapper
-  // can possibly run.
   let proxy!: HTMLVideoElement
 
-  const wrapListener = (listener: EventListenerOrEventListenerObject): EventListener => {
+  // User listeners are wrapped so the wrapper rebinds `this` to the video proxy
+  // and overrides event.target/currentTarget/srcElement to point at the video
+  // proxy (the eventTarget revivable would otherwise set them to the eventProxy
+  // itself, which the user has no reference to).
+  const wrapperByListener = new WeakMap<object, EventListener>()
+
+  const wrapForVideo = (listener: EventListenerOrEventListenerObject): EventListener => {
     const existing = wrapperByListener.get(listener as object)
     if (existing) return existing
 
@@ -267,49 +267,51 @@ export const revive = <T extends BoxedHTMLVideoElement, T2 extends RevivableCont
     return wrapped
   }
 
-  const addEventListener = (
-    kind: string,
-    listener: EventListenerOrEventListenerObject | null,
-    options?: boolean | AddEventListenerOptions,
-  ) => {
-    if (listener == null) return
-    inner.addEventListener(kind, wrapListener(listener), options)
-  }
+  // Pre-register one internal listener per known media event on the eventProxy.
+  // This runs BEFORE any user-added listener (because user listeners arrive
+  // after revive returns), so the local state cache and the on<event> handler
+  // slot are both updated before user code sees the event.
+  for (const eventName of EVENT_NAMES) {
+    eventProxy.addEventListener(eventName, (event) => {
+      const detail = (event as CustomEvent).detail as Partial<VideoState> | null
+      if (detail) Object.assign(state, detail)
 
-  const removeEventListener = (
-    kind: string,
-    listener: EventListenerOrEventListenerObject | null,
-    options?: boolean | EventListenerOptions,
-  ) => {
-    if (listener == null) return
-    const wrapped = wrapperByListener.get(listener as object)
-    if (wrapped) inner.removeEventListener(kind, wrapped, options)
-  }
-
-  const dispatchEvent = (event: Event): boolean => {
-    // Override target/currentTarget/srcElement up-front so the on<event> slot
-    // (which we fire ourselves) and any addEventListener wrappers (which redo
-    // the same defineProperty idempotently) all see the proxy as the source.
-    Object.defineProperty(event, 'target',        { value: proxy, configurable: true })
-    Object.defineProperty(event, 'currentTarget', { value: proxy, configurable: true })
-    Object.defineProperty(event, 'srcElement',    { value: proxy, configurable: true })
-
-    const onHandler = onHandlers.get(`on${event.type}`)
-    if (onHandler) {
-      try { onHandler.call(proxy, event) }
-      catch (e) { queueMicrotask(() => { throw e }) }
-    }
-
-    return inner.dispatchEvent(event)
+      const onHandler = onHandlers.get(`on${eventName}`)
+      if (onHandler) {
+        // The eventTarget revivable already overrode event.target to its own
+        // proxy; redirect it to the video proxy here so the user's on-handler
+        // sees the right source.
+        Object.defineProperty(event, 'target',        { value: proxy, configurable: true })
+        Object.defineProperty(event, 'currentTarget', { value: proxy, configurable: true })
+        Object.defineProperty(event, 'srcElement',    { value: proxy, configurable: true })
+        try { onHandler.call(proxy, event) }
+        catch (e) { queueMicrotask(() => { throw e }) }
+      }
+    })
   }
 
   const target = Object.create(HTMLVideoElement.prototype) as HTMLVideoElement
 
   proxy = new Proxy(target, {
     get(t, prop, receiver) {
-      if (prop === 'addEventListener')    return addEventListener
-      if (prop === 'removeEventListener') return removeEventListener
-      if (prop === 'dispatchEvent')       return dispatchEvent
+      if (prop === 'addEventListener') return (
+        kind: string,
+        listener: EventListenerOrEventListenerObject | null,
+        options?: boolean | AddEventListenerOptions,
+      ) => {
+        if (listener == null) return
+        eventProxy.addEventListener(kind, wrapForVideo(listener), options)
+      }
+      if (prop === 'removeEventListener') return (
+        kind: string,
+        listener: EventListenerOrEventListenerObject | null,
+        options?: boolean | EventListenerOptions,
+      ) => {
+        if (listener == null) return
+        const wrapped = wrapperByListener.get(listener as object)
+        if (wrapped) eventProxy.removeEventListener(kind, wrapped, options)
+      }
+      if (prop === 'dispatchEvent') return (event: Event) => eventProxy.dispatchEvent(event)
 
       if (typeof prop === 'string' && ON_HANDLER_NAMES.has(prop)) {
         return onHandlers.get(prop) ?? null
@@ -347,14 +349,6 @@ export const revive = <T extends BoxedHTMLVideoElement, T2 extends RevivableCont
       return Reflect.set(t, prop, value, receiver)
     },
   }) as unknown as HTMLVideoElement
-
-  // Start the event stream. The returned disposer is intentionally not captured:
-  // teardown is handled by function.ts's FinalizationRegistry when `controller`
-  // is GC'd along with the proxy.
-  void controller.subscribe((type, delta) => {
-    Object.assign(state, delta)
-    dispatchEvent(new Event(type))
-  })
 
   return proxy
 }

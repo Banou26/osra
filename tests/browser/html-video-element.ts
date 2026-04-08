@@ -2,7 +2,13 @@ import type { Transport } from '../../src/types'
 
 import { expect } from 'chai'
 
-import { expose, htmlVideoElement } from '../../src/index'
+import { expose, htmlVideoElement, eventTarget } from '../../src/index'
+
+// Order matters: htmlVideoElement is more specific than eventTarget (every
+// HTMLVideoElement is also an EventTarget) so it must come first in the
+// revivableModules list, otherwise videos would be boxed via the generic
+// eventTarget revivable.
+const modules = [htmlVideoElement, eventTarget] as const
 
 /**
  * Creates a real <video> element on the "remote" side and exposes it through
@@ -14,11 +20,11 @@ const setupVideoRoundTrip = async (transport: Transport) => {
   const remote = document.createElement('video')
 
   const exposed = { getVideo: async () => remote }
-  expose(exposed, { transport, revivableModules: [htmlVideoElement] })
+  expose(exposed, { transport, revivableModules: modules })
 
   const client = await expose<typeof exposed>(
     {},
-    { transport, revivableModules: [htmlVideoElement] },
+    { transport, revivableModules: modules },
   )
 
   const local = await client.getVideo()
@@ -28,6 +34,12 @@ const setupVideoRoundTrip = async (transport: Transport) => {
 /** A one-microtask flush — the Proxy `set` trap fires `controller.set` without
  *  awaiting it, so tests need a short yield before observing the remote side. */
 const flush = () => new Promise(resolve => queueMicrotask(() => resolve(undefined)))
+
+/** Wait long enough for an addEventListener / removeEventListener subscribe RPC
+ *  to land on the remote side. The eventTarget revivable's addEventListener is
+ *  fire-and-forget — if a remote dispatch happens before the registration RPC
+ *  arrives, the listener won't see the event. */
+const flushSubscribe = () => new Promise(resolve => setTimeout(resolve, 50))
 
 export const instanceOfCheck = async (transport: Transport) => {
   const { local } = await setupVideoRoundTrip(transport)
@@ -41,11 +53,11 @@ export const initialStateMirrored = async (transport: Transport) => {
   remote.loop = true
 
   const exposed = { getVideo: async () => remote }
-  expose(exposed, { transport, revivableModules: [htmlVideoElement] })
+  expose(exposed, { transport, revivableModules: modules })
 
   const client = await expose<typeof exposed>(
     {},
-    { transport, revivableModules: [htmlVideoElement] },
+    { transport, revivableModules: modules },
   )
   const local = await client.getVideo()
 
@@ -114,8 +126,8 @@ export const playPauseRoundTrip = async (transport: Transport) => {
 export const eventDeltaUpdatesState = async (transport: Transport) => {
   const { local, remote } = await setupVideoRoundTrip(transport)
 
-  // Give subscribe() a turn to register on the remote side before we mutate.
-  await new Promise(resolve => setTimeout(resolve, 50))
+  // Give the video module's internal subscribes a turn to land on the remote.
+  await flushSubscribe()
 
   const seen: Array<{ type: string, currentTime: number }> = []
   local.addEventListener('seeked', () => {
@@ -124,6 +136,9 @@ export const eventDeltaUpdatesState = async (transport: Transport) => {
   local.addEventListener('timeupdate', () => {
     seen.push({ type: 'timeupdate', currentTime: local.currentTime })
   })
+
+  // The user listener add is also a fire-and-forget subscribe RPC; wait for it.
+  await flushSubscribe()
 
   // Dispatch a synthetic seeked event on the remote element. This is the most
   // reliable way to force a state change without needing media to actually load
@@ -146,13 +161,16 @@ export const eventDeltaUpdatesState = async (transport: Transport) => {
 export const addEventListenerFires = async (transport: Transport) => {
   const { local, remote } = await setupVideoRoundTrip(transport)
 
-  // Give subscribe() a turn to register listeners on the remote.
-  await new Promise(resolve => setTimeout(resolve, 50))
+  // Give the video module's internal subscribes a turn to land on the remote.
+  await flushSubscribe()
 
   const observed: Array<{ type: string, targetIsProxy: boolean }> = []
   local.addEventListener('volumechange', (e) => {
     observed.push({ type: e.type, targetIsProxy: e.target === local })
   })
+
+  // Wait for the user listener's subscribe RPC to land before dispatching.
+  await flushSubscribe()
 
   remote.volume = 0.25 // triggers volumechange on remote
   remote.dispatchEvent(new Event('volumechange'))
@@ -168,12 +186,16 @@ export const addEventListenerFires = async (transport: Transport) => {
 export const removeEventListenerDetaches = async (transport: Transport) => {
   const { local, remote } = await setupVideoRoundTrip(transport)
 
-  await new Promise(resolve => setTimeout(resolve, 50))
+  await flushSubscribe()
 
   let firedCount = 0
   const listener = () => { firedCount++ }
   local.addEventListener('volumechange', listener)
   local.removeEventListener('volumechange', listener)
+
+  // Both the add and the remove are fire-and-forget RPCs over the same channel
+  // so they arrive in order; wait for both to land before dispatching.
+  await flushSubscribe()
 
   remote.volume = 0.1
   remote.dispatchEvent(new Event('volumechange'))
@@ -222,7 +244,7 @@ export const multipleDeltaFields = async (transport: Transport) => {
 
 export const errorListenerIsolation = async (transport: Transport) => {
   const { local, remote } = await setupVideoRoundTrip(transport)
-  await new Promise(resolve => setTimeout(resolve, 50))
+  await flushSubscribe()
 
   // Install a global error swallower so the queueMicrotask rethrow doesn't
   // fail the test. Playwright reports unhandled errors to the test runner.
@@ -232,6 +254,8 @@ export const errorListenerIsolation = async (transport: Transport) => {
   let goodRan = false
   local.addEventListener('volumechange', () => { throw new Error('bad listener') })
   local.addEventListener('volumechange', () => { goodRan = true })
+
+  await flushSubscribe()
 
   remote.volume = 0.2
   remote.dispatchEvent(new Event('volumechange'))
@@ -251,11 +275,11 @@ export const customPropertyPassthrough = async (transport: Transport) => {
 
 export const defaultsStillWork = async (transport: Transport) => {
   const value = async () => new Date('2026-04-08T00:00:00.000Z')
-  expose(value, { transport, revivableModules: [htmlVideoElement] })
+  expose(value, { transport, revivableModules: modules })
 
   const test = await expose<typeof value>(
     {},
-    { transport, revivableModules: [htmlVideoElement] },
+    { transport, revivableModules: modules },
   )
 
   const result = await test()
