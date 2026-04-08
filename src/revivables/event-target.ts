@@ -3,16 +3,21 @@
 // Generic revivable for `EventTarget` instances. The revived proxy is itself
 // an `EventTarget` (via `instanceof`); calls to `addEventListener`,
 // `removeEventListener`, and `dispatchEvent` are forwarded to the remote side
-// over RPC. Listeners are register-on-demand: each local `addEventListener`
-// allocates a UUID and asks the remote side to fire the corresponding callback
-// when the matching event type fires on the underlying `EventTarget`.
+// over RPC.
+//
+// The listener dedup story relies on the function revivable's per-connection
+// identity cache (see `src/revivables/function.ts`): when the local user
+// passes the same listener reference to `addEventListener` and then
+// `removeEventListener`, both reach the box side as the same revived
+// function. We take advantage of that by keeping a `WeakMap<revivedListener,
+// wrapper>` on the box side, so subscribe and unsubscribe find the same real
+// EventTarget wrapper without any uuid tracking.
 //
 // Limitations
 // -----------
 // - The wire form for events is `{ type, detail, bubbles, cancelable, composed }`
 //   reconstructed as a `CustomEvent`. Subtype-specific properties (`MouseEvent`
-//   coordinates, `ProgressEvent` lengths, etc.) are NOT preserved. Suitable for
-//   custom events and DOM events that only carry `type`/`detail`.
+//   coordinates, `ProgressEvent` lengths, etc.) are NOT preserved.
 // - `addEventListener` is sync in the spec but the underlying subscribe RPC is
 //   fire-and-forget. If an event fires on the remote side before the subscribe
 //   RPC has been processed there, the local listener will not see it. Add a
@@ -55,9 +60,22 @@ const deserializeEvent = (data: SerializedEvent): Event =>
     composed: data.composed,
   })
 
+type RemoteListener = (serialized: SerializedEvent) => void
+
+/**
+ * Options forwarded to the remote side's native `addEventListener`. `once`
+ * and `signal` flow through so the remote `EventTarget` enforces them
+ * natively — the `abortSignal` revivable already handles `signal` crossing
+ * the wire, so local aborts propagate correctly.
+ */
+type RemoteAddEventListenerOptions = {
+  once?: boolean
+  signal?: AbortSignal
+}
+
 type Controller = {
-  subscribe: (uuid: string, type: string, cb: (event: SerializedEvent) => void) => Promise<void>
-  unsubscribe: (uuid: string) => Promise<void>
+  subscribe: (type: string, listener: RemoteListener, options?: RemoteAddEventListenerOptions) => Promise<void>
+  unsubscribe: (type: string, listener: RemoteListener) => Promise<void>
   dispatch: (event: SerializedEvent) => Promise<boolean>
 }
 
@@ -75,40 +93,29 @@ export const box = <T extends EventTarget, T2 extends RevivableContext>(
   value: T,
   context: T2,
 ): BoxedEventTarget => {
-  // For each event type, the real DOM listener attached to `value` that
-  // fans out to all registered callbacks for that type.
-  const realListeners = new Map<string, EventListener>()
-  // (uuid → { type, callback }). All registered callbacks across all types.
-  const callbacksByUuid = new Map<string, { type: string, cb: (event: SerializedEvent) => void }>()
+  // For each revived listener we've seen, the real DOM wrapper we attached to
+  // the underlying EventTarget. Keyed by the revived listener so that the same
+  // listener (resolved by function identity on the wire) maps to the same
+  // wrapper across subscribe/unsubscribe calls.
+  const wrapperByListener = new WeakMap<RemoteListener, EventListener>()
 
-  const ensureAttached = (eventType: string) => {
-    if (realListeners.has(eventType)) return
-    const fanOut: EventListener = (event) => {
-      const serialized = serializeEvent(event)
-      for (const entry of callbacksByUuid.values()) {
-        if (entry.type === eventType) entry.cb(serialized)
-      }
+  const getOrCreateWrapper = (listener: RemoteListener): EventListener => {
+    const existing = wrapperByListener.get(listener)
+    if (existing) return existing
+    const wrapper: EventListener = (event) => {
+      listener(serializeEvent(event))
     }
-    value.addEventListener(eventType, fanOut)
-    realListeners.set(eventType, fanOut)
+    wrapperByListener.set(listener, wrapper)
+    return wrapper
   }
 
   const controller: Controller = {
-    subscribe: async (uuid, eventType, cb) => {
-      callbacksByUuid.set(uuid, { type: eventType, cb })
-      ensureAttached(eventType)
+    subscribe: async (eventType, listener, options) => {
+      value.addEventListener(eventType, getOrCreateWrapper(listener), options)
     },
-    unsubscribe: async (uuid) => {
-      const entry = callbacksByUuid.get(uuid)
-      if (!entry) return
-      callbacksByUuid.delete(uuid)
-      // If no more callbacks for this type, detach the real DOM listener.
-      const stillUsed = [...callbacksByUuid.values()].some(e => e.type === entry.type)
-      if (!stillUsed) {
-        const real = realListeners.get(entry.type)
-        if (real) value.removeEventListener(entry.type, real)
-        realListeners.delete(entry.type)
-      }
+    unsubscribe: async (eventType, listener) => {
+      const wrapper = wrapperByListener.get(listener)
+      if (wrapper) value.removeEventListener(eventType, wrapper)
     },
     dispatch: async (serialized) => value.dispatchEvent(deserializeEvent(serialized)),
   }
@@ -129,16 +136,38 @@ export const revive = <T extends BoxedEventTarget, T2 extends RevivableContext>(
     context,
   ) as unknown as Controller
 
-  // (listener → (type → uuid)). Lets removeEventListener find the right uuid.
-  // Stored as a Map<type, uuid> per listener so the same listener registered
-  // for multiple types can be removed independently.
-  const uuidsByListener = new WeakMap<object, Map<string, string>>()
+  // Map the user's original listener (function or handler object) to the
+  // wrapped function we hand over the wire. We need the same wrapped reference
+  // on the second (remove) call so function identity links the two on the box
+  // side.
+  const wrappedByListener = new WeakMap<object, RemoteListener>()
 
   // The proxy target is a real EventTarget so `instanceof EventTarget` works
-  // without any prototype trickery. We override addEventListener / removeEventListener
-  // / dispatchEvent on top of it; the inherited slots are unused.
+  // without any prototype trickery. We override addEventListener /
+  // removeEventListener / dispatchEvent on top of it; the inherited listener
+  // slots are unused.
   const target = new EventTarget()
   let proxy!: EventTarget
+
+  const wrapListener = (listener: EventListenerOrEventListenerObject): RemoteListener => {
+    const existing = wrappedByListener.get(listener as object)
+    if (existing) return existing
+
+    const handle: EventListener = typeof listener === 'function'
+      ? listener
+      : (e) => { (listener as EventListenerObject).handleEvent?.(e) }
+
+    const wrapped: RemoteListener = (serialized) => {
+      const event = deserializeEvent(serialized)
+      Object.defineProperty(event, 'target',        { value: proxy, configurable: true })
+      Object.defineProperty(event, 'currentTarget', { value: proxy, configurable: true })
+      Object.defineProperty(event, 'srcElement',    { value: proxy, configurable: true })
+      try { handle.call(proxy, event) }
+      catch (e) { queueMicrotask(() => { throw e }) }
+    }
+    wrappedByListener.set(listener as object, wrapped)
+    return wrapped
+  }
 
   const addEventListener = (
     kind: string,
@@ -146,40 +175,19 @@ export const revive = <T extends BoxedEventTarget, T2 extends RevivableContext>(
     options?: boolean | AddEventListenerOptions,
   ) => {
     if (listener == null) return
-    let typeMap = uuidsByListener.get(listener as object)
-    if (!typeMap) { typeMap = new Map(); uuidsByListener.set(listener as object, typeMap) }
-    if (typeMap.has(kind)) return // dedup, matching native EventTarget semantics
+    const wrapped = wrapListener(listener)
 
-    const uuid = globalThis.crypto.randomUUID()
-    typeMap.set(kind, uuid)
-
-    const once = typeof options === 'object' && options != null && options.once === true
-    const signal = typeof options === 'object' && options != null ? options.signal : undefined
-
-    const callback = (serialized: SerializedEvent) => {
-      const event = deserializeEvent(serialized)
-      Object.defineProperty(event, 'target',        { value: proxy, configurable: true })
-      Object.defineProperty(event, 'currentTarget', { value: proxy, configurable: true })
-      Object.defineProperty(event, 'srcElement',    { value: proxy, configurable: true })
-      try {
-        if (typeof listener === 'function') listener.call(proxy, event)
-        else (listener as EventListenerObject).handleEvent?.call(proxy, event)
-      } catch (e) { queueMicrotask(() => { throw e }) }
-
-      if (once) {
-        typeMap!.delete(kind)
-        void controller.unsubscribe(uuid)
-      }
+    // Normalize the options bag to just the fields we forward over the wire.
+    // `capture` is dropped because there is no tree here. `passive` is dropped
+    // because the remote EventTarget doesn't benefit from it either.
+    let forwarded: RemoteAddEventListenerOptions | undefined
+    if (typeof options === 'object' && options != null) {
+      forwarded = {}
+      if (options.once) forwarded.once = true
+      if (options.signal) forwarded.signal = options.signal
     }
 
-    void controller.subscribe(uuid, kind, callback)
-
-    if (signal) {
-      signal.addEventListener('abort', () => {
-        typeMap!.delete(kind)
-        void controller.unsubscribe(uuid)
-      }, { once: true })
-    }
+    void controller.subscribe(kind, wrapped, forwarded)
   }
 
   const removeEventListener = (
@@ -188,13 +196,8 @@ export const revive = <T extends BoxedEventTarget, T2 extends RevivableContext>(
     _options?: boolean | EventListenerOptions,
   ) => {
     if (listener == null) return
-    const typeMap = uuidsByListener.get(listener as object)
-    if (!typeMap) return
-    const uuid = typeMap.get(kind)
-    if (uuid) {
-      typeMap.delete(kind)
-      void controller.unsubscribe(uuid)
-    }
+    const wrapped = wrappedByListener.get(listener as object)
+    if (wrapped) void controller.unsubscribe(kind, wrapped)
   }
 
   const dispatchEvent = (event: Event): boolean => {
