@@ -438,6 +438,42 @@ export const userRequestNoBody = async (transport: Transport) => {
   expect(request.body).to.be.null
 }
 
+export const functionIdentityPreservedAsArgs = async (transport: Transport) => {
+  // When the same function reference is passed twice as separate arguments to
+  // a single RPC, the receiving side should see the same reference both times
+  // (enabled by the function revivable's per-connection identity cache).
+  const value = {
+    compare: async (a: () => number, b: () => number) => a === b,
+  }
+  expose(value, { transport })
+
+  const { compare } = await expose<typeof value>({}, { transport })
+
+  const fn = () => 42
+  await expect(compare(fn, fn)).to.eventually.equal(true)
+}
+
+export const functionIdentityPreservedAcrossCalls = async (transport: Transport) => {
+  // Passing the same function across two separate RPCs should also resolve to
+  // the same reference on the receiving side, because the identity is cached
+  // for the lifetime of the connection.
+  let lastReceived: (() => number) | null = null
+  const value = {
+    record: async (fn: () => number) => {
+      const sameAsBefore = lastReceived === fn
+      lastReceived = fn
+      return sameAsBefore
+    },
+  }
+  expose(value, { transport })
+
+  const { record } = await expose<typeof value>({}, { transport })
+
+  const fn = () => 42
+  await expect(record(fn)).to.eventually.equal(false) // first call: nothing cached yet
+  await expect(record(fn)).to.eventually.equal(true)  // second call: same ref
+}
+
 export const base = {
   argsAndResponse,
   callback,
@@ -461,5 +497,7 @@ export const base = {
   userResponseNoBody,
   userRequest,
   userRequestWithBody,
-  userRequestNoBody
+  userRequestNoBody,
+  functionIdentityPreservedAsArgs,
+  functionIdentityPreservedAcrossCalls,
 }

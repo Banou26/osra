@@ -64,6 +64,10 @@ export const userRequestWithBody = () => base.userRequestWithBody(jsonTransport(
 
 export const userRequestNoBody = () => base.userRequestNoBody(jsonTransport())
 
+export const functionIdentityPreservedAsArgs = () => base.functionIdentityPreservedAsArgs(jsonTransport())
+
+export const functionIdentityPreservedAcrossCalls = () => base.functionIdentityPreservedAcrossCalls(jsonTransport())
+
 const JSON_ITERATIONS = 2_500
 const JSON_MEMORY_THRESHOLD = 1_000_000
 

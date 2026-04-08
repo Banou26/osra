@@ -25,6 +25,18 @@ export type RevivableContext<TModules extends readonly RevivableModule[] = Defau
   sendMessage: (message: ConnectionMessage) => void
   revivableModules: TModules
   eventTarget: MessageEventTarget
+  /**
+   * Identity tables for the function revivable. Let the same function sent
+   * twice over the same connection dedupe to a single revived reference on
+   * the other side (so `addEventListener(fn) + removeEventListener(fn)`
+   * works). See `src/revivables/function.ts` for how they're used.
+   */
+  // eslint-disable-next-line @typescript-eslint/ban-types
+  outgoingFunctionIds: WeakMap<Function, Uuid>
+  // eslint-disable-next-line @typescript-eslint/ban-types
+  outgoingFunctionsById: Map<Uuid, WeakRef<Function>>
+  // eslint-disable-next-line @typescript-eslint/ban-types
+  revivedFunctionsById: Map<Uuid, WeakRef<Function>>
 }
 
 export type ExtractModule<T> = T extends { isType: (value: unknown) => value is infer S } ? S : never

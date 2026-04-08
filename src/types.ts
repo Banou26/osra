@@ -97,6 +97,18 @@ export type BidirectionalConnectionMessage =
     /** uuid of the messagePort that closed */
     portId: string
   }
+  /**
+   * Sent by the revive side of a function revivable when its cached proxy is
+   * garbage collected. The box side uses this to evict its outgoing identity
+   * entry so that a subsequent box of the same function allocates a fresh id
+   * and sends the full payload instead of a ref-only box.
+   */
+  | {
+    type: 'function-drop'
+    remoteUuid: Uuid
+    /** id of the function registration being dropped */
+    id: Uuid
+  }
 
 export type UnidirectionalConnectionMessage = {
   type: 'message'

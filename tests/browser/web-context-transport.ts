@@ -49,6 +49,10 @@ export const userRequestWithBody = () => base.userRequestWithBody(window)
 
 export const userRequestNoBody = () => base.userRequestNoBody(window)
 
+export const functionIdentityPreservedAsArgs = () => base.functionIdentityPreservedAsArgs(window)
+
+export const functionIdentityPreservedAcrossCalls = () => base.functionIdentityPreservedAcrossCalls(window)
+
 export const MemoryLeaks = {
   config: {
     iterations: baseMemory.DEFAULT_ITERATIONS,

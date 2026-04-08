@@ -42,6 +42,12 @@ export type ConnectionRevivableContext<TModules extends readonly RevivableModule
   sendMessage: (message: ConnectionMessage) => void
   revivableModules: TModules
   eventTarget: MessageEventTarget
+  // eslint-disable-next-line @typescript-eslint/ban-types
+  outgoingFunctionIds: WeakMap<Function, Uuid>
+  // eslint-disable-next-line @typescript-eslint/ban-types
+  outgoingFunctionsById: Map<Uuid, WeakRef<Function>>
+  // eslint-disable-next-line @typescript-eslint/ban-types
+  revivedFunctionsById: Map<Uuid, WeakRef<Function>>
 }
 
 export type BidirectionalConnection<T extends Capable = Capable> = {
@@ -75,7 +81,13 @@ export const startBidirectionalConnection = <
     messageChannels: makeMessageChannelAllocator(),
     sendMessage: send,
     eventTarget,
-    revivableModules
+    revivableModules,
+    // eslint-disable-next-line @typescript-eslint/ban-types
+    outgoingFunctionIds: new WeakMap<Function, Uuid>(),
+    // eslint-disable-next-line @typescript-eslint/ban-types
+    outgoingFunctionsById: new Map<Uuid, WeakRef<Function>>(),
+    // eslint-disable-next-line @typescript-eslint/ban-types
+    revivedFunctionsById: new Map<Uuid, WeakRef<Function>>(),
   } satisfies ConnectionRevivableContext<TModules>
   let initResolve: ((message: ConnectionMessage & { type: 'init' }) => void)
   const initMessage = new Promise<ConnectionMessage & { type: 'init' }>((resolve, reject) => {
@@ -90,6 +102,14 @@ export const startBidirectionalConnection = <
       const messageChannel = revivableContext.messageChannels.getOrAlloc(detail.portId)
       const transferables = getTransferableObjects(detail)
       ;(messageChannel.port2 as MessagePort)?.postMessage(detail, { transfer: transferables })
+    } else if (detail.type === 'function-drop') {
+      // The remote side's revived function proxy was garbage collected; evict
+      // our outgoing identity entry so the next box of the same source
+      // function allocates a fresh id and sends the full payload.
+      const ref = revivableContext.outgoingFunctionsById.get(detail.id)
+      const fn = ref?.deref()
+      if (fn) revivableContext.outgoingFunctionIds.delete(fn)
+      revivableContext.outgoingFunctionsById.delete(detail.id)
     }
   })
 
