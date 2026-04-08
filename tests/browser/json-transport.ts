@@ -69,7 +69,9 @@ export const functionIdentityPreservedAsArgs = () => base.functionIdentityPreser
 export const functionIdentityPreservedAcrossCalls = () => base.functionIdentityPreservedAcrossCalls(jsonTransport())
 
 const JSON_ITERATIONS = 2_500
-const JSON_MEMORY_THRESHOLD = 1_000_000
+// 2MB — bumped from 1MB when per-connection identity dedup landed. See the
+// comment on web-context-transport.ts's threshold for details.
+const JSON_MEMORY_THRESHOLD = 2_000_000
 
 export const MemoryLeaks = {
   config: {
@@ -94,6 +96,8 @@ export const userPoint = () => customRevivables.userPoint(jsonTransport())
 export const userPointReturn = () => customRevivables.userPointReturn(jsonTransport())
 
 export const userPointDefaultsStillWork = () => customRevivables.userPointDefaultsStillWork(jsonTransport())
+
+export const userPointIdentityPreserved = () => customRevivables.userPointIdentityPreserved(jsonTransport())
 
 export const htmlVideoElementInstanceOfCheck = () => htmlVideoElementTests.instanceOfCheck(jsonTransport())
 

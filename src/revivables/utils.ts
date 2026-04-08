@@ -26,17 +26,24 @@ export type RevivableContext<TModules extends readonly RevivableModule[] = Defau
   revivableModules: TModules
   eventTarget: MessageEventTarget
   /**
-   * Identity tables for the function revivable. Let the same function sent
-   * twice over the same connection dedupe to a single revived reference on
-   * the other side (so `addEventListener(fn) + removeEventListener(fn)`
-   * works). See `src/revivables/function.ts` for how they're used.
+   * Identity tables for every object-typed revivable value. The same reference
+   * sent twice over the same connection dedupes to the same revived reference
+   * on the other side, which preserves pass-by-reference semantics across the
+   * wire (so `addEventListener(fn) + removeEventListener(fn)` works, and the
+   * same MessagePort or class instance round-trips to the same object both
+   * times). Maintained by `recursiveBox` / `recursiveRevive`.
    */
-  // eslint-disable-next-line @typescript-eslint/ban-types
-  outgoingFunctionIds: WeakMap<Function, Uuid>
-  // eslint-disable-next-line @typescript-eslint/ban-types
-  outgoingFunctionsById: Map<Uuid, WeakRef<Function>>
-  // eslint-disable-next-line @typescript-eslint/ban-types
-  revivedFunctionsById: Map<Uuid, WeakRef<Function>>
+  outgoingValueIds: WeakMap<object, Uuid>
+  outgoingValuesById: Map<Uuid, WeakRef<object>>
+  revivedValuesById: Map<Uuid, WeakRef<object>>
+  /**
+   * Per-connection FinalizationRegistry that fires when a revived proxy is
+   * garbage collected. Evicts the local `revivedValuesById` entry and sends a
+   * `revivable-drop` message so the box side can evict its outgoing entry.
+   * Held value is just the id; the callback closes over the connection so we
+   * don't allocate a per-revive held-value object.
+   */
+  revivableCleanupRegistry: FinalizationRegistry<Uuid>
 }
 
 export type ExtractModule<T> = T extends { isType: (value: unknown) => value is infer S } ? S : never

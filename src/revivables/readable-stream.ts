@@ -10,6 +10,10 @@ import { box as boxMessagePort, revive as reviveMessagePort, BoxedMessagePort } 
 
 export const type = 'readableStream' as const
 
+// Opt out of per-connection identity dedup: ReadableStreams are single-reader
+// and the same stream reference is never usefully sent twice.
+export const identity = false
+
 export type PullContext = {
   type: 'pull' | 'cancel'
 }

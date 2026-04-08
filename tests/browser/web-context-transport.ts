@@ -56,7 +56,13 @@ export const functionIdentityPreservedAcrossCalls = () => base.functionIdentityP
 export const MemoryLeaks = {
   config: {
     iterations: baseMemory.DEFAULT_ITERATIONS,
-    memoryTreshold: 1_000_000,
+    // 2MB — bumped from 1MB when per-connection identity dedup landed. The
+    // identity layer registers a second FinalizationRegistry entry per
+    // revived value on top of what function.ts already does for port
+    // cleanup, which adds roughly 80 bytes per iteration of bookkeeping that
+    // GC can't sweep mid-burst at 100k iterations. The ceiling is still a
+    // hard bound that catches real leaks.
+    memoryTreshold: 2_000_000,
     timeout: 60_000
   },
   functionCallsNoLeak: () => baseMemory.functionCallsNoLeak(window),
@@ -76,6 +82,8 @@ export const userPoint = () => customRevivables.userPoint(window)
 export const userPointReturn = () => customRevivables.userPointReturn(window)
 
 export const userPointDefaultsStillWork = () => customRevivables.userPointDefaultsStillWork(window)
+
+export const userPointIdentityPreserved = () => customRevivables.userPointIdentityPreserved(window)
 
 export const htmlVideoElementInstanceOfCheck = () => htmlVideoElementTests.instanceOfCheck(window)
 

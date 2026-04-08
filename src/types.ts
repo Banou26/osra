@@ -98,15 +98,16 @@ export type BidirectionalConnectionMessage =
     portId: string
   }
   /**
-   * Sent by the revive side of a function revivable when its cached proxy is
+   * Sent by the revive side when one of its identity-cached revived values is
    * garbage collected. The box side uses this to evict its outgoing identity
-   * entry so that a subsequent box of the same function allocates a fresh id
-   * and sends the full payload instead of a ref-only box.
+   * entry so that a subsequent box of the same source value allocates a fresh
+   * id and sends the full payload instead of a dangling ref-only box. Applies
+   * to every object-typed revivable, not just functions.
    */
   | {
-    type: 'function-drop'
+    type: 'revivable-drop'
     remoteUuid: Uuid
-    /** id of the function registration being dropped */
+    /** id of the revivable registration being dropped */
     id: Uuid
   }
 

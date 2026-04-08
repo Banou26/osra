@@ -74,3 +74,24 @@ export const userPointDefaultsStillWork = async (transport: Transport) => {
   expect(result).to.be.instanceOf(Date)
   expect(result.toISOString()).to.equal('2026-04-08T00:00:00.000Z')
 }
+
+/**
+ * Identity dedup covers user-defined revivables: passing the same class
+ * instance twice (as two args to one call) should revive to the same
+ * reference on the other side, because the identity layer in recursiveBox
+ * applies to every object-like module (not just functions).
+ */
+export const userPointIdentityPreserved = async (transport: Transport) => {
+  const value = {
+    compare: async (a: Point, b: Point) => a === b,
+  }
+  expose(value, { transport, revivableModules: [pointModule] })
+
+  const { compare } = await expose<typeof value>(
+    {},
+    { transport, revivableModules: [pointModule] },
+  )
+
+  const p = new Point(3, 4)
+  await expect(compare(p, p)).to.eventually.equal(true)
+}

@@ -8,7 +8,6 @@ import type {
 import type { MessageChannelAllocator } from './allocator'
 import type { PlatformCapabilities } from './capabilities'
 import type { StrictMessagePort } from './message-channel'
-
 import { makeMessageChannelAllocator } from './allocator'
 import { DefaultRevivableModules, recursiveBox, recursiveRevive, RevivableModule } from '../revivables'
 import { getTransferableObjects } from './transferable'
@@ -42,12 +41,10 @@ export type ConnectionRevivableContext<TModules extends readonly RevivableModule
   sendMessage: (message: ConnectionMessage) => void
   revivableModules: TModules
   eventTarget: MessageEventTarget
-  // eslint-disable-next-line @typescript-eslint/ban-types
-  outgoingFunctionIds: WeakMap<Function, Uuid>
-  // eslint-disable-next-line @typescript-eslint/ban-types
-  outgoingFunctionsById: Map<Uuid, WeakRef<Function>>
-  // eslint-disable-next-line @typescript-eslint/ban-types
-  revivedFunctionsById: Map<Uuid, WeakRef<Function>>
+  outgoingValueIds: WeakMap<object, Uuid>
+  outgoingValuesById: Map<Uuid, WeakRef<object>>
+  revivedValuesById: Map<Uuid, WeakRef<object>>
+  revivableCleanupRegistry: FinalizationRegistry<Uuid>
 }
 
 export type BidirectionalConnection<T extends Capable = Capable> = {
@@ -73,6 +70,31 @@ export const startBidirectionalConnection = <
     revivableModules: TModules
   }
 ) => {
+  // Identity tables — declared here so the FinalizationRegistry can close
+  // over them without going through a per-entry held-value object (which
+  // would allocate per-revive under heavy churn).
+  const outgoingValueIds = new WeakMap<object, Uuid>()
+  const outgoingValuesById = new Map<Uuid, WeakRef<object>>()
+  const revivedValuesById = new Map<Uuid, WeakRef<object>>()
+
+  // Revive-side cleanup: fires when a revived proxy is GC'd. Evicts the local
+  // cache entry and sends a `revivable-drop` so the box side can evict its
+  // outgoing entry. Held value is just the id string — the callback closes
+  // over the locals above so there's no per-entry allocation.
+  //
+  // Box-side cleanup (sweeping dead WeakRefs from `outgoingValuesById` when
+  // the source is GC'd on this side) is handled reactively through the
+  // `revivable-drop` messages the other side sends when it drops its revived
+  // proxy — adding a second sender-side FR on top of this doubled per-box
+  // bookkeeping cost and pushed memory tests over their threshold under
+  // heavy churn, without materially changing the steady-state leak profile.
+  const revivableCleanupRegistry = new FinalizationRegistry<Uuid>((id) => {
+    revivedValuesById.delete(id)
+    try {
+      send({ type: 'revivable-drop', remoteUuid, id })
+    } catch { /* Connection may already be torn down */ }
+  })
+
   const revivableContext = {
     platformCapabilities,
     transport,
@@ -82,12 +104,10 @@ export const startBidirectionalConnection = <
     sendMessage: send,
     eventTarget,
     revivableModules,
-    // eslint-disable-next-line @typescript-eslint/ban-types
-    outgoingFunctionIds: new WeakMap<Function, Uuid>(),
-    // eslint-disable-next-line @typescript-eslint/ban-types
-    outgoingFunctionsById: new Map<Uuid, WeakRef<Function>>(),
-    // eslint-disable-next-line @typescript-eslint/ban-types
-    revivedFunctionsById: new Map<Uuid, WeakRef<Function>>(),
+    outgoingValueIds,
+    outgoingValuesById,
+    revivedValuesById,
+    revivableCleanupRegistry,
   } satisfies ConnectionRevivableContext<TModules>
   let initResolve: ((message: ConnectionMessage & { type: 'init' }) => void)
   const initMessage = new Promise<ConnectionMessage & { type: 'init' }>((resolve, reject) => {
@@ -102,14 +122,14 @@ export const startBidirectionalConnection = <
       const messageChannel = revivableContext.messageChannels.getOrAlloc(detail.portId)
       const transferables = getTransferableObjects(detail)
       ;(messageChannel.port2 as MessagePort)?.postMessage(detail, { transfer: transferables })
-    } else if (detail.type === 'function-drop') {
-      // The remote side's revived function proxy was garbage collected; evict
-      // our outgoing identity entry so the next box of the same source
-      // function allocates a fresh id and sends the full payload.
-      const ref = revivableContext.outgoingFunctionsById.get(detail.id)
-      const fn = ref?.deref()
-      if (fn) revivableContext.outgoingFunctionIds.delete(fn)
-      revivableContext.outgoingFunctionsById.delete(detail.id)
+    } else if (detail.type === 'revivable-drop') {
+      // The remote side's revived proxy for this id was garbage collected;
+      // evict our outgoing identity entry so the next box of the same source
+      // value allocates a fresh id and sends the full payload.
+      const ref = revivableContext.outgoingValuesById.get(detail.id)
+      const source = ref?.deref()
+      if (source) revivableContext.outgoingValueIds.delete(source)
+      revivableContext.outgoingValuesById.delete(detail.id)
     }
   })
 

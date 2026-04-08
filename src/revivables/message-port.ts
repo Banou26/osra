@@ -31,6 +31,13 @@ const messagePortRegistry = new FinalizationRegistry<PortCleanupInfo>((info) => 
 
 export const type = 'messagePort' as const
 
+// Opt out of per-connection identity dedup: MessagePorts are stateful
+// single-use channels, the same port is almost never sent twice, and the
+// per-connection RPC plumbing (function call return-value ports, promise
+// resolution ports) churns through fresh MessagePorts per call — so the
+// bookkeeping for identity would dominate at 100k-iteration scale.
+export const identity = false
+
 export type BoxedMessagePort<T extends StructurableTransferable = StructurableTransferable> =
   & BoxBaseType<typeof type>
   & ({ portId: string } | { port: StrictMessagePort<T> })

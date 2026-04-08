@@ -10,6 +10,11 @@ import { box as boxMessagePort, revive as reviveMessagePort, BoxedMessagePort } 
 
 export const type = 'promise' as const
 
+// Opt out of per-connection identity dedup: Promises are single-fire, the
+// same Promise reference is rarely sent twice, and every iteration in
+// per-call RPC plumbing allocates fresh promise ports.
+export const identity = false
+
 export type Context =
   | { type: 'resolve', data: Capable }
   | { type: 'reject', error: string }
