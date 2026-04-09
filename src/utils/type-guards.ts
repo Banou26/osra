@@ -7,13 +7,8 @@ import type {
   ReceiveTransport, Transport
 } from '../types'
 
-import { OSRA_BOX, OSRA_KEY } from '../types'
+import { OSRA_KEY } from '../types'
 import { getWebExtensionRuntime } from './platform'
-
-export type TransferBox<T extends Transferable = Transferable> = {
-  [OSRA_BOX]: 'transferable'
-  value: T
-}
 
 const typedArrayConstructors = [
   Int8Array,
@@ -125,13 +120,6 @@ export const isTransferable = (value: any): value is Transferable =>
   : globalThis.TransformStream && value instanceof globalThis.TransformStream ? true
   : globalThis.ImageBitmap && value instanceof globalThis.ImageBitmap ? true
   : false
-
-export const isTransferBox = (value: any): value is TransferBox<any> =>
-  Boolean(
-    value
-    && typeof value === 'object'
-    && (value as TransferBox<Transferable>)[OSRA_BOX] === 'transferable'
-  )
 
 export type WebExtRuntime = typeof browser.runtime
 export const isWebExtensionRuntime = (value: any): value is WebExtRuntime => {

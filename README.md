@@ -216,7 +216,6 @@ The main function for establishing communication between contexts.
   - `key?`: Optional key for additional security
   - `origin?`: Origin restriction for Window communication
   - `unregisterSignal?`: AbortSignal to clean up the connection
-  - `transferAll?`: Automatically transfer all transferables (default: false)
 
 #### Returns
 
@@ -224,18 +223,28 @@ Promise resolving to the remote API object with full type safety.
 
 ### Transfer Optimization
 
-For large binary data, use the `transfer` helper to transfer instead of clone:
+Osra copies transferables by default — your buffers stay usable on the
+sender after an RPC. When you want to hand off ownership instead (large
+uploads, one-shot buffers, streams you won't read locally), wrap the value
+in `transfer()`:
 
 ```typescript
 import { expose, transfer } from 'osra'
 
-const api = {
-  processImage: async (imageData: ImageData) => {
-    // Process image...
-    return transfer(imageData) // Transfer back instead of cloning
-  }
-}
+const buffer = new Uint8Array(largeData).buffer
+
+// Default: copy. `buffer` is still usable after this call.
+await remote.preview(buffer)
+
+// Opt-in transfer: `buffer` is neutered on the sender, no copy made.
+await remote.upload(transfer(buffer))
 ```
+
+`transfer()` works for `ArrayBuffer`, typed array views, `MessagePort`,
+streams, `ImageBitmap`, and `OffscreenCanvas`. It's idempotent and a no-op
+for primitives and plain objects. Must-transfer types (`MessagePort`,
+streams, `OffscreenCanvas`) are always moved regardless of the wrapper —
+structured clone can't copy them.
 
 ## Protocol Modes
 

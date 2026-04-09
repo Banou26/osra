@@ -38,7 +38,6 @@ interface ExposeOptions {
   origin?: string
   unregisterSignal?: AbortSignal
   platformCapabilities?: PlatformCapabilities
-  transferAll?: boolean
   logger?: Logger
 }
 ```
@@ -52,7 +51,6 @@ interface ExposeOptions {
 | `origin` | `string` | No | Origin restriction for Window postMessage |
 | `unregisterSignal` | `AbortSignal` | No | Signal to clean up the connection |
 | `platformCapabilities` | `PlatformCapabilities` | No | Override auto-detected capabilities |
-| `transferAll` | `boolean` | No | Automatically transfer all transferables (default: false) |
 | `logger` | `Logger` | No | Custom logger for debugging |
 
 #### Returns
@@ -61,38 +59,52 @@ Returns a `Promise<T>` that resolves to:
 - **Server side**: The original value passed in
 - **Client side**: A proxy to the remote value with all functions callable
 
-### `transfer<T>(value: T): TransferBox<T>`
+### `transfer<T>(value: T): T`
 
-Marks a value to be transferred instead of cloned when sent across contexts.
+Opts into transfer (move) semantics for a transferable value. Without this
+wrapper osra sends transferables as structured clones (copies) and the
+sender-side reference stays usable after the RPC. Wrapping a value hands
+its underlying storage off to the receiver and neuters the sender-side
+reference — the same thing you'd get by listing it in the transfer list of
+`postMessage(msg, [buf])`.
 
 ```typescript
 import { transfer } from 'osra'
 
-// Transfer an ArrayBuffer instead of cloning it
-const buffer = new ArrayBuffer(1024)
-return transfer(buffer)
+const buffer = new Uint8Array(1024).buffer
+
+// Default: copy. `buffer` remains usable after the call.
+await remote.preview(buffer)
+console.log(buffer.byteLength) // 1024
+
+// Opt-in transfer. `buffer` is neutered on the sender.
+await remote.upload(transfer(buffer))
+console.log(buffer.byteLength) // 0
 ```
 
-#### Parameters
+- Primitives, `null`, `undefined`, plain objects, `Promise`, `Date`, and
+  any other non-transferable value are returned unchanged — safe to wrap
+  by accident.
+- Typed array views (`Uint8Array`, `DataView`, …) are accepted as a
+  convenience; their underlying `.buffer` is what actually gets moved.
+- `transfer(transfer(x))` is the same as `transfer(x)` — idempotent.
+- If the current platform cannot transfer the given type the wrapper
+  silently degrades to a copy; nothing throws.
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `value` | `T` | The value to transfer |
+Must-transfer types (`MessagePort`, `ReadableStream`, `WritableStream`,
+`TransformStream`, `OffscreenCanvas`) are always transferred automatically
+with or without the wrapper — structured clone cannot represent them.
 
-#### Returns
-
-Returns a `TransferBox<T>` wrapper that signals the value should be transferred.
-
-#### Transferable Types
+#### Supported Transferable Types
 
 - `ArrayBuffer`
+- Typed array views (`Uint8Array`, `Int16Array`, `DataView`, …)
 - `MessagePort`
 - `ReadableStream`
 - `WritableStream`
 - `TransformStream`
 - `ImageBitmap`
 - `OffscreenCanvas`
-- `RTCDataChannel`
 
 ## Type System
 
@@ -103,7 +115,7 @@ Returns a `TransferBox<T>` wrapper that signals the value should be transferred.
 Union type of all values that Osra can handle:
 
 ```typescript
-type Capable = Structurable | Revivable | TransferBox | Transferable
+type Capable = Structurable | Revivable | Transferable
 ```
 
 #### `Structurable`

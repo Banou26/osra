@@ -4,6 +4,7 @@ import { base } from './base-tests'
 import { baseMemory } from './base-memory-tests'
 import * as customRevivables from './custom-revivables'
 import * as identityTests from './identity'
+import * as transferTests from './transfer'
 
 const jsonTransport = (): Transport => ({
   isJson: true,
@@ -100,4 +101,19 @@ export const Identity = {
   primitivesPassThrough: () => identityTests.primitivesPassThrough(jsonTransport()),
   identityWithFunctionStillCallable: () => identityTests.identityWithFunctionStillCallable(jsonTransport()),
   identityTwiceAcrossCallsCallable: () => identityTests.identityTwiceAcrossCallsCallable(jsonTransport()),
+}
+
+export const Transfer = {
+  unwrappedBufferIsCopied: () => transferTests.unwrappedBufferIsCopied(jsonTransport()),
+  transferredBufferIsDetached: () => transferTests.transferredBufferIsDetached(jsonTransport()),
+  broadcastUnwrappedWorks: () => transferTests.broadcastUnwrappedWorks(jsonTransport()),
+  transferIsIdempotent: () => transferTests.transferIsIdempotent(jsonTransport()),
+  transferIsIdempotentTypedArray: () => transferTests.transferIsIdempotentTypedArray(jsonTransport()),
+  transferTwiceInlineStillTransfers: () => transferTests.transferTwiceInlineStillTransfers(jsonTransport()),
+  transferTypedArrayMovesUnderlyingBuffer: () => transferTests.transferTypedArrayMovesUnderlyingBuffer(jsonTransport()),
+  transferReadableStream: () => transferTests.transferReadableStream(jsonTransport()),
+  nonTransferablesAreNoOp: () => transferTests.nonTransferablesAreNoOp(jsonTransport()),
+  transferDoesNotCrashNonTransferable: () => transferTests.transferDoesNotCrashNonTransferable(jsonTransport()),
+  messagePortStillTransfersWithoutWrapper: () => transferTests.messagePortStillTransfersWithoutWrapper(jsonTransport()),
+  transferredBufferDataRoundTrips: () => transferTests.transferredBufferDataRoundTrips(jsonTransport()),
 }
