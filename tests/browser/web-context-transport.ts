@@ -2,6 +2,7 @@ import { base } from './base-tests'
 import { baseMemory } from './base-memory-tests'
 import * as customRevivables from './custom-revivables'
 import * as identityTests from './identity'
+import * as transferTests from './transfer'
 
 export const argsAndResponse = () => base.argsAndResponse(window)
 
@@ -82,4 +83,19 @@ export const Identity = {
   primitivesPassThrough: () => identityTests.primitivesPassThrough(window),
   identityWithFunctionStillCallable: () => identityTests.identityWithFunctionStillCallable(window),
   identityTwiceAcrossCallsCallable: () => identityTests.identityTwiceAcrossCallsCallable(window),
+}
+
+export const Transfer = {
+  unwrappedBufferIsCopied: () => transferTests.unwrappedBufferIsCopied(window),
+  transferredBufferIsDetached: () => transferTests.transferredBufferIsDetached(window),
+  broadcastUnwrappedWorks: () => transferTests.broadcastUnwrappedWorks(window),
+  transferIsIdempotent: () => transferTests.transferIsIdempotent(window),
+  transferIsIdempotentTypedArray: () => transferTests.transferIsIdempotentTypedArray(window),
+  transferTwiceInlineStillTransfers: () => transferTests.transferTwiceInlineStillTransfers(window),
+  transferTypedArrayMovesUnderlyingBuffer: () => transferTests.transferTypedArrayMovesUnderlyingBuffer(window),
+  transferReadableStream: () => transferTests.transferReadableStream(window),
+  nonTransferablesAreNoOp: () => transferTests.nonTransferablesAreNoOp(window),
+  transferDoesNotCrashNonTransferable: () => transferTests.transferDoesNotCrashNonTransferable(window),
+  messagePortStillTransfersWithoutWrapper: () => transferTests.messagePortStillTransfersWithoutWrapper(window),
+  transferredBufferDataRoundTrips: () => transferTests.transferredBufferDataRoundTrips(window),
 }
