@@ -63,7 +63,6 @@ export const expose = async <
     origin = '*',
     unregisterSignal,
     platformCapabilities: _platformCapabilities,
-    transferAll,
     logger,
     revivableModules: _userRevivableModules
   }: {
@@ -74,7 +73,6 @@ export const expose = async <
     origin?: string
     unregisterSignal?: AbortSignal
     platformCapabilities?: PlatformCapabilities
-    transferAll?: boolean
     logger?: {}
     revivableModules?: TUserModules
   }

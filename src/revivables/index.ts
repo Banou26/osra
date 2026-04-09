@@ -17,8 +17,10 @@ import * as abortSignal from './abort-signal'
 import * as response from './response'
 import * as request from './request'
 import * as identity from './identity'
+import * as transfer from './transfer'
 
 export { identity } from './identity'
+export { transfer } from './transfer'
 
 export * from './utils'
 
@@ -30,6 +32,7 @@ export type RevivableModule<T extends string = string, T2 = any, T3 extends BoxB
 }
 
 export const defaultRevivableModules = [
+  transfer,
   identity,
   arrayBuffer,
   date,
