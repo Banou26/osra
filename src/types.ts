@@ -97,6 +97,14 @@ export type BidirectionalConnectionMessage =
     /** uuid of the messagePort that closed */
     portId: string
   }
+  /** identity-wrapped value was garbage collected on the sender — drop the
+   *  receiver-side cached revived value so both sides converge. */
+  | {
+    type: 'identity-dispose'
+    remoteUuid: Uuid
+    /** id of the identity-wrapped value that was collected */
+    id: string
+  }
 
 export type UnidirectionalConnectionMessage = {
   type: 'message'

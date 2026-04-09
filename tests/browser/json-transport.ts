@@ -3,6 +3,7 @@ import type { Transport } from '../../src/types'
 import { base } from './base-tests'
 import { baseMemory } from './base-memory-tests'
 import * as customRevivables from './custom-revivables'
+import * as identityTests from './identity'
 
 const jsonTransport = (): Transport => ({
   isJson: true,
@@ -89,3 +90,14 @@ export const userPoint = () => customRevivables.userPoint(jsonTransport())
 export const userPointReturn = () => customRevivables.userPointReturn(jsonTransport())
 
 export const userPointDefaultsStillWork = () => customRevivables.userPointDefaultsStillWork(jsonTransport())
+
+export const Identity = {
+  sameReferenceAcrossArgs: () => identityTests.sameReferenceAcrossArgs(jsonTransport()),
+  sameReferenceAcrossCalls: () => identityTests.sameReferenceAcrossCalls(jsonTransport()),
+  addRemoveEventListenerPattern: () => identityTests.addRemoveEventListenerPattern(jsonTransport()),
+  unwrappedValuesClone: () => identityTests.unwrappedValuesClone(jsonTransport()),
+  identityIdempotentMemoized: () => identityTests.identityIdempotentMemoized(jsonTransport()),
+  primitivesPassThrough: () => identityTests.primitivesPassThrough(jsonTransport()),
+  identityWithFunctionStillCallable: () => identityTests.identityWithFunctionStillCallable(jsonTransport()),
+  identityTwiceAcrossCallsCallable: () => identityTests.identityTwiceAcrossCallsCallable(jsonTransport()),
+}

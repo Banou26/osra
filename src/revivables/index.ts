@@ -16,6 +16,9 @@ import * as readableStream from './readable-stream'
 import * as abortSignal from './abort-signal'
 import * as response from './response'
 import * as request from './request'
+import * as identity from './identity'
+
+export { identity } from './identity'
 
 export * from './utils'
 
@@ -27,6 +30,7 @@ export type RevivableModule<T extends string = string, T2 = any, T3 extends BoxB
 }
 
 export const defaultRevivableModules = [
+  identity,
   arrayBuffer,
   date,
   headers,
