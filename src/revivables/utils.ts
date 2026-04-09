@@ -25,6 +25,15 @@ export type RevivableContext<TModules extends readonly RevivableModule[] = Defau
   sendMessage: (message: ConnectionMessage) => void
   revivableModules: TModules
   eventTarget: MessageEventTarget
+  /**
+   * Per-connection identity tables — populated only by the `identity`
+   * revivable module. Non-wrapped values never touch these. See
+   * `src/revivables/identity.ts`.
+   */
+  outgoingIdentityIds: WeakMap<object, Uuid>
+  outgoingIdentitiesById: Map<Uuid, WeakRef<object>>
+  revivedIdentitiesById: Map<Uuid, WeakRef<object>>
+  identityCleanupRegistry: FinalizationRegistry<Uuid>
 }
 
 export type ExtractModule<T> = T extends { isType: (value: unknown) => value is infer S } ? S : never

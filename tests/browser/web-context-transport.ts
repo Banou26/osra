@@ -1,6 +1,7 @@
 import { base } from './base-tests'
 import { baseMemory } from './base-memory-tests'
 import * as customRevivables from './custom-revivables'
+import * as identityTests from './identity'
 
 export const argsAndResponse = () => base.argsAndResponse(window)
 
@@ -71,3 +72,15 @@ export const userPoint = () => customRevivables.userPoint(window)
 export const userPointReturn = () => customRevivables.userPointReturn(window)
 
 export const userPointDefaultsStillWork = () => customRevivables.userPointDefaultsStillWork(window)
+
+export const identityPreservedAsArgs = () => identityTests.identityPreservedAsArgs(window)
+
+export const identityPreservedAcrossCalls = () => identityTests.identityPreservedAcrossCalls(window)
+
+export const noIdentityWithoutWrapper = () => identityTests.noIdentityWithoutWrapper(window)
+
+export const identityIdempotent = () => identityTests.identityIdempotent(window)
+
+export const identityPrimitivesPassThrough = () => identityTests.identityPrimitivesPassThrough(window)
+
+export const identityPreservedForUserClass = () => identityTests.identityPreservedForUserClass(window)

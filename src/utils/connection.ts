@@ -42,6 +42,10 @@ export type ConnectionRevivableContext<TModules extends readonly RevivableModule
   sendMessage: (message: ConnectionMessage) => void
   revivableModules: TModules
   eventTarget: MessageEventTarget
+  outgoingIdentityIds: WeakMap<object, Uuid>
+  outgoingIdentitiesById: Map<Uuid, WeakRef<object>>
+  revivedIdentitiesById: Map<Uuid, WeakRef<object>>
+  identityCleanupRegistry: FinalizationRegistry<Uuid>
 }
 
 export type BidirectionalConnection<T extends Capable = Capable> = {
@@ -67,6 +71,24 @@ export const startBidirectionalConnection = <
     revivableModules: TModules
   }
 ) => {
+  // Identity tables — populated only by the `identity` revivable. Declared
+  // here so the cleanup FinalizationRegistry can close over them without
+  // going through a per-entry held-value object.
+  const outgoingIdentityIds = new WeakMap<object, Uuid>()
+  const outgoingIdentitiesById = new Map<Uuid, WeakRef<object>>()
+  const revivedIdentitiesById = new Map<Uuid, WeakRef<object>>()
+
+  // Fires when a revived identity-wrapped value is GC'd. Evicts the local
+  // cache entry and sends an `identity-drop` so the box side can evict its
+  // outgoing entry. Held value is just the id — the callback closes over
+  // the Map and `send` so there's no per-entry allocation.
+  const identityCleanupRegistry = new FinalizationRegistry<Uuid>((id) => {
+    revivedIdentitiesById.delete(id)
+    try {
+      send({ type: 'identity-drop', remoteUuid, id })
+    } catch { /* Connection may already be torn down */ }
+  })
+
   const revivableContext = {
     platformCapabilities,
     transport,
@@ -75,7 +97,11 @@ export const startBidirectionalConnection = <
     messageChannels: makeMessageChannelAllocator(),
     sendMessage: send,
     eventTarget,
-    revivableModules
+    revivableModules,
+    outgoingIdentityIds,
+    outgoingIdentitiesById,
+    revivedIdentitiesById,
+    identityCleanupRegistry,
   } satisfies ConnectionRevivableContext<TModules>
   let initResolve: ((message: ConnectionMessage & { type: 'init' }) => void)
   const initMessage = new Promise<ConnectionMessage & { type: 'init' }>((resolve, reject) => {
@@ -90,6 +116,14 @@ export const startBidirectionalConnection = <
       const messageChannel = revivableContext.messageChannels.getOrAlloc(detail.portId)
       const transferables = getTransferableObjects(detail)
       ;(messageChannel.port2 as MessagePort)?.postMessage(detail, { transfer: transferables })
+    } else if (detail.type === 'identity-drop') {
+      // The remote side's cached revived value for this id was GC'd; evict
+      // our outgoing entry so the next box of the same wrapper allocates a
+      // fresh id.
+      const ref = outgoingIdentitiesById.get(detail.id)
+      const wrapper = ref?.deref()
+      if (wrapper) outgoingIdentityIds.delete(wrapper)
+      outgoingIdentitiesById.delete(detail.id)
     }
   })
 

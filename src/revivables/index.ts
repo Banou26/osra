@@ -16,6 +16,9 @@ import * as readableStream from './readable-stream'
 import * as abortSignal from './abort-signal'
 import * as response from './response'
 import * as request from './request'
+import * as identityModule from './identity'
+
+export { identity } from './identity'
 
 export * from './utils'
 
@@ -38,7 +41,12 @@ export const defaultRevivableModules = [
   readableStream,
   abortSignal,
   response,
-  request
+  request,
+  // Placed last so every other more-specific module gets a chance to match
+  // first. `identity.isType` only matches wrapper objects produced by the
+  // `identity()` helper, so ordering is actually irrelevant here — but the
+  // intent (a generic last-resort wrapper) is clearer this way.
+  identityModule,
 ] as const
 
 export type DefaultRevivableModules = typeof defaultRevivableModules
