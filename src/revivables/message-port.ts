@@ -31,6 +31,10 @@ const messagePortRegistry = new FinalizationRegistry<PortCleanupInfo>((info) => 
 
 export const type = 'messagePort' as const
 
+export type Messages =
+  | { type: 'message'; remoteUuid: Uuid; data: Capable; portId: Uuid }
+  | { type: 'message-port-close'; remoteUuid: Uuid; portId: string }
+
 export type BoxedMessagePort<T extends StructurableTransferable = StructurableTransferable> =
   & BoxBaseType<typeof type>
   & ({ portId: string } | { port: StrictMessagePort<T> })

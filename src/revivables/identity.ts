@@ -1,10 +1,13 @@
-import type { Capable, Message } from '../types'
+import type { Capable, Message, Uuid } from '../types'
 import type { RevivableContext, BoxBase as BoxBaseType, UnderlyingType } from './utils'
 
 import { BoxBase } from './utils'
 import { recursiveBox, recursiveRevive } from '.'
 
 export const type = 'identity' as const
+
+export type Messages =
+  | { type: 'identity-dispose'; remoteUuid: Uuid; id: string }
 
 const IDENTITY_MARKER: unique symbol = Symbol.for('osra.identity')
 

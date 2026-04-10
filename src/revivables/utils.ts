@@ -7,6 +7,9 @@ import { OSRA_BOX } from '../types'
 export declare const UnderlyingType: unique symbol
 export type UnderlyingType = typeof UnderlyingType
 
+export declare const ModuleMessages: unique symbol
+export type ModuleMessages = typeof ModuleMessages
+
 export const BoxBase = {
   [OSRA_BOX]: 'revivable',
   type: '' as string
@@ -21,10 +24,13 @@ export type RevivableContext<TModules extends readonly RevivableModule[] = Defau
   transport: Transport
   remoteUuid: Uuid
   messagePorts: Set<MessagePort>
-  sendMessage: (message: ConnectionMessage) => void
+  sendMessage: (message: ConnectionMessage<TModules>) => void
   revivableModules: TModules
   eventTarget: MessageEventTarget
 }
+
+export type ExtractModuleMessages<T> = T extends { readonly [ModuleMessages]?: infer M } ? Exclude<M, undefined> : never
+export type ExtractAllModuleMessages<TModules extends readonly unknown[]> = ExtractModuleMessages<TModules[number]>
 
 export type ExtractModule<T> = T extends { isType: (value: unknown) => value is infer S } ? S : never
 export type ExtractType<T> = T extends { isType: (value: unknown) => value is infer S } ? S : never

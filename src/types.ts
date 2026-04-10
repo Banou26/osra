@@ -1,7 +1,7 @@
 import { TypedEventTarget } from 'typescript-event-target'
 import type { TypedArray, WebExtOnConnect, WebExtOnMessage, WebExtPort, WebExtRuntime, WebExtSender } from './utils/type-guards'
 import { DefaultRevivableModule, DefaultRevivableModules, RevivableModule } from './revivables'
-import { InferRevivables } from './revivables/utils'
+import { ExtractAllModuleMessages, InferRevivables } from './revivables/utils'
 
 export const OSRA_KEY = '__OSRA_KEY__' as const
 export const OSRA_DEFAULT_KEY = '__OSRA_DEFAULT_KEY__' as const
@@ -76,35 +76,13 @@ export type ProtocolMessage =
     remoteUuid: Uuid
   }
 
-export type BidirectionalConnectionMessage =
+export type BidirectionalConnectionMessage<TModules extends readonly RevivableModule[] = DefaultRevivableModules> =
   | {
     type: 'init'
     remoteUuid: Uuid
     data: Capable
   }
-  /** message not needed if transferring MessagePort is supported */
-  | {
-    type: 'message'
-    remoteUuid: Uuid
-    data: Capable
-    /** uuid of the messagePort that the message was sent through */
-    portId: Uuid
-  }
-  /** message not needed if transferring MessagePort is supported */
-  | {
-    type: 'message-port-close'
-    remoteUuid: Uuid
-    /** uuid of the messagePort that closed */
-    portId: string
-  }
-  /** identity-wrapped value was garbage collected on the sender — drop the
-   *  receiver-side cached revived value so both sides converge. */
-  | {
-    type: 'identity-dispose'
-    remoteUuid: Uuid
-    /** id of the identity-wrapped value that was collected */
-    id: string
-  }
+  | ExtractAllModuleMessages<TModules>
 
 export type UnidirectionalConnectionMessage = {
   type: 'message'
@@ -113,17 +91,17 @@ export type UnidirectionalConnectionMessage = {
   portId: Uuid
 }
 
-export type ConnectionMessage =
-  | BidirectionalConnectionMessage
+export type ConnectionMessage<TModules extends readonly RevivableModule[] = DefaultRevivableModules> =
+  | BidirectionalConnectionMessage<TModules>
   | UnidirectionalConnectionMessage
 
-export type MessageVariant =
+export type MessageVariant<TModules extends readonly RevivableModule[] = DefaultRevivableModules> =
   | ProtocolMessage
-  | ConnectionMessage
+  | ConnectionMessage<TModules>
 
-export type Message =
+export type Message<TModules extends readonly RevivableModule[] = DefaultRevivableModules> =
   | MessageBase
-  & MessageVariant
+  & MessageVariant<TModules>
 
 export type MessageContext = {
   port?: MessagePort | WebExtPort // WebExtension

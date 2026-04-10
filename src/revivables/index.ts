@@ -1,5 +1,5 @@
-import type { BoxBase, RevivableContext } from './utils'
-export type { UnderlyingType } from './utils'
+import type { BoxBase, ModuleMessages, RevivableContext } from './utils'
+export type { UnderlyingType, ModuleMessages, ExtractModuleMessages, ExtractAllModuleMessages } from './utils'
 import type { DeepReplaceWithBox, DeepReplaceWithRevive, ReplaceWithBox, ReplaceWithRevive } from '../utils/replace'
 
 import { Capable } from '../types'
@@ -24,14 +24,32 @@ export { transfer } from './transfer'
 
 export * from './utils'
 
-export type RevivableModule<T extends string = string, T2 = any, T3 extends BoxBase<T> = any> = {
+export type RevivableModule<T extends string = string, T2 = any, T3 extends BoxBase<T> = any, TMessages = any> = {
   readonly type: T
   readonly isType: (value: unknown) => value is T2
   readonly box: ((value: T2, context: RevivableContext) => T3) | ((...args: any[]) => any)
   readonly revive: (value: T3, context: RevivableContext) => T2
+  readonly [ModuleMessages]?: TMessages
 }
 
-export const defaultRevivableModules = [
+type WithModuleMessages<TModule, TMessages> = TModule & { readonly [ModuleMessages]?: TMessages }
+
+export const defaultRevivableModules: readonly [
+  typeof transfer,
+  WithModuleMessages<typeof identity, identity.Messages>,
+  typeof arrayBuffer,
+  typeof date,
+  typeof headers,
+  typeof error,
+  typeof typedArray,
+  typeof promise,
+  typeof func,
+  WithModuleMessages<typeof messagePort, messagePort.Messages>,
+  typeof readableStream,
+  typeof abortSignal,
+  typeof response,
+  typeof request
+] = [
   transfer,
   identity,
   arrayBuffer,
@@ -46,7 +64,7 @@ export const defaultRevivableModules = [
   abortSignal,
   response,
   request
-] as const
+]
 
 export type DefaultRevivableModules = typeof defaultRevivableModules
 
