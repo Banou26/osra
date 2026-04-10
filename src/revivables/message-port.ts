@@ -34,6 +34,7 @@ export const type = 'messagePort' as const
 export type Messages =
   | { type: 'message'; remoteUuid: Uuid; data: Capable; portId: Uuid }
   | { type: 'message-port-close'; remoteUuid: Uuid; portId: string }
+export declare const Messages: Messages
 
 export type BoxedMessagePort<T extends StructurableTransferable = StructurableTransferable> =
   & BoxBaseType<typeof type>

@@ -35,7 +35,7 @@ export type ConnectionRevivableContext<TModules extends readonly RevivableModule
   transport: Transport
   remoteUuid: Uuid
   messagePorts: Set<MessagePort>
-  sendMessage: (message: ConnectionMessage<TModules>) => void
+  sendMessage: (message: ConnectionMessage) => void
   revivableModules: TModules
   eventTarget: MessageEventTarget
 }
@@ -58,7 +58,7 @@ export const startBidirectionalConnection = <
     remoteUuid: Uuid
     platformCapabilities: PlatformCapabilities
     eventTarget: MessageEventTarget
-    send: (message: ConnectionMessage<TModules>) => void
+    send: (message: ConnectionMessage) => void
     close: () => void
     revivableModules: TModules
   }

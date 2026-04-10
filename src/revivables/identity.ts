@@ -8,6 +8,7 @@ export const type = 'identity' as const
 
 export type Messages =
   | { type: 'identity-dispose'; remoteUuid: Uuid; id: string }
+export declare const Messages: Messages
 
 const IDENTITY_MARKER: unique symbol = Symbol.for('osra.identity')
 
