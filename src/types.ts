@@ -1,7 +1,7 @@
 import { TypedEventTarget } from 'typescript-event-target'
 import type { TypedArray, WebExtOnConnect, WebExtOnMessage, WebExtPort, WebExtRuntime, WebExtSender } from './utils/type-guards'
-import { DefaultRevivableModule, DefaultRevivableModules, RevivableModule } from './revivables'
-import { ExtractAllModuleMessages, InferRevivables } from './revivables/utils'
+import { DefaultModuleMessages, DefaultRevivableModule, DefaultRevivableModules, RevivableModule } from './revivables'
+import { InferRevivables } from './revivables/utils'
 
 export const OSRA_KEY = '__OSRA_KEY__' as const
 export const OSRA_DEFAULT_KEY = '__OSRA_DEFAULT_KEY__' as const
@@ -76,13 +76,13 @@ export type ProtocolMessage =
     remoteUuid: Uuid
   }
 
-export type BidirectionalConnectionMessage<TModules extends readonly RevivableModule[] = DefaultRevivableModules> =
+export type BidirectionalConnectionMessage<TModuleMessages = DefaultModuleMessages> =
   | {
     type: 'init'
     remoteUuid: Uuid
     data: Capable
   }
-  | ExtractAllModuleMessages<TModules>
+  | TModuleMessages
 
 export type UnidirectionalConnectionMessage = {
   type: 'message'
@@ -91,17 +91,17 @@ export type UnidirectionalConnectionMessage = {
   portId: Uuid
 }
 
-export type ConnectionMessage<TModules extends readonly RevivableModule[] = DefaultRevivableModules> =
-  | BidirectionalConnectionMessage<TModules>
+export type ConnectionMessage<TModuleMessages = DefaultModuleMessages> =
+  | BidirectionalConnectionMessage<TModuleMessages>
   | UnidirectionalConnectionMessage
 
-export type MessageVariant<TModules extends readonly RevivableModule[] = DefaultRevivableModules> =
+export type MessageVariant<TModuleMessages = DefaultModuleMessages> =
   | ProtocolMessage
-  | ConnectionMessage<TModules>
+  | ConnectionMessage<TModuleMessages>
 
-export type Message<TModules extends readonly RevivableModule[] = DefaultRevivableModules> =
+export type Message<TModuleMessages = DefaultModuleMessages> =
   | MessageBase
-  & MessageVariant<TModules>
+  & MessageVariant<TModuleMessages>
 
 export type MessageContext = {
   port?: MessagePort | WebExtPort // WebExtension

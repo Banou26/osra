@@ -35,7 +35,7 @@ export type ConnectionRevivableContext<TModules extends readonly RevivableModule
   transport: Transport
   remoteUuid: Uuid
   messagePorts: Set<MessagePort>
-  sendMessage: (message: ConnectionMessage<TModules>) => void
+  sendMessage: (message: ConnectionMessage) => void
   revivableModules: TModules
   eventTarget: MessageEventTarget
 }
@@ -58,7 +58,7 @@ export const startBidirectionalConnection = <
     remoteUuid: Uuid
     platformCapabilities: PlatformCapabilities
     eventTarget: MessageEventTarget
-    send: (message: ConnectionMessage<TModules>) => void
+    send: (message: ConnectionMessage) => void
     close: () => void
     revivableModules: TModules
   }
@@ -77,9 +77,16 @@ export const startBidirectionalConnection = <
     initResolve = resolve
   })
 
+  const pendingMessages: Message[] = []
+  let buffering = true
+
   eventTarget.addEventListener('message', ({ detail }) => {
     if (detail.type === 'init') {
       initResolve(detail)
+      return
+    }
+    if (buffering) {
+      pendingMessages.push(detail)
     }
   })
 
@@ -95,7 +102,19 @@ export const startBidirectionalConnection = <
     },
     remoteValue:
       initMessage
-        .then(initMessage => recursiveRevive(initMessage.data, revivableContext)) as Promise<T>
+        .then(initMessage => {
+          const result = recursiveRevive(initMessage.data, revivableContext)
+          // Replay any messages that arrived before revive listeners were registered
+          buffering = false
+          for (const msg of pendingMessages) {
+            eventTarget.dispatchTypedEvent(
+              'message',
+              new CustomEvent('message', { detail: msg })
+            )
+          }
+          pendingMessages.length = 0
+          return result
+        }) as Promise<T>
   } satisfies BidirectionalConnection<T>
 }
 
