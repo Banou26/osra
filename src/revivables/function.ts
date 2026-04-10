@@ -4,7 +4,7 @@ import type { UnderlyingType, RevivableContext, BoxBase as BoxBaseType } from '.
 import { BoxBase } from './utils'
 import { recursiveBox, recursiveRevive } from '.'
 import { getTransferableObjects } from '../utils'
-import { box as boxMessagePort, revive as reviveMessagePort, BoxedMessagePort } from './message-port'
+import { box as boxMessagePort, revive as reviveMessagePort, cleanupBoxedPort, BoxedMessagePort } from './message-port'
 
 export const type = 'function' as const
 
@@ -101,6 +101,7 @@ export const revive = <T extends BoxedFunction, T2 extends RevivableContext>(
           .catch(reject)
           .finally(() => {
             returnValueLocalPort.close()
+            cleanupBoxedPort(returnValueRemotePort)
           })
       }, { once: true })
       returnValueLocalPort.start()

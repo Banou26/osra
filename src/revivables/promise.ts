@@ -6,7 +6,7 @@ import type { UnderlyingType } from '.'
 import { BoxBase } from './utils'
 import { recursiveBox, recursiveRevive } from '.'
 import { getTransferableObjects } from '../utils'
-import { box as boxMessagePort, revive as reviveMessagePort, BoxedMessagePort } from './message-port'
+import { box as boxMessagePort, revive as reviveMessagePort, cleanupBoxedPort, BoxedMessagePort } from './message-port'
 
 export const type = 'promise' as const
 
@@ -52,7 +52,6 @@ export const box = <T, T2 extends RevivableContext>(
     const boxedResult = recursiveBox(result, context)
     localPort.postMessage(boxedResult, getTransferableObjects(boxedResult))
     localPort.close()
-    // Clean up the remote port from the set (it was transferred earlier)
     context.messagePorts.delete(remotePort)
   }
 
@@ -83,7 +82,7 @@ export const revive = <T extends BoxedPromise, T2 extends RevivableContext>(
         reject(result.error)
       }
       context.messagePorts.delete(port as MessagePort)
-      port.close()
+      cleanupBoxedPort(port as MessagePort)
     }, { once: true })
     port.start()
   })

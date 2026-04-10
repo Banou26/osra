@@ -72,14 +72,18 @@ export const startBidirectionalConnection = <
     eventTarget,
     revivableModules
   } satisfies ConnectionRevivableContext<TModules>
-  let initResolve: ((message: ConnectionMessage & { type: 'init' }) => void)
-  const initMessage = new Promise<ConnectionMessage & { type: 'init' }>((resolve, reject) => {
-    initResolve = resolve
+  let resolveRemoteValue: ((value: T) => void)
+  const remoteValue = new Promise<T>((resolve) => {
+    resolveRemoteValue = resolve
   })
 
   eventTarget.addEventListener('message', ({ detail }) => {
     if (detail.type === 'init') {
-      initResolve(detail)
+      // Revive synchronously inside the macrotask so every port listener
+      // is installed before any subsequent transport message can fire.
+      // Deferring to a .then() microtask would let queued 'message' events
+      // for nested ports arrive before their revive listeners exist.
+      resolveRemoteValue(recursiveRevive(detail.data, revivableContext) as T)
     }
   })
 
@@ -93,9 +97,7 @@ export const startBidirectionalConnection = <
     revivableContext,
     close: () => {
     },
-    remoteValue:
-      initMessage
-        .then(initMessage => recursiveRevive(initMessage.data, revivableContext)) as Promise<T>
+    remoteValue,
   } satisfies BidirectionalConnection<T>
 }
 
