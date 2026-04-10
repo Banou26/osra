@@ -5,13 +5,10 @@ import type {
   Transport,
   Uuid
 } from '../types'
-import type { MessageChannelAllocator } from './allocator'
 import type { PlatformCapabilities } from './capabilities'
 import type { StrictMessagePort } from './message-channel'
 
-import { makeMessageChannelAllocator } from './allocator'
 import { DefaultRevivableModules, recursiveBox, recursiveRevive, RevivableModule } from '../revivables'
-import { getTransferableObjects } from './transferable'
 
 export type BidirectionalConnectionContext = {
   type: 'bidirectional'
@@ -38,7 +35,6 @@ export type ConnectionRevivableContext<TModules extends readonly RevivableModule
   transport: Transport
   remoteUuid: Uuid
   messagePorts: Set<MessagePort>
-  messageChannels: MessageChannelAllocator
   sendMessage: (message: ConnectionMessage) => void
   revivableModules: TModules
   eventTarget: MessageEventTarget
@@ -72,7 +68,6 @@ export const startBidirectionalConnection = <
     transport,
     remoteUuid,
     messagePorts: new Set(),
-    messageChannels: makeMessageChannelAllocator(),
     sendMessage: send,
     eventTarget,
     revivableModules
@@ -85,11 +80,6 @@ export const startBidirectionalConnection = <
   eventTarget.addEventListener('message', ({ detail }) => {
     if (detail.type === 'init') {
       initResolve(detail)
-      return
-    } else if (detail.type === 'message') {
-      const messageChannel = revivableContext.messageChannels.getOrAlloc(detail.portId)
-      const transferables = getTransferableObjects(detail)
-      ;(messageChannel.port2 as MessagePort)?.postMessage(detail, { transfer: transferables })
     }
   })
 
