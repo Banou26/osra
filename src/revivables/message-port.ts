@@ -145,20 +145,27 @@ export const revive = <T extends StructurableTransferable, T2 extends RevivableC
     const { portId } = value
     const { port1: userPort, port2: internalPort } = new MessageChannel()
 
+    const existingChannel = context.messageChannels.get(value.portId)
+    const { port1 } =
+      existingChannel
+        ? existingChannel
+        : context.messageChannels.alloc(value.portId as Uuid)
+
     const userPortRef = new WeakRef(userPort)
 
-    // Listen directly on eventTarget for both 'message' and 'message-port-close' events for this portId
+    // Listen for close messages from the remote side through the main event target
     const eventTargetListener = ({ detail: message }: CustomEvent<Message>) => {
-      if (message.type === 'message-port-close') {
-        if (message.portId !== portId) return
-        const port = userPortRef.deref()
-        if (port) {
-          // Unregister from FinalizationRegistry to prevent double-close
-          messagePortRegistry.unregister(port)
-        }
-        performCleanup()
-        return
+      if (message.type !== 'message-port-close' || message.portId !== portId) return
+      const port = userPortRef.deref()
+      if (port) {
+        // Unregister from FinalizationRegistry to prevent double-close
+        messagePortRegistry.unregister(port)
       }
+      performCleanup()
+    }
+
+    // Receive messages routed through the allocator's MessageChannel by connection.ts
+    const port1Listener = ({ data: message }: MessageEvent) => {
       if (message.type !== 'message' || message.portId !== portId) return
 
       const port = userPortRef.deref()
@@ -190,8 +197,17 @@ export const revive = <T extends StructurableTransferable, T2 extends RevivableC
 
     const performCleanup = () => {
       context.eventTarget.removeEventListener('message', eventTargetListener)
+      port1.removeEventListener('message', port1Listener)
       internalPort.removeEventListener('message', internalPortListener)
       internalPort.close()
+      const allocatedChannel = context.messageChannels.get(portId)
+      if (allocatedChannel) {
+        allocatedChannel.port1.close()
+        if (allocatedChannel.port2) {
+          allocatedChannel.port2.close()
+        }
+      }
+      context.messageChannels.free(portId)
     }
 
     // Register the userPort for automatic cleanup when garbage collected
@@ -207,6 +223,10 @@ export const revive = <T extends StructurableTransferable, T2 extends RevivableC
     internalPort.start()
 
     context.eventTarget.addEventListener('message', eventTargetListener)
+
+    // Drain any messages buffered by connection.ts before revive was called
+    port1.addEventListener('message', port1Listener)
+    port1.start()
 
     return userPort as StrictMessagePort<T>
   }

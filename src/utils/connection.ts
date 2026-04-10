@@ -5,10 +5,13 @@ import type {
   Transport,
   Uuid
 } from '../types'
+import type { MessageChannelAllocator } from './allocator'
 import type { PlatformCapabilities } from './capabilities'
 import type { StrictMessagePort } from './message-channel'
 
+import { makeMessageChannelAllocator } from './allocator'
 import { DefaultRevivableModules, recursiveBox, recursiveRevive, RevivableModule } from '../revivables'
+import { getTransferableObjects } from './transferable'
 
 export type BidirectionalConnectionContext = {
   type: 'bidirectional'
@@ -35,6 +38,7 @@ export type ConnectionRevivableContext<TModules extends readonly RevivableModule
   transport: Transport
   remoteUuid: Uuid
   messagePorts: Set<MessagePort>
+  messageChannels: MessageChannelAllocator
   sendMessage: (message: ConnectionMessage) => void
   revivableModules: TModules
   eventTarget: MessageEventTarget
@@ -68,6 +72,7 @@ export const startBidirectionalConnection = <
     transport,
     remoteUuid,
     messagePorts: new Set(),
+    messageChannels: makeMessageChannelAllocator(),
     sendMessage: send,
     eventTarget,
     revivableModules
@@ -77,16 +82,14 @@ export const startBidirectionalConnection = <
     initResolve = resolve
   })
 
-  const pendingMessages: Message[] = []
-  let buffering = true
-
   eventTarget.addEventListener('message', ({ detail }) => {
     if (detail.type === 'init') {
       initResolve(detail)
       return
-    }
-    if (buffering) {
-      pendingMessages.push(detail)
+    } else if (detail.type === 'message') {
+      const messageChannel = revivableContext.messageChannels.getOrAlloc(detail.portId)
+      const transferables = getTransferableObjects(detail)
+      ;(messageChannel.port2 as MessagePort)?.postMessage(detail, { transfer: transferables })
     }
   })
 
@@ -102,19 +105,7 @@ export const startBidirectionalConnection = <
     },
     remoteValue:
       initMessage
-        .then(initMessage => {
-          const result = recursiveRevive(initMessage.data, revivableContext)
-          // Replay any messages that arrived before revive listeners were registered
-          buffering = false
-          for (const msg of pendingMessages) {
-            eventTarget.dispatchTypedEvent(
-              'message',
-              new CustomEvent('message', { detail: msg })
-            )
-          }
-          pendingMessages.length = 0
-          return result
-        }) as Promise<T>
+        .then(initMessage => recursiveRevive(initMessage.data, revivableContext)) as Promise<T>
   } satisfies BidirectionalConnection<T>
 }
 

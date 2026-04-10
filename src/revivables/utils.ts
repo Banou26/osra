@@ -1,6 +1,6 @@
 import type { DefaultRevivableModules, RevivableModule } from '.'
 import type { ConnectionMessage, MessageEventTarget, Transport, Uuid } from '../types'
-import type { PlatformCapabilities } from '../utils'
+import type { MessageChannelAllocator, PlatformCapabilities } from '../utils'
 
 import { OSRA_BOX } from '../types'
 
@@ -24,6 +24,7 @@ export type RevivableContext<TModules extends readonly RevivableModule[] = Defau
   transport: Transport
   remoteUuid: Uuid
   messagePorts: Set<MessagePort>
+  messageChannels: MessageChannelAllocator
   sendMessage: (message: ConnectionMessage) => void
   revivableModules: TModules
   eventTarget: MessageEventTarget
