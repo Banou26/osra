@@ -1,5 +1,7 @@
 import type { StructurableTransferable, Uuid } from '../types'
-import type { StrictMessageChannel, StrictMessagePort } from './message-channel'
+import type { StrictMessagePort } from './message-channel'
+
+import { CapableChannel } from './message-channel'
 
 export const makeAllocator = <T>() => {
   const channels = new Map<string, T>()
@@ -35,15 +37,15 @@ export const makeAllocator = <T>() => {
 
 export type Allocator<T> = ReturnType<typeof makeAllocator<T>>
 
-type AllocatedMessageChannel<
-  T extends StructurableTransferable = StructurableTransferable,
-  T2 extends StructurableTransferable = StructurableTransferable
-> = {
+type AllocatedMessageChannel = {
   uuid: Uuid
-  /** Local port */
-  port1: StrictMessagePort<T>
-  /** Remote port that gets transferred, might be undefined if a remote context created the channel */
-  port2?: StrictMessagePort<T2>
+  /** Local port — typed as `any` since the allocator is internal plumbing
+   *  that routes arbitrary event objects between box/revive and the init()
+   *  dispatcher. */
+  port1: StrictMessagePort<any>
+  /** Remote port that gets transferred, might be undefined if a remote
+   *  context created the channel */
+  port2?: StrictMessagePort<any>
 }
 
 export const makeMessageChannelAllocator = () => {
@@ -57,24 +59,27 @@ export const makeMessageChannelAllocator = () => {
       }
       return uuid
     },
-    set: (uuid: Uuid, messagePorts: { port1: StrictMessagePort, port2?: StrictMessagePort }) => {
+    set: (uuid: Uuid, messagePorts: { port1: StrictMessagePort<any>, port2?: StrictMessagePort<any> }): void => {
       channels.set(uuid, { uuid, ...messagePorts })
     },
     alloc: (
       uuid: Uuid | undefined = result.getUniqueUuid(),
-      messagePorts?: { port1: StrictMessagePort, port2?: StrictMessagePort }
-    ) => {
+      messagePorts?: { port1: StrictMessagePort<any>, port2?: StrictMessagePort<any> },
+    ): AllocatedMessageChannel => {
       if (messagePorts) {
-        const allocatedMessageChannel = { uuid, ...messagePorts } satisfies AllocatedMessageChannel
+        const allocatedMessageChannel: AllocatedMessageChannel = { uuid, ...messagePorts }
         channels.set(uuid, allocatedMessageChannel)
         return allocatedMessageChannel
       }
-      const messageChannel = new MessageChannel() as StrictMessageChannel
-      const allocatedMessageChannel = {
+      // Allocated channels are purely internal plumbing — they route dispatched
+      // events between init() and box/revive in the same process. Use the
+      // CapableChannel stub so arbitrary JS values can flow through unchanged.
+      const messageChannel = new CapableChannel<any, any>()
+      const allocatedMessageChannel: AllocatedMessageChannel = {
         uuid,
         port1: messageChannel.port1,
-        port2: messageChannel.port2
-      } satisfies AllocatedMessageChannel
+        port2: messageChannel.port2,
+      }
       channels.set(uuid, allocatedMessageChannel)
       return allocatedMessageChannel
     },
@@ -83,10 +88,10 @@ export const makeMessageChannelAllocator = () => {
     free: (uuid: string) => channels.delete(uuid),
     getOrAlloc: (
       uuid: Uuid | undefined = result.getUniqueUuid(),
-      messagePorts?: { port1: StrictMessagePort, port2?: StrictMessagePort }
-    ) => {
+      messagePorts?: { port1: StrictMessagePort<any>, port2?: StrictMessagePort<any> },
+    ): AllocatedMessageChannel => {
       const existingChannel = result.get(uuid)
-      if (existingChannel) return existingChannel!
+      if (existingChannel) return existingChannel
       return result.alloc(uuid, messagePorts)
     }
   }

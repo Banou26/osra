@@ -1,11 +1,10 @@
 import type { Capable } from '../types'
-import type { RevivableContext } from './utils'
 import type { StrictMessagePort } from '../utils/message-channel'
+import type { RevivableContext } from './utils'
 import type { UnderlyingType } from '.'
 
 import { BoxBase } from './utils'
-import { recursiveBox, recursiveRevive } from '.'
-import { getTransferableObjects } from '../utils'
+import { CapableChannel } from '../utils/message-channel'
 import { box as boxMessagePort, revive as reviveMessagePort, BoxedMessagePort } from './message-port'
 
 export const type = 'promise' as const
@@ -41,48 +40,48 @@ export const isType = (value: unknown): value is Promise<any> =>
 
 export const box = <T, T2 extends RevivableContext>(
   value: CapablePromise<T>,
-  context: T2
+  context: T2,
 ): BoxedPromise<ExtractCapable<T>> => {
   if (!isCapablePromise(value)) throw new TypeError('Expected Promise')
   const promise = value
-  const { port1: localPort, port2: remotePort } = new MessageChannel()
-  context.messagePorts.add(remotePort)
-
-  const sendResult = (result: Context) => {
-    const boxedResult = recursiveBox(result, context)
-    localPort.postMessage(boxedResult, getTransferableObjects(boxedResult))
-    localPort.close()
-    // Clean up the remote port from the set (it was transferred earlier)
-    context.messagePorts.delete(remotePort)
-  }
+  // CapableChannel — we can post raw JS values through the channel
+  // without worrying about structured clone. The boxing/reviving at the
+  // message-port tunnel boundary handles the wire format.
+  const { port1: localPort, port2: remotePort } = new CapableChannel<Context, Context>()
 
   promise
-    .then((data: ExtractCapable<T>) => sendResult({ type: 'resolve', data }))
-    .catch((error: unknown) => sendResult({ type: 'reject', error: (error as Error)?.stack ?? String(error) }))
+    .then((data: ExtractCapable<T>) => {
+      localPort.postMessage({ type: 'resolve', data })
+      localPort.close()
+    })
+    .catch((error: unknown) => {
+      localPort.postMessage({
+        type: 'reject',
+        error: (error as Error)?.stack ?? String(error),
+      })
+      localPort.close()
+    })
 
   return {
     ...BoxBase,
     type,
-    port: boxMessagePort(remotePort as unknown as StrictMessagePort<string>, context)
+    port: boxMessagePort(remotePort as unknown as StrictMessagePort<Context>, context),
   } as unknown as BoxedPromise<ExtractCapable<T>>
 }
 
 export const revive = <T extends BoxedPromise, T2 extends RevivableContext>(
   value: T,
-  context: T2
+  context: T2,
 ) => {
-  const port = reviveMessagePort(value.port as unknown as BoxedMessagePort<string>, context)
-  context.messagePorts.add(port as MessagePort)
+  const port = reviveMessagePort(value.port as unknown as BoxedMessagePort<Context>, context)
   return new Promise<T[UnderlyingType]>((resolve, reject) => {
     port.addEventListener('message', (event) => {
-      const data = (event as unknown as MessageEvent<Context>).data
-      const result = recursiveRevive(data, context) as Context
+      const result = (event as unknown as MessageEvent<Context>).data
       if (result.type === 'resolve') {
         resolve(result.data as T[UnderlyingType])
       } else {
         reject(result.error)
       }
-      context.messagePorts.delete(port as MessagePort)
       port.close()
     }, { once: true })
     port.start()

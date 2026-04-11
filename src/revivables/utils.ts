@@ -1,6 +1,11 @@
+import type { TypedEventTarget } from 'typescript-event-target'
 import type { DefaultRevivableModules, RevivableModule } from '.'
-import type { ConnectionMessage, MessageEventTarget, Transport, Uuid } from '../types'
-import type { MessageChannelAllocator } from '../utils'
+import type {
+  ConnectionMessage,
+  Message,
+  Transport,
+  Uuid
+} from '../types'
 
 import { OSRA_BOX } from '../types'
 
@@ -16,27 +21,70 @@ export type BoxBase<T extends string = string> =
   & typeof BoxBase
   & { type: T }
 
+export type RevivablesMessageEventMap<TModules extends readonly RevivableModule[] = DefaultRevivableModules> = {
+  message: CustomEvent<Message | InferMessages<TModules>>
+}
+
 export type RevivableContext<TModules extends readonly RevivableModule[] = DefaultRevivableModules> = {
   transport: Transport
   remoteUuid: Uuid
-  messagePorts: Set<MessagePort>
-  messageChannels: MessageChannelAllocator
-  sendMessage: (message: ConnectionMessage) => void
+  unregisterSignal?: AbortSignal
+  // Typed as `any` on the parameter so a concrete narrower sendMessage (the
+  // one built by startBidirectionalConnection, typed against a specific
+  // TModules) is assignable to the generic widened `RevivableContext` bound
+  // that recursiveBox/Revive infer. Contravariance on function properties
+  // would otherwise reject the assignment. Callers should still pass
+  // ConnectionMessage | InferMessages<TModules>-shaped values.
+  sendMessage: (message: any) => void
   revivableModules: TModules
-  eventTarget: MessageEventTarget
+  eventTarget: TypedEventTarget<RevivablesMessageEventMap<TModules>>
 }
 
-export type ExtractModule<T> = T extends { isType: (value: unknown) => value is infer S } ? S : never
-export type ExtractType<T> = T extends { isType: (value: unknown) => value is infer S } ? S : never
-export type ExtractBoxInput<T> = T extends { box: (value: infer S) => value is any } ? S : never
-export type ExtractReviveInput<T> = T extends { revive: (value: infer S) => value is any } ? S : never
-export type ExtractBox<T> = T extends { box: (...args: any[]) => infer B } ? B : never
+export type CustomMessageEvent<TModules extends readonly RevivableModule[] = DefaultRevivableModules> = CustomEvent<Message | InferMessages<TModules>>
+
+export type ExtractModule<T> =
+  T extends { isType: (value: unknown) => value is infer S }
+    ? S
+    : never
+    
+export type ExtractType<T> =
+  T extends { isType: (value: unknown) => value is infer S }
+    ? S
+    : never
+    
+export type ExtractBoxInput<T> =
+  T extends { box: (value: infer S) => value is any }
+    ? S
+  : never
+    
+export type ExtractReviveInput<T> =
+  T extends { revive: (value: infer S) => value is any }
+    ? S
+  : never
+    
+export type ExtractBox<T> =
+  T extends { box: (...args: any[]) => infer B }
+    ? B
+    : never
+    
+export type ExtractMessages<T> =
+  T extends { Messages: infer B extends { type: string } }
+    ? B
+    : never
+    
+export type InferMessages<TModules extends readonly unknown[]> =
+  ExtractMessages<TModules[number]>
+  
 export type InferRevivables<TModules extends readonly unknown[]> =
   ExtractType<TModules[number]>
+  
 export type InferRevivableBox<TModules extends readonly unknown[]> =
   ExtractBox<TModules[number]>
 
-export const isRevivableBox = <T extends RevivableContext<readonly RevivableModule[]>>(value: any, _context: T): value is InferRevivableBox<T['revivableModules']> =>
+export const isRevivableBox = <
+  TModules extends readonly RevivableModule[],
+  T extends RevivableContext<TModules>
+>(value: any, _context: T): value is InferRevivableBox<TModules> =>
   value
   && typeof value === 'object'
   && OSRA_BOX in value

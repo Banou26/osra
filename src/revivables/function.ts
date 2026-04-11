@@ -1,24 +1,24 @@
 import type { Capable } from '../types'
+import type { StrictMessagePort } from '../utils/message-channel'
 import type { UnderlyingType, RevivableContext, BoxBase as BoxBaseType } from './utils'
 
 import { BoxBase } from './utils'
-import { recursiveBox, recursiveRevive } from '.'
-import { getTransferableObjects } from '../utils'
+import { CapableChannel } from '../utils/message-channel'
 import { box as boxMessagePort, revive as reviveMessagePort, BoxedMessagePort } from './message-port'
 
 export const type = 'function' as const
 
 /**
- * FinalizationRegistry for automatically cleaning up function ports when the revived function is garbage collected.
+ * FinalizationRegistry for automatically cleaning up function ports when the
+ * revived function is garbage collected.
  */
 type FunctionCleanupInfo = {
-  port: MessagePort
+  port: StrictMessagePort<CallContextOrClose>
 }
 
 const functionRegistry = new FinalizationRegistry<FunctionCleanupInfo>((info) => {
-  // Send a close signal through the port before closing it
   try {
-    info.port.postMessage({ __osra_close__: true })
+    info.port.postMessage({ __osra_close__: true } as unknown as CallContextOrClose)
   } catch { /* Port may already be closed */ }
   try {
     info.port.close()
@@ -26,11 +26,13 @@ const functionRegistry = new FinalizationRegistry<FunctionCleanupInfo>((info) =>
 })
 
 export type CallContext = [
-  /** MessagePort or portId that will be used to send the result of the function call */
-  MessagePort | string,
-  /** Arguments that will be passed to the function call */
-  Capable[]
+  /** MessagePort the result of the call will be posted back on */
+  StrictMessagePort<Promise<Capable>>,
+  /** Arguments forwarded to the function */
+  Capable[],
 ]
+
+type CallContextOrClose = CallContext | { __osra_close__: true }
 
 export type BoxedFunction<T extends (...args: any[]) => any = (...args: any[]) => any> =
   & BoxBaseType<typeof type>
@@ -48,54 +50,56 @@ export const isType = (value: unknown): value is (...args: any[]) => any =>
 
 export const box = <T extends (...args: any[]) => any, T2 extends RevivableContext>(
   value: T & CapableFunction<T>,
-  context: T2
+  context: T2,
 ): BoxedFunction<T> => {
-  const { port1: localPort, port2: remotePort } = new MessageChannel()
-  context.messagePorts.add(remotePort)
+  // CapableChannel — the call context arrives already revived at the
+  // message-port boundary, so we can read it directly without needing to
+  // run recursiveRevive ourselves.
+  const { port1: localPort, port2: remotePort } =
+    new CapableChannel<CallContextOrClose, CallContextOrClose>()
 
-  const cleanup = () => {
-    context.messagePorts.delete(remotePort)
-    localPort.close()
-  }
-
-  localPort.addEventListener('message', ({ data }: MessageEvent<CallContext | { __osra_close__: true }>) => {
-    // Check for close signal
+  localPort.addEventListener('message', (event) => {
+    const data = (event as MessageEvent<CallContextOrClose>).data
     if (data && typeof data === 'object' && '__osra_close__' in data) {
-      cleanup()
+      localPort.close()
       return
     }
-    const [returnValuePort, args] = recursiveRevive(data as CallContext, context) as [MessagePort, Capable[]]
+    const [returnValuePort, args] = data
     const result = (async () => value(...args))()
-    const boxedResult = recursiveBox(result, context)
-    returnValuePort.postMessage(boxedResult, getTransferableObjects(boxedResult))
+    // Post the raw Promise through the stub channel. The message-port
+    // tunnel boundary on the receiving side will box/revive it.
+    returnValuePort.postMessage(result as unknown as Promise<Capable>)
   })
   localPort.start()
 
   return {
     ...BoxBase,
     type,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    port: boxMessagePort(remotePort as any, context)
+    port: boxMessagePort(remotePort, context),
   } as BoxedFunction<T>
 }
 
 export const revive = <T extends BoxedFunction, T2 extends RevivableContext>(
   value: T,
-  context: T2
+  context: T2,
 ): T[UnderlyingType] => {
-  const port = reviveMessagePort(value.port as unknown as BoxedMessagePort, context)
+  const port = reviveMessagePort(
+    value.port as unknown as BoxedMessagePort<CallContextOrClose>,
+    context,
+  )
 
   const func = (...args: Capable[]) =>
     new Promise((resolve, reject) => {
-      const { port1: returnValueLocalPort, port2: returnValueRemotePort } = new MessageChannel()
-      context.messagePorts.add(returnValueRemotePort)
-      const callContext = recursiveBox([returnValueRemotePort, args] as const, context)
-      ;(port as MessagePort).postMessage(callContext, getTransferableObjects(callContext))
-      // Remove the remote port from the set after transfer (it's neutered now)
-      context.messagePorts.delete(returnValueRemotePort)
+      const { port1: returnValueLocalPort, port2: returnValueRemotePort } =
+        new CapableChannel<Promise<Capable>, Promise<Capable>>()
 
-      returnValueLocalPort.addEventListener('message', ({ data }: MessageEvent<Capable>) => {
-        const result = recursiveRevive(data, context) as Promise<Capable>
+      // Post raw values — returnValueRemotePort is a stub that passes by
+      // reference. The message-port tunnel boundary boxes it on the wire
+      // for us and the receiving side unboxes back into a real port.
+      port.postMessage([returnValueRemotePort, args] as unknown as CallContextOrClose)
+
+      returnValueLocalPort.addEventListener('message', (event) => {
+        const result = (event as MessageEvent<Promise<Capable>>).data
         result
           .then(resolve)
           .catch(reject)
@@ -107,9 +111,9 @@ export const revive = <T extends BoxedFunction, T2 extends RevivableContext>(
     })
 
   // Register the function for automatic cleanup when garbage collected
-  functionRegistry.register(func, { port: port as MessagePort }, func)
+  functionRegistry.register(func, { port }, func)
 
-  return func
+  return func as T[UnderlyingType]
 }
 
 const typeCheck = () => {

@@ -1,6 +1,13 @@
-import { TypedEventTarget } from 'typescript-event-target'
-import type { TypedArray, WebExtOnConnect, WebExtOnMessage, WebExtPort, WebExtRuntime, WebExtSender } from './utils/type-guards'
-import { DefaultRevivableModule, DefaultRevivableModules, RevivableModule } from './revivables'
+import type {
+  WebExtOnConnect,
+  WebExtOnMessage,
+  WebExtPort,
+  WebExtRuntime,
+  WebExtSender
+} from './utils/type-guards'
+import type { TypedEventTarget } from 'typescript-event-target'
+
+import { DefaultRevivableModules, RevivableModule } from './revivables'
 import { InferRevivables } from './revivables/utils'
 
 export const OSRA_KEY = '__OSRA_KEY__' as const
@@ -53,6 +60,11 @@ export type Capable<TModules extends readonly RevivableModule[] = DefaultRevivab
   | Map<Capable, Capable>
   | Set<Capable>
 
+export type MessageFields = {
+  type: string
+  remoteUuid: Uuid
+}
+
 export type MessageBase = {
   [OSRA_KEY]: string
   /** UUID of the client that sent the message */
@@ -82,40 +94,12 @@ export type BidirectionalConnectionMessage =
     remoteUuid: Uuid
     data: Capable
   }
-  /** message not needed if transferring MessagePort is supported */
-  | {
-    type: 'message'
-    remoteUuid: Uuid
-    data: Capable
-    /** uuid of the messagePort that the message was sent through */
-    portId: Uuid
-  }
-  /** message not needed if transferring MessagePort is supported */
-  | {
-    type: 'message-port-close'
-    remoteUuid: Uuid
-    /** uuid of the messagePort that closed */
-    portId: string
-  }
-  /** identity-wrapped value was garbage collected on the sender — drop the
-   *  receiver-side cached revived value so both sides converge. */
-  | {
-    type: 'identity-dispose'
-    remoteUuid: Uuid
-    /** id of the identity-wrapped value that was collected */
-    id: string
-  }
 
-export type UnidirectionalConnectionMessage = {
-  type: 'message'
-  remoteUuid: Uuid
-  data: Capable
-  portId: Uuid
-}
+export type UnidirectionalConnectionMessage = unknown
 
 export type ConnectionMessage =
   | BidirectionalConnectionMessage
-  | UnidirectionalConnectionMessage
+  // | UnidirectionalConnectionMessage
 
 export type MessageVariant =
   | ProtocolMessage
@@ -135,6 +119,7 @@ export type MessageContext = {
 export type MessageEventMap = {
   message: CustomEvent<Message>
 }
+
 export type MessageEventTarget = TypedEventTarget<MessageEventMap>
 
 export type CustomTransport =

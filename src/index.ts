@@ -2,15 +2,15 @@ import type {
   EmitTransport, Message,
   MessageContext, MessageVariant,
   Capable, Transport,
-  MessageEventMap
 } from './types'
 export type { UnderlyingType } from './revivables/utils'
 import type {
   ConnectionContext,
   BidirectionalConnectionContext
 } from './utils'
+import type { RevivablesMessageEventMap } from './revivables/utils'
 
-import type { RevivableModule } from './revivables'
+import type { InferMessages, RevivableModule } from './revivables'
 
 import { OSRA_DEFAULT_KEY, OSRA_KEY } from './types'
 import { defaultRevivableModules } from './revivables'
@@ -95,7 +95,9 @@ export const expose = async <
     ),
     ...userRevivableModules,
   ] as const
-  const connectionContexts = new Map<string, ConnectionContext>()
+  type MergedModules = typeof mergedRevivableModules
+  type SendableMessage = MessageVariant | InferMessages<MergedModules>
+  const connectionContexts = new Map<string, ConnectionContext<MergedModules>>()
 
   let resolveRemoteValue: (connection: T) => void
   const remoteValuePromise = new Promise<T>((resolve) => {
@@ -112,7 +114,7 @@ export const expose = async <
     })
   }
 
-  const sendMessage = (transport: EmitTransport, message: MessageVariant) => {
+  const sendMessage = (transport: EmitTransport, message: SendableMessage) => {
     if (aborted) return
     const transferables = getTransferableObjects(message)
     sendOsraMessage(
@@ -121,8 +123,8 @@ export const expose = async <
         [OSRA_KEY]: key,
         name,
         uuid,
-        ...message
-      },
+        ...message,
+      } as Message,
       origin,
       transferables
     )
@@ -150,7 +152,7 @@ export const expose = async <
       // Send announce back so the other side can also create a connection
       // (in case they missed our initial announce due to timing)
       sendMessage(transport, { type: 'announce', remoteUuid: message.uuid })
-      const eventTarget = new TypedEventTarget<MessageEventMap>()
+      const eventTarget = new TypedEventTarget<RevivablesMessageEventMap<MergedModules>>()
       const connectionContext = {
         type: 'bidirectional',
         eventTarget,
@@ -161,11 +163,12 @@ export const expose = async <
             uuid,
             remoteUuid: message.uuid,
             eventTarget,
-            send: (message: MessageVariant) => sendMessage(transport, message),
+            unregisterSignal,
+            send: (message: SendableMessage) => sendMessage(transport, message),
             close: () => void connectionContexts.delete(message.uuid),
-            revivableModules: mergedRevivableModules
-          })
-      } satisfies BidirectionalConnectionContext
+            revivableModules: mergedRevivableModules,
+          }),
+      } satisfies BidirectionalConnectionContext<MergedModules>
       connectionContexts.set(message.uuid, connectionContext)
       connectionContext.connection.remoteValue.then((remoteValue) =>
         resolveRemoteValue(remoteValue as T)
@@ -217,10 +220,10 @@ export const expose = async <
 
   // Unidirectional emitting mode
   if (isEmitTransport(transport) && !isReceiveTransport(transport)) {
-    const { remoteValueProxy } = startUnidirectionalEmittingConnection<T>({
+    const { remoteValueProxy } = startUnidirectionalEmittingConnection<T, MergedModules>({
       value,
       uuid,
-      send: (message: MessageVariant) => sendMessage(transport, message),
+      send: (message: SendableMessage) => sendMessage(transport, message),
       close: () => connectionContexts.delete(uuid)
     })
     return remoteValueProxy

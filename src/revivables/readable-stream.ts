@@ -1,11 +1,8 @@
-import type { Capable, StructurableTransferable } from '../types'
 import type { RevivableContext } from './utils'
-import type { StrictMessageChannel, StrictMessagePort } from '../utils/message-channel'
 import type { UnderlyingType } from '.'
 
 import { BoxBase } from './utils'
-import { recursiveBox, recursiveRevive } from '.'
-import { getTransferableObjects } from '../utils'
+import { CapableChannel } from '../utils/message-channel'
 import { box as boxMessagePort, revive as reviveMessagePort, BoxedMessagePort } from './message-port'
 
 export const type = 'readableStream' as const
@@ -13,6 +10,10 @@ export const type = 'readableStream' as const
 export type PullContext = {
   type: 'pull' | 'cancel'
 }
+
+export type StreamChunk = ReadableStreamReadResult<any>
+
+type WireMessage = PullContext | StreamChunk
 
 export type BoxedReadableStream<T extends ReadableStream = ReadableStream> = {
   __OSRA_BOX__: 'revivable'
@@ -26,19 +27,25 @@ export const isType = (value: unknown): value is ReadableStream =>
 
 export const box = <T extends ReadableStream, T2 extends RevivableContext>(
   value: T,
-  context: T2
+  context: T2,
 ): BoxedReadableStream<T> => {
-  const { port1: localPort, port2: remotePort } = new MessageChannel() as StrictMessageChannel<StructurableTransferable, StructurableTransferable>
-  context.messagePorts.add(remotePort as MessagePort)
+  // CapableChannel — chunks can be arbitrary JS values including things
+  // that wouldn't survive structured clone. The boundary at message-port
+  // handles the wire format.
+  const { port1: localPort, port2: remotePort } = new CapableChannel<WireMessage, WireMessage>()
 
   const reader = value.getReader()
 
-  ;(localPort as MessagePort).addEventListener('message', async ({ data }) => {
-    const { type } = recursiveRevive(data, context) as PullContext
-    if (type === 'pull') {
-      const pullResult = reader.read()
-      const boxedResult = recursiveBox(pullResult, context)
-      ;(localPort as MessagePort).postMessage(boxedResult, getTransferableObjects(boxedResult))
+  localPort.addEventListener('message', async (event) => {
+    const data = (event as MessageEvent<PullContext>).data
+    if (data.type === 'pull') {
+      try {
+        const result = await reader.read()
+        localPort.postMessage(result)
+        if (result.done) localPort.close()
+      } catch {
+        localPort.close()
+      }
     } else {
       reader.cancel()
       localPort.close()
@@ -49,39 +56,34 @@ export const box = <T extends ReadableStream, T2 extends RevivableContext>(
   return {
     ...BoxBase,
     type,
-    port: boxMessagePort(remotePort as MessagePort as StrictMessagePort<Record<string, StructurableTransferable>>, context)
+    port: boxMessagePort(remotePort, context),
   } as BoxedReadableStream<T>
 }
 
 export const revive = <T extends BoxedReadableStream, T2 extends RevivableContext>(
   value: T,
-  context: T2
+  context: T2,
 ): T[UnderlyingType] => {
-  const port = reviveMessagePort(value.port as unknown as BoxedMessagePort, context) as MessagePort
-  context.messagePorts.add(port as MessagePort)
+  const port = reviveMessagePort(value.port as unknown as BoxedMessagePort<WireMessage>, context)
   port.start()
 
   return new ReadableStream({
     start(_controller) {},
     pull(controller) {
-      return new Promise((resolve, reject) => {
-        port.addEventListener('message', async ({ data }) => {
-          const result = recursiveRevive(data, context) as Promise<ReadableStreamReadResult<any>>
-          result
-            .then(result => {
-              if (result.done) controller.close()
-              else controller.enqueue(result.value)
-              resolve()
-            })
-            .catch(reject)
+      return new Promise<void>((resolve, reject) => {
+        port.addEventListener('message', (event) => {
+          const result = (event as unknown as MessageEvent<StreamChunk>).data
+          if (result.done) controller.close()
+          else controller.enqueue(result.value)
+          resolve()
         }, { once: true })
-        port.postMessage(recursiveBox({ type: 'pull' }, context))
+        port.postMessage({ type: 'pull' } as unknown as WireMessage)
       })
     },
     cancel() {
-      port.postMessage(recursiveBox({ type: 'cancel' }, context))
+      port.postMessage({ type: 'cancel' } as unknown as WireMessage)
       port.close()
-    }
+    },
   }) as T[UnderlyingType]
 }
 
