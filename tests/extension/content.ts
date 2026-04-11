@@ -4,14 +4,6 @@ import { expose } from '../../src/index'
 import * as contentTests from './content-tests'
 import { setApi, setBgInitiatedApi } from './content-tests'
 
-const jsonOnlyCapabilities = {
-  jsonOnly: true,
-  messagePort: false,
-  arrayBuffer: false,
-  transferable: false,
-  transferableStream: false
-}
-
 // API exposed by content script to background
 const resolvers = {
   getContentInfo: async () => ({ location: window.location.href, timestamp: Date.now() }),
@@ -28,8 +20,7 @@ export type Resolvers = typeof resolvers
 // Content-initiated connection to background
 const port = chrome.runtime.connect({ name: `content-${Date.now()}` })
 const api = await expose<BackgroundResolvers>(resolvers, {
-  transport: { isJson: true, emit: port, receive: port },
-  platformCapabilities: jsonOnlyCapabilities
+  transport: { isJson: true, emit: port, receive: port }
 })
 
 setApi(api)
@@ -38,8 +29,7 @@ setApi(api)
 chrome.runtime.onConnect.addListener(async (port) => {
   if (port.name.startsWith('bg-to-content-')) {
     const bgInitiatedApi = await expose<BackgroundResolvers>(resolvers, {
-      transport: { isJson: true, emit: port, receive: port },
-      platformCapabilities: jsonOnlyCapabilities
+      transport: { isJson: true, emit: port, receive: port }
     })
     setBgInitiatedApi(bgInitiatedApi)
   }
@@ -60,8 +50,7 @@ const runtimeTransport = {
 }
 
 const runtimeApi = await expose<BackgroundResolvers>(resolvers, {
-  transport: runtimeTransport,
-  platformCapabilities: jsonOnlyCapabilities
+  transport: runtimeTransport
 })
 
 setRuntimeApi(runtimeApi)

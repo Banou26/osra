@@ -1,6 +1,6 @@
 import type { DefaultRevivableModules, RevivableModule } from '.'
 import type { ConnectionMessage, MessageEventTarget, Transport, Uuid } from '../types'
-import type { MessageChannelAllocator, PlatformCapabilities } from '../utils'
+import type { MessageChannelAllocator } from '../utils'
 
 import { OSRA_BOX } from '../types'
 
@@ -17,7 +17,6 @@ export type BoxBase<T extends string = string> =
   & { type: T }
 
 export type RevivableContext<TModules extends readonly RevivableModule[] = DefaultRevivableModules> = {
-  platformCapabilities: PlatformCapabilities
   transport: Transport
   remoteUuid: Uuid
   messagePorts: Set<MessagePort>

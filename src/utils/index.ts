@@ -1,5 +1,4 @@
 export * from './allocator'
-export * from './capabilities'
 export * from './platform'
 export * from '../revivables'
 export * from './replace'

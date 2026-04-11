@@ -10,9 +10,8 @@ Osra is a powerful, type-safe communication library for JavaScript/TypeScript th
 - **Universal Communication** - Works across Workers, SharedWorkers, ServiceWorkers, Windows, MessagePorts, WebSockets, and Browser Extensions
 - **Rich Type Support** - Seamlessly handle Promises, Functions, Streams, Dates, Errors, TypedArrays, and more
 - **Full TypeScript Support** - Complete type safety with automatic type inference
-- **Intelligent Transport** - Automatically detects platform capabilities and adapts accordingly
+- **Two Transport Modes** - Capable mode for structured-clone transports, JSON mode for string-only channels — selected from the transport itself
 - **Zero Dependencies** - Lightweight with no external runtime dependencies
-- **Graceful Degradation** - Falls back to JSON-only mode when advanced features aren't supported
 
 ## Installation
 
@@ -272,16 +271,23 @@ expose(api, { transport })
 const api = await expose<API>({}, { transport })
 ```
 
-## Platform Capabilities
+## Transport Modes
 
-Osra automatically detects platform capabilities and adapts its behavior:
+Osra picks between two modes based on the transport you hand it:
 
-- **MessagePort Transfer**: Can transfer MessagePort objects for function calls
-- **ArrayBuffer Transfer**: Can transfer ArrayBuffers instead of cloning
-- **Stream Transfer**: Can transfer ReadableStreams directly
-- **Structured Clone**: Supports native structured cloning
+- **Capable mode** — Workers, SharedWorkers, ServiceWorkers, Windows,
+  MessagePorts, and any custom transport without `isJson: true`. Uses
+  structured clone natively and moves transferables when you opt in with
+  `transfer()`.
+- **JSON mode** — WebSockets, browser extension runtime/port APIs, and any
+  custom transport flagged with `isJson: true`. Complex types (Functions,
+  Promises, Dates, Errors, TypedArrays, streams, …) still work: the
+  box/reviver system serializes them into JSON-safe representations and
+  revives them on the other side.
 
-When operating in JSON-only mode (WebSockets, Browser Extensions), Osra uses a box/reviver system to serialize complex types like Functions, Promises, Dates, Errors, and TypedArrays into JSON-compatible representations that are automatically revived on the receiving end.
+You generally don't need to configure anything — pass your transport and
+osra does the right thing. For a custom transport that tunnels JSON (e.g.
+over a `string`-only channel), set `isJson: true` on it.
 
 ## Performance Tips
 

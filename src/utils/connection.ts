@@ -6,7 +6,6 @@ import type {
   Uuid
 } from '../types'
 import type { MessageChannelAllocator } from './allocator'
-import type { PlatformCapabilities } from './capabilities'
 import type { StrictMessagePort } from './message-channel'
 
 import { makeMessageChannelAllocator } from './allocator'
@@ -34,7 +33,6 @@ export type ConnectionContext =
   | UnidirectionalReceivingConnectionContext
 
 export type ConnectionRevivableContext<TModules extends readonly RevivableModule[] = DefaultRevivableModules> = {
-  platformCapabilities: PlatformCapabilities
   transport: Transport
   remoteUuid: Uuid
   messagePorts: Set<MessagePort>
@@ -54,13 +52,12 @@ export const startBidirectionalConnection = <
   T extends Capable,
   TModules extends readonly RevivableModule[] = DefaultRevivableModules
 >(
-  { transport, value, uuid, remoteUuid, platformCapabilities, eventTarget, send, close, revivableModules }:
+  { transport, value, uuid, remoteUuid, eventTarget, send, close, revivableModules }:
   {
     transport: Transport
     value: Capable
     uuid: Uuid
     remoteUuid: Uuid
-    platformCapabilities: PlatformCapabilities
     eventTarget: MessageEventTarget
     send: (message: ConnectionMessage) => void
     close: () => void
@@ -68,7 +65,6 @@ export const startBidirectionalConnection = <
   }
 ) => {
   const revivableContext = {
-    platformCapabilities,
     transport,
     remoteUuid,
     messagePorts: new Set(),
@@ -115,11 +111,10 @@ export type UnidirectionalEmittingConnection<T extends Capable = Capable> = {
 }
 
 export const startUnidirectionalEmittingConnection = <T extends Capable>(
-  { value, uuid, platformCapabilities, send, close }:
+  { value, uuid, send, close }:
   {
     value: Capable
     uuid: Uuid
-    platformCapabilities: PlatformCapabilities
     send: (message: Message) => void
     close: () => void
   }
@@ -145,11 +140,10 @@ export type UnidirectionalReceivingConnection = {
 }
 
 export const startUnidirectionalReceivingConnection = (
-  { uuid, remoteUuid, platformCapabilities, close }:
+  { uuid, remoteUuid, close }:
   {
     uuid: Uuid
     remoteUuid?: Uuid
-    platformCapabilities: PlatformCapabilities
     eventTarget: StrictMessagePort<Message>
     close: () => void
   }

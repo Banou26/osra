@@ -37,7 +37,6 @@ interface ExposeOptions {
   key?: string
   origin?: string
   unregisterSignal?: AbortSignal
-  platformCapabilities?: PlatformCapabilities
   logger?: Logger
 }
 ```
@@ -50,7 +49,6 @@ interface ExposeOptions {
 | `key` | `string` | No | Shared secret for additional security |
 | `origin` | `string` | No | Origin restriction for Window postMessage |
 | `unregisterSignal` | `AbortSignal` | No | Signal to clean up the connection |
-| `platformCapabilities` | `PlatformCapabilities` | No | Override auto-detected capabilities |
 | `logger` | `Logger` | No | Custom logger for debugging |
 
 #### Returns
@@ -220,19 +218,30 @@ Transports that use JSON serialization (WebSocket, WebExtension). The box/revive
 type JsonPlatformTransport = WebSocket | chrome.runtime | browser.runtime
 ```
 
-### Platform Capabilities
+### Transport Modes
+
+Osra runs in one of two modes, selected from the transport:
+
+- **Capable mode** — structured-clone transports (Worker, SharedWorker,
+  ServiceWorker, Window, MessagePort, and any custom transport without
+  `isJson: true`). Transferables can be moved with `transfer()`.
+- **JSON mode** — `WebSocket`, browser extension runtime/port APIs, and
+  any custom transport that sets `isJson: true`. Complex types travel
+  through the box/reviver system, so Functions, Promises, Dates, Errors,
+  TypedArrays, streams, etc. still work — they're serialized as JSON-safe
+  boxes and revived on the other side.
+
+A custom transport can force JSON mode by setting `isJson: true`:
 
 ```typescript
-interface PlatformCapabilities {
-  jsonOnly: boolean           // Use JSON serialization with box/reviver system
-  messagePort: boolean         // Can transfer MessagePort objects
-  arrayBuffer: boolean         // Can clone ArrayBuffer natively
-  transferable: boolean        // Can transfer transferables
-  transferableStream: boolean  // Can transfer ReadableStream
+const transport = {
+  isJson: true,
+  emit: (message) => socket.send(JSON.stringify(message)),
+  receive: (listener) => socket.on('message', (data) =>
+    listener(JSON.parse(data), {}),
+  ),
 }
 ```
-
-When `jsonOnly` is true, Osra uses the box/reviver system to serialize complex types into JSON. This means Functions, Promises, Dates, Errors, and other complex types still work, even over WebSockets or Browser Extension messaging.
 
 ## Message Protocol
 

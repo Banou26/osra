@@ -2,6 +2,7 @@ import type { Capable } from '../types'
 import type { BoxBase as BoxBaseType, RevivableContext, UnderlyingType } from './utils'
 
 import { BoxBase } from './utils'
+import { isJsonOnlyTransport } from '../utils'
 import { recursiveBox, recursiveRevive } from '.'
 
 export const type = 'transfer' as const
@@ -75,15 +76,17 @@ export const box = <T extends Capable, TContext extends RevivableContext>(
 ): BoxedTransfer<T> => {
   const inner = wrapper.value
   const innerBoxed = recursiveBox(inner, context)
-  // The `degraded` flag carries the platform capability to the send-time
-  // walker in getTransferableObjects. When true, the walker treats this box
-  // as if it weren't a transfer box at all — no mode flip, no transferables
-  // on the transfer list — and the wrapper silently degrades to a copy.
+  // The `degraded` flag carries the transport mode to the send-time walker
+  // in getTransferableObjects. When true, the walker treats this box as if
+  // it weren't a transfer box at all — no mode flip, no transferables on
+  // the transfer list — and the wrapper silently degrades to a copy. JSON
+  // transports can't move ownership over the wire, so transfer semantics
+  // don't apply and we degrade.
   return {
     ...BoxBase,
     type,
     inner: innerBoxed,
-    degraded: !context.platformCapabilities.transferable,
+    degraded: isJsonOnlyTransport(context.transport),
   } as unknown as BoxedTransfer<T>
 }
 

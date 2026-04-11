@@ -4,14 +4,13 @@
 
 1. [Protocol Modes](#protocol-modes)
 2. [Transport Modes](#transport-modes)
-3. [Platform Capabilities](#platform-capabilities)
-4. [Complex Type Handling](#complex-type-handling)
-5. [Performance Optimization](#performance-optimization)
-6. [Error Handling & Debugging](#error-handling--debugging)
-7. [Security Considerations](#security-considerations)
-8. [Custom Transports](#custom-transports)
-9. [Browser Extension Integration](#browser-extension-integration)
-10. [Testing Strategies](#testing-strategies)
+3. [Complex Type Handling](#complex-type-handling)
+4. [Performance Optimization](#performance-optimization)
+5. [Error Handling & Debugging](#error-handling--debugging)
+6. [Security Considerations](#security-considerations)
+7. [Custom Transports](#custom-transports)
+8. [Browser Extension Integration](#browser-extension-integration)
+9. [Testing Strategies](#testing-strategies)
 
 ## Protocol Modes
 
@@ -87,9 +86,13 @@ Osra automatically detects the mode based on the initial handshake. If one side 
 
 ## Transport Modes
 
+Osra runs in one of two modes. The mode is determined by the transport
+itself — there's no runtime probing, and no manual override knob.
+
 ### Capable Mode
 
-Capable mode uses native browser capabilities like structured cloning and transferables for optimal performance.
+Capable mode uses native structured cloning and transferables. Selected
+for every transport that isn't flagged as JSON-only.
 
 ```typescript
 // Automatically selected for most transports
@@ -104,10 +107,12 @@ await api.sendPromise(Promise.resolve(42))
 - Worker/SharedWorker/ServiceWorker
 - MessagePort
 - Window (with MessageChannel)
+- Custom transports without `isJson: true`
 
-### JSON-Only Mode
+### JSON Mode
 
-JSON-only mode uses a box/reviver system to serialize complex types into JSON. **Complex types still work through this system.**
+JSON mode uses the box/reviver system to serialize complex types into
+JSON. **Complex types still work through this system.**
 
 ```typescript
 // Automatically selected for WebSocket/WebExtension
@@ -126,8 +131,8 @@ await api.sendError(new Error('test'))      // Works!
 ```
 
 **How It Works:**
-- Functions are boxed with MessagePorts for remote execution
-- Promises are boxed with MessagePorts for resolution/rejection
+- Functions are boxed with virtual MessagePort ids for remote execution
+- Promises are boxed with virtual MessagePort ids for resolution/rejection
 - Dates are boxed as ISO strings and revived as Date objects
 - Errors are boxed with message/stack and revived as Error objects
 - ArrayBuffers are boxed as base64 and revived as ArrayBuffers
@@ -135,85 +140,20 @@ await api.sendError(new Error('test'))      // Works!
 
 **Supported Transports:**
 - WebSocket
-- Chrome/Firefox Extension APIs
+- Chrome/Firefox Extension runtime and Port APIs
+- Any custom transport with `isJson: true`
 
-**Force JSON-Only Mode:**
+**Force JSON Mode:**
 ```typescript
-// You can force JSON-only mode for testing
+// Wrap any custom transport with { isJson: true } to force JSON mode
 const api = await expose<API>({}, {
-  transport: worker,
-  platformCapabilities: {
-    jsonOnly: true,
-    messagePort: false,
-    arrayBuffer: false,
-    transferable: false,
-    transferableStream: false
-  }
+  transport: {
+    isJson: true,
+    emit: (message) => myChannel.send(JSON.stringify(message)),
+    receive: (listener) =>
+      myChannel.on('message', (data) => listener(JSON.parse(data), {})),
+  },
 })
-```
-
-## Platform Capabilities
-
-Osra automatically detects what your platform supports:
-
-### Capability Detection
-
-```typescript
-import { detectCapabilities } from 'osra'
-
-const capabilities = await detectCapabilities()
-console.log(capabilities)
-// {
-//   jsonOnly: false,
-//   messagePort: true,
-//   arrayBuffer: true,
-//   transferable: true,
-//   transferableStream: true
-// }
-```
-
-### Override Capabilities
-
-```typescript
-// Force specific capabilities
-const api = await expose<API>({}, {
-  transport: worker,
-  platformCapabilities: {
-    jsonOnly: false,
-    messagePort: true,
-    arrayBuffer: true,
-    transferable: true,
-    transferableStream: false // Disable stream transfer
-  }
-})
-```
-
-### Capability-Based Code
-
-```typescript
-// Worker that adapts to capabilities
-const api = {
-  getData: async (options, capabilities) => {
-    if (capabilities.transferableStream) {
-      // Return a stream
-      return new ReadableStream({
-        async start(controller) {
-          for await (const chunk of generateData()) {
-            controller.enqueue(chunk)
-          }
-          controller.close()
-        }
-      })
-    } else {
-      // Return array for limited platforms
-      const result = []
-      for await (const chunk of generateData()) {
-        result.push(chunk)
-      }
-      return result
-    }
-  }
-}
 ```
 
 ## Complex Type Handling

@@ -6,7 +6,7 @@ import type {
 } from './types'
 export type { UnderlyingType } from './revivables/utils'
 import type {
-  PlatformCapabilities, ConnectionContext,
+  ConnectionContext,
   BidirectionalConnectionContext
 } from './utils'
 
@@ -16,7 +16,6 @@ import { OSRA_DEFAULT_KEY, OSRA_KEY } from './types'
 import { defaultRevivableModules } from './revivables'
 export { BoxBase } from './revivables/utils'
 import {
-  probePlatformCapabilities,
   registerOsraMessageListener,
   sendOsraMessage,
   startBidirectionalConnection,
@@ -48,7 +47,7 @@ export type {
  *
  * Transport modes:
  * - Capable mode
- * - Jsonable mode
+ * - JSON mode
  */
 export const expose = async <
   T extends Capable,
@@ -62,7 +61,6 @@ export const expose = async <
     key = OSRA_DEFAULT_KEY,
     origin = '*',
     unregisterSignal,
-    platformCapabilities: _platformCapabilities,
     logger,
     revivableModules: _userRevivableModules
   }: {
@@ -72,7 +70,6 @@ export const expose = async <
     key?: string
     origin?: string
     unregisterSignal?: AbortSignal
-    platformCapabilities?: PlatformCapabilities
     logger?: {}
     revivableModules?: TUserModules
   }
@@ -98,7 +95,6 @@ export const expose = async <
     ),
     ...userRevivableModules,
   ] as const
-  const platformCapabilities = _platformCapabilities ?? probePlatformCapabilities()
   const connectionContexts = new Map<string, ConnectionContext>()
 
   let resolveRemoteValue: (connection: T) => void
@@ -164,7 +160,6 @@ export const expose = async <
             value,
             uuid,
             remoteUuid: message.uuid,
-            platformCapabilities,
             eventTarget,
             send: (message: MessageVariant) => sendMessage(transport, message),
             close: () => void connectionContexts.delete(message.uuid),
@@ -225,7 +220,6 @@ export const expose = async <
     const { remoteValueProxy } = startUnidirectionalEmittingConnection<T>({
       value,
       uuid,
-      platformCapabilities,
       send: (message: MessageVariant) => sendMessage(transport, message),
       close: () => connectionContexts.delete(uuid)
     })

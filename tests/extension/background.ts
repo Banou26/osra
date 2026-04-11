@@ -2,14 +2,6 @@ import { Resolvers as ContentScriptResolvers } from './background'
 
 import { expose } from '../../src/index'
 
-const jsonOnlyCapabilities = {
-  jsonOnly: true,
-  messagePort: false,
-  arrayBuffer: false,
-  transferable: false,
-  transferableStream: false
-}
-
 // Content API from content-initiated connection
 let contentApi: ContentAPI | null = null
 // Content API from background-initiated connection
@@ -83,8 +75,7 @@ const resolvers = {
       if (!connectedTabId) throw new Error('No tab connected yet')
       const port = chrome.tabs.connect(connectedTabId, { name: `bg-to-content-${Date.now()}` })
       bgInitiatedContentApi = await expose<ContentScriptResolvers>(resolvers, {
-        transport: { isJson: true, emit: port, receive: port },
-        platformCapabilities: jsonOnlyCapabilities
+        transport: { isJson: true, emit: port, receive: port }
       })
       return true
     },
@@ -127,8 +118,7 @@ chrome.runtime.onConnect.addListener(async (port) => {
     // Track the tab ID for background-initiated connections
     connectedTabId = port.sender?.tab?.id ?? null
     contentApi = await expose<ContentScriptResolvers>(resolvers, {
-      transport: { isJson: true, emit: port, receive: port },
-      platformCapabilities: jsonOnlyCapabilities
+      transport: { isJson: true, emit: port, receive: port }
     })
   }
 })
@@ -197,7 +187,6 @@ chrome.runtime.onMessage.addListener(function runtimeInitialListener(message, se
       },
     },
   }, {
-    transport,
-    platformCapabilities: jsonOnlyCapabilities
+    transport
   }).then(api => { runtimeContentApi = api })
 })
