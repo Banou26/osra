@@ -1,4 +1,4 @@
-import { TypedEventTarget } from 'typescript-event-target'
+import { TypedEventTarget } from './utils/typed-event-target'
 import type { TypedArray, WebExtOnConnect, WebExtOnMessage, WebExtPort, WebExtRuntime, WebExtSender } from './utils/type-guards'
 import { DefaultRevivableModule, DefaultRevivableModules, RevivableModule } from './revivables'
 import { InferRevivables } from './revivables/utils'

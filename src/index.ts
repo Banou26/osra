@@ -29,7 +29,7 @@ import {
   DeepReplaceAsync,
   AsCapable
 } from './utils'
-import { TypedEventTarget } from 'typescript-event-target'
+import { TypedEventTarget } from './utils/typed-event-target'
 
 export * from './types'
 export * from './revivables'
@@ -150,7 +150,7 @@ export const expose = async <
       // Send announce back so the other side can also create a connection
       // (in case they missed our initial announce due to timing)
       sendMessage(transport, { type: 'announce', remoteUuid: message.uuid })
-      const eventTarget = new TypedEventTarget<MessageEventMap>()
+      const eventTarget = new EventTarget() as TypedEventTarget<MessageEventMap>
       const connectionContext = {
         type: 'bidirectional',
         eventTarget,
@@ -193,8 +193,7 @@ export const expose = async <
         return
       }
       if (connection.type !== 'unidirectional-emitting') {
-        connection.eventTarget.dispatchTypedEvent(
-          'message',
+        connection.eventTarget.dispatchEvent(
           new CustomEvent('message', { detail: message })
         )
       }

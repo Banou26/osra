@@ -1,5 +1,5 @@
 import type { StructurableTransferable } from '../types'
-import type { StrictMessageChannel, StrictMessagePort } from '../utils/message-channel'
+import type { TypedMessageChannel, TypedMessagePort } from '../utils/typed-message-channel'
 import type { RevivableContext } from './utils'
 
 import { BoxBase } from './utils'
@@ -19,7 +19,7 @@ export const box = <T extends AbortSignal, T2 extends RevivableContext>(
   value: T,
   context: T2
 ) => {
-  const { port1: localPort, port2: remotePort } = new MessageChannel() as StrictMessageChannel<StructurableTransferable, StructurableTransferable>
+  const { port1: localPort, port2: remotePort } = new MessageChannel() as TypedMessageChannel<StructurableTransferable, StructurableTransferable>
   context.messagePorts.add(remotePort as MessagePort)
 
   if (!value.aborted) {
@@ -35,7 +35,7 @@ export const box = <T extends AbortSignal, T2 extends RevivableContext>(
     localPort.close()
   }
 
-  const boxedPort = boxMessagePort(remotePort as MessagePort as StrictMessagePort<Record<string, StructurableTransferable>>, context)
+  const boxedPort = boxMessagePort(remotePort as MessagePort as TypedMessagePort<Record<string, StructurableTransferable>>, context)
 
   return {
     ...BoxBase,

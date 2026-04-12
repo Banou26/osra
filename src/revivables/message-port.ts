@@ -1,5 +1,5 @@
 import type { Capable, ConnectionMessage, Message, StructurableTransferable, Uuid } from '../types'
-import type { StrictMessagePort } from '../utils/message-channel'
+import type { TypedMessagePort } from '../utils/typed-message-channel'
 import type { RevivableContext, BoxBase as BoxBaseType, UnderlyingType } from './utils'
 
 import { BoxBase } from './utils'
@@ -33,12 +33,12 @@ export const type = 'messagePort' as const
 
 export type BoxedMessagePort<T extends StructurableTransferable = StructurableTransferable> =
   & BoxBaseType<typeof type>
-  & ({ portId: string } | { port: StrictMessagePort<T> })
-  & { [UnderlyingType]: StrictMessagePort<T> }
+  & ({ portId: string } | { port: TypedMessagePort<T> })
+  & { [UnderlyingType]: TypedMessagePort<T> }
 
 declare const StructurableTransferableError: unique symbol
 type StructurableTransferablePort<T> = T extends StructurableTransferable
-  ? StrictMessagePort<T>
+  ? TypedMessagePort<T>
   : { [StructurableTransferableError]: 'Message type must extend StructurableTransferable'; __badType__: T }
 
 type ExtractStructurableTransferable<T> = T extends StructurableTransferable ? T : never
@@ -57,7 +57,7 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
   context: T2
 ) => {
   if (isJsonOnlyTransport(context.transport)) {
-    const messagePort = value as StrictMessagePort<ExtractStructurableTransferable<T>>
+    const messagePort = value as TypedMessagePort<ExtractStructurableTransferable<T>>
     // Only generate a unique UUID, don't store the port in the allocator.
     // Storing the port would create a strong reference that prevents GC and FinalizationRegistry cleanup.
     const portId = context.messageChannels.getUniqueUuid()
@@ -126,20 +126,20 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
       type,
       portId
     }
-    return result as typeof result & { [UnderlyingType]: StrictMessagePort<ExtractStructurableTransferable<T>> }
+    return result as typeof result & { [UnderlyingType]: TypedMessagePort<ExtractStructurableTransferable<T>> }
   }
   const result = {
     ...BoxBase,
     type,
     port: value
   }
-  return result as typeof result & { [UnderlyingType]: StrictMessagePort<ExtractStructurableTransferable<T>> }
+  return result as typeof result & { [UnderlyingType]: TypedMessagePort<ExtractStructurableTransferable<T>> }
 }
 
 export const revive = <T extends StructurableTransferable, T2 extends RevivableContext>(
   value: BoxedMessagePort<T>,
   context: T2
-): StrictMessagePort<T> => {
+): TypedMessagePort<T> => {
   if ('portId' in value) {
     const { portId } = value
     const { port1: userPort, port2: internalPort } = new MessageChannel()
@@ -230,18 +230,18 @@ export const revive = <T extends StructurableTransferable, T2 extends RevivableC
     port1.addEventListener('message', port1Listener)
     port1.start()
 
-    return userPort as StrictMessagePort<T>
+    return userPort as TypedMessagePort<T>
   }
   return value.port
 }
 
 const typeCheck = () => {
-  const port = new MessageChannel().port1 as StrictMessagePort<{ foo: string }>
+  const port = new MessageChannel().port1 as TypedMessagePort<{ foo: string }>
   const boxed = box(port, {} as RevivableContext)
   const revived = revive(boxed, {} as RevivableContext)
-  const expected: StrictMessagePort<{ foo: string }> = revived
+  const expected: TypedMessagePort<{ foo: string }> = revived
   // @ts-expect-error - wrong message type
-  const wrongType: StrictMessagePort<{ bar: number }> = revived
+  const wrongType: TypedMessagePort<{ bar: number }> = revived
   // @ts-expect-error - non-StructurableTransferable message type
-  box(new MessageChannel().port1 as StrictMessagePort<Promise<string>>, {} as RevivableContext)
+  box(new MessageChannel().port1 as TypedMessagePort<Promise<string>>, {} as RevivableContext)
 }
