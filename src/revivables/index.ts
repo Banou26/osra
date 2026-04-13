@@ -1,5 +1,4 @@
 import type { BoxBase, RevivableContext } from './utils'
-export type { UnderlyingType } from './utils'
 import type { DeepReplaceWithBox, DeepReplaceWithRevive, ReplaceWithBox, ReplaceWithRevive } from '../utils/replace'
 import type { MessageFields } from '../types'
 

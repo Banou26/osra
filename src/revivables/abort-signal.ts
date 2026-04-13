@@ -1,5 +1,5 @@
 import type { StructurableTransferable } from '../types'
-import type { TypedEventChannel, TypedEventPort } from '../utils/typed-message-channel'
+import { EventChannel } from '../utils/typed-event-channel'
 import type { RevivableContext } from './utils'
 
 import { BoxBase } from './utils'
@@ -19,30 +19,23 @@ export const box = <T extends AbortSignal, T2 extends RevivableContext>(
   value: T,
   context: T2
 ) => {
-  const { port1: localPort, port2: remotePort } = new MessageChannel() as TypedEventChannel<StructurableTransferable, StructurableTransferable>
-  context.messagePorts.add(remotePort as MessagePort)
+  const { port1: localPort, port2: remotePort } = new EventChannel<AbortMessage, AbortMessage>()
 
   if (!value.aborted) {
     value.addEventListener('abort', () => {
-      const message: AbortMessage = {
-        type: 'abort',
-        reason: value.reason
-      }
-      ;(localPort as MessagePort).postMessage(message)
+      localPort.postMessage({ type: 'abort', reason: value.reason })
       localPort.close()
     }, { once: true })
   } else {
     localPort.close()
   }
 
-  const boxedPort = boxMessagePort(remotePort as MessagePort as TypedEventPort<Record<string, StructurableTransferable>>, context)
-
   return {
     ...BoxBase,
     type,
     aborted: value.aborted,
     reason: value.reason,
-    port: boxedPort as BoxedMessagePort
+    port: boxMessagePort(remotePort, context)
   }
 }
 

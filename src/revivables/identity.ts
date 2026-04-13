@@ -1,10 +1,20 @@
-import type { Capable, Message } from '../types'
-import type { RevivableContext, BoxBase as BoxBaseType, UnderlyingType } from './utils'
+import type { Capable, Message, Uuid } from '../types'
+import type { RevivableContext, BoxBase as BoxBaseType, CustomMessageEvent } from './utils'
+import type { UnderlyingType } from '../utils/type'
 
 import { BoxBase } from './utils'
 import { recursiveBox, recursiveRevive } from '.'
 
 export const type = 'identity' as const
+
+export type Messages = {
+  type: 'identity-dispose'
+  remoteUuid: Uuid
+  /** id of the identity-wrapped value that was collected */
+  id: string
+}
+
+export declare const Messages: Messages
 
 const IDENTITY_MARKER: unique symbol = Symbol.for('osra.identity')
 
@@ -97,7 +107,7 @@ const installReceiveListener = (context: RevivableContext, state: IdentityState)
   if (state.listenerInstalled) return
   state.listenerInstalled = true
   context.eventTarget.addEventListener('message', (event) => {
-    const detail = (event as CustomEvent<Message>).detail
+    const detail = (event as CustomMessageEvent).detail
     if (detail?.type === 'identity-dispose') {
       state.receiveCache.delete(detail.id)
     }

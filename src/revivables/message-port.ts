@@ -1,6 +1,7 @@
-import type { Capable, ConnectionMessage, Message, StructurableTransferable, Uuid } from '../types'
-import type { TypedEventPort } from '../utils/typed-message-channel'
-import type { RevivableContext, BoxBase as BoxBaseType, UnderlyingType } from './utils'
+import type { Capable, Message, StructurableTransferable, Uuid } from '../types'
+import type { TypedEventPort } from '../utils/typed-event-channel'
+import type { RevivableContext, BoxBase as BoxBaseType } from './utils'
+import type { UnderlyingType } from '../utils/type'
 
 import { BoxBase } from './utils'
 import { recursiveBox, recursiveRevive } from '.'
@@ -12,7 +13,7 @@ import { getTransferableObjects, isJsonOnlyTransport } from '../utils'
  * This is used in JSON-only mode where MessagePorts can't be transferred directly.
  */
 type PortCleanupInfo = {
-  sendMessage: (message: ConnectionMessage) => void
+  sendMessage: (message: Messages) => void
   remoteUuid: Uuid
   portId: string
   cleanup: () => void
@@ -30,6 +31,23 @@ const messagePortRegistry = new FinalizationRegistry<PortCleanupInfo>((info) => 
 })
 
 export const type = 'messagePort' as const
+
+export type Messages =
+  | {
+    type: 'message'
+    remoteUuid: Uuid
+    data: Capable
+    /** uuid of the messagePort that the message was sent through */
+    portId: Uuid
+  }
+  | {
+    type: 'message-port-close'
+    remoteUuid: Uuid
+    /** uuid of the messagePort that closed */
+    portId: string
+  }
+
+export declare const Messages: Messages
 
 export type BoxedMessagePort<T extends StructurableTransferable = StructurableTransferable> =
   & BoxBaseType<typeof type>
