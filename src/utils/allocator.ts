@@ -1,5 +1,5 @@
 import type { StructurableTransferable, Uuid } from '../types'
-import type { TypedMessageChannel, TypedMessagePort } from './typed-message-channel'
+import type { TypedEventChannel, TypedEventPort } from './typed-message-channel'
 
 export const makeAllocator = <T>() => {
   const channels = new Map<string, T>()
@@ -41,9 +41,9 @@ type AllocatedMessageChannel<
 > = {
   uuid: Uuid
   /** Local port */
-  port1: TypedMessagePort<T>
+  port1: TypedEventPort<T>
   /** Remote port that gets transferred, might be undefined if a remote context created the channel */
-  port2?: TypedMessagePort<T2>
+  port2?: TypedEventPort<T2>
 }
 
 export const makeMessageChannelAllocator = () => {
@@ -57,19 +57,19 @@ export const makeMessageChannelAllocator = () => {
       }
       return uuid
     },
-    set: (uuid: Uuid, messagePorts: { port1: TypedMessagePort, port2?: TypedMessagePort }) => {
+    set: (uuid: Uuid, messagePorts: { port1: TypedEventPort, port2?: TypedEventPort }) => {
       channels.set(uuid, { uuid, ...messagePorts })
     },
     alloc: (
       uuid: Uuid | undefined = result.getUniqueUuid(),
-      messagePorts?: { port1: TypedMessagePort, port2?: TypedMessagePort }
+      messagePorts?: { port1: TypedEventPort, port2?: TypedEventPort }
     ) => {
       if (messagePorts) {
         const allocatedMessageChannel = { uuid, ...messagePorts } satisfies AllocatedMessageChannel
         channels.set(uuid, allocatedMessageChannel)
         return allocatedMessageChannel
       }
-      const messageChannel = new MessageChannel() as TypedMessageChannel
+      const messageChannel = new MessageChannel() as TypedEventChannel
       const allocatedMessageChannel = {
         uuid,
         port1: messageChannel.port1,
@@ -83,7 +83,7 @@ export const makeMessageChannelAllocator = () => {
     free: (uuid: string) => channels.delete(uuid),
     getOrAlloc: (
       uuid: Uuid | undefined = result.getUniqueUuid(),
-      messagePorts?: { port1: TypedMessagePort, port2?: TypedMessagePort }
+      messagePorts?: { port1: TypedEventPort, port2?: TypedEventPort }
     ) => {
       const existingChannel = result.get(uuid)
       if (existingChannel) return existingChannel!

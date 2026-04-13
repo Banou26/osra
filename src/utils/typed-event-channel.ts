@@ -1,14 +1,14 @@
 import type { UnderlyingType } from './type'
 import type { TypedEventTarget } from './typed-event-target'
 
-export type TypedMessagePortEventMap<T = unknown> = {
+export type TypedEventPortEventMap<T = unknown> = {
   'message': MessageEvent<T>
   'messageerror': MessageEvent
 }
 
-export interface TypedMessagePort<T = unknown>
+export interface TypedEventPort<T = unknown>
   extends Omit<
-    TypedEventTarget<TypedMessagePortEventMap<T>>,
+    TypedEventTarget<TypedEventPortEventMap<T>>,
     typeof UnderlyingType
   > {
   [UnderlyingType]?: T
@@ -23,15 +23,15 @@ export interface TypedMessagePort<T = unknown>
   close(): void
 }
 
-export interface TypedMessageChannel<T1 = unknown, T2 = unknown> {
-  readonly port1: TypedMessagePort<T1>
-  readonly port2: TypedMessagePort<T2>
+export interface TypedEventChannel<T1 = unknown, T2 = unknown> {
+  readonly port1: TypedEventPort<T1>
+  readonly port2: TypedEventPort<T2>
 }
 
-export class CapableMessagePort<T> extends EventTarget {
-  addEventListener<K extends keyof TypedMessagePortEventMap<T> & string>(
+export class EventPort<T> extends EventTarget {
+  addEventListener<K extends keyof TypedEventPortEventMap<T> & string>(
     type: K,
-    listener: ((event: TypedMessagePortEventMap<T>[K]) => void) | null,
+    listener: ((event: TypedEventPortEventMap<T>[K]) => void) | null,
     options?: boolean | AddEventListenerOptions
   ): void
   addEventListener(
@@ -47,9 +47,9 @@ export class CapableMessagePort<T> extends EventTarget {
     super.addEventListener(type, listener as EventListener, options)
   }
 
-  removeEventListener<K extends keyof TypedMessagePortEventMap<T> & string>(
+  removeEventListener<K extends keyof TypedEventPortEventMap<T> & string>(
     type: K,
-    listener: ((event: TypedMessagePortEventMap<T>[K]) => void) | null,
+    listener: ((event: TypedEventPortEventMap<T>[K]) => void) | null,
     options?: boolean | EventListenerOptions
   ): void
   removeEventListener(
@@ -65,7 +65,7 @@ export class CapableMessagePort<T> extends EventTarget {
     super.removeEventListener(type, listener as EventListener, options)
   }
 
-  _peer: CapableMessagePort<any> | undefined
+  _peer: EventPort<any> | undefined
   _queue: MessageEvent<T>[] = []
   _started = false
   _closed = false
@@ -118,19 +118,19 @@ export class CapableMessagePort<T> extends EventTarget {
     this._queue.length = 0
   }
 }
-export interface CapableMessagePort<T>
+export interface EventPort<T>
   extends Omit<
-    TypedMessagePort<T>,
+    TypedEventPort<T>,
     'addEventListener' | 'removeEventListener'
   > {}
 
-export class CapableMessageChannel<T1 = unknown, T2 = unknown> {
-  readonly port1: CapableMessagePort<T1>
-  readonly port2: CapableMessagePort<T2>
+export class EventChannel<T1 = unknown, T2 = unknown> {
+  readonly port1: EventPort<T1>
+  readonly port2: EventPort<T2>
 
   constructor() {
-    const port1 = new CapableMessagePort<T1>()
-    const port2 = new CapableMessagePort<T2>()
+    const port1 = new EventPort<T1>()
+    const port2 = new EventPort<T2>()
     port1._peer = port2
     port2._peer = port1
     this.port1 = port1

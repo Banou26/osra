@@ -1,6 +1,6 @@
 import type { Capable } from '../types'
 import type { RevivableContext } from './utils'
-import type { TypedMessagePort } from '../utils/typed-message-channel'
+import type { TypedEventPort } from '../utils/typed-message-channel'
 import type { UnderlyingType } from '.'
 
 import { BoxBase } from './utils'
@@ -63,7 +63,7 @@ export const box = <T, T2 extends RevivableContext>(
   return {
     ...BoxBase,
     type,
-    port: boxMessagePort(remotePort as unknown as TypedMessagePort<string>, context)
+    port: boxMessagePort(remotePort as unknown as TypedEventPort<string>, context)
   } as unknown as BoxedPromise<ExtractCapable<T>>
 }
 

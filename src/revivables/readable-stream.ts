@@ -1,6 +1,6 @@
 import type { Capable, StructurableTransferable } from '../types'
 import type { RevivableContext } from './utils'
-import type { TypedMessageChannel, TypedMessagePort } from '../utils/typed-message-channel'
+import type { TypedEventChannel, TypedEventPort } from '../utils/typed-message-channel'
 import type { UnderlyingType } from '.'
 
 import { BoxBase } from './utils'
@@ -28,7 +28,7 @@ export const box = <T extends ReadableStream, T2 extends RevivableContext>(
   value: T,
   context: T2
 ): BoxedReadableStream<T> => {
-  const { port1: localPort, port2: remotePort } = new MessageChannel() as TypedMessageChannel<StructurableTransferable, StructurableTransferable>
+  const { port1: localPort, port2: remotePort } = new MessageChannel() as TypedEventChannel<StructurableTransferable, StructurableTransferable>
   context.messagePorts.add(remotePort as MessagePort)
 
   const reader = value.getReader()
@@ -49,7 +49,7 @@ export const box = <T extends ReadableStream, T2 extends RevivableContext>(
   return {
     ...BoxBase,
     type,
-    port: boxMessagePort(remotePort as MessagePort as TypedMessagePort<Record<string, StructurableTransferable>>, context)
+    port: boxMessagePort(remotePort as MessagePort as TypedEventPort<Record<string, StructurableTransferable>>, context)
   } as BoxedReadableStream<T>
 }
 

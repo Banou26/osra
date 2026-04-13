@@ -6,7 +6,7 @@ import type {
   Uuid
 } from '../types'
 import type { MessageChannelAllocator } from './allocator'
-import type { TypedMessagePort } from './typed-message-channel'
+import type { TypedEventPort } from './typed-message-channel'
 
 import { makeMessageChannelAllocator } from './allocator'
 import { DefaultRevivableModules, recursiveBox, recursiveRevive, RevivableModule } from '../revivables'
@@ -144,7 +144,7 @@ export const startUnidirectionalReceivingConnection = (
   {
     uuid: Uuid
     remoteUuid?: Uuid
-    eventTarget: TypedMessagePort<Message>
+    eventTarget: TypedEventPort<Message>
     close: () => void
   }
 ) => {
