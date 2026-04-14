@@ -1,4 +1,4 @@
-import type { Transport } from '../../src/types'
+import type { Transport } from '../../src'
 
 import { expose } from '../../src/index'
 
