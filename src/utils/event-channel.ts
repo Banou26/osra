@@ -1,37 +1,9 @@
-import type { UnderlyingType } from './type'
-import type { TypedEventTarget } from './typed-event-target'
-
-export type TypedEventPortEventMap<T = unknown> = {
-  'message': MessageEvent<T>
-  'messageerror': MessageEvent
-}
-
-export interface TypedEventPort<T = unknown>
-  extends Omit<
-    TypedEventTarget<TypedEventPortEventMap<T>>,
-    typeof UnderlyingType
-  > {
-  [UnderlyingType]?: T
-
-  onmessage: ((this: MessagePort, ev: MessageEvent<T>) => unknown) | null
-  onmessageerror: ((this: MessagePort, ev: MessageEvent) => unknown) | null
-
-  postMessage(message: T, transfer: Transferable[]): void
-  postMessage(message: T, options?: StructuredSerializeOptions): void
-
-  start(): void
-  close(): void
-}
-
-export interface TypedEventChannel<T1 = unknown, T2 = unknown> {
-  readonly port1: TypedEventPort<T1>
-  readonly port2: TypedEventPort<T2>
-}
+import type { TypedMessagePort, TypedMessagePortEventMap } from './typed-message-channel'
 
 export class EventPort<T> extends EventTarget {
-  addEventListener<K extends keyof TypedEventPortEventMap<T> & string>(
+  addEventListener<K extends keyof TypedMessagePortEventMap<T> & string>(
     type: K,
-    listener: ((event: TypedEventPortEventMap<T>[K]) => void) | null,
+    listener: ((event: TypedMessagePortEventMap<T>[K]) => void) | null,
     options?: boolean | AddEventListenerOptions
   ): void
   addEventListener(
@@ -47,9 +19,9 @@ export class EventPort<T> extends EventTarget {
     super.addEventListener(type, listener as EventListener, options)
   }
 
-  removeEventListener<K extends keyof TypedEventPortEventMap<T> & string>(
+  removeEventListener<K extends keyof TypedMessagePortEventMap<T> & string>(
     type: K,
-    listener: ((event: TypedEventPortEventMap<T>[K]) => void) | null,
+    listener: ((event: TypedMessagePortEventMap<T>[K]) => void) | null,
     options?: boolean | EventListenerOptions
   ): void
   removeEventListener(
@@ -118,9 +90,10 @@ export class EventPort<T> extends EventTarget {
     this._queue.length = 0
   }
 }
+
 export interface EventPort<T>
   extends Omit<
-    TypedEventPort<T>,
+    TypedMessagePort<T>,
     'addEventListener' | 'removeEventListener'
   > {}
 
