@@ -1,9 +1,10 @@
 import type {
-  CustomTransport, EmitTransport,
-  Message, MessageContext,
-  ReceiveTransport
+  Message, MessageContext
 } from '../types'
-import type { WebExtOnMessage, WebExtPort, WebExtSender } from './type-guards'
+import type {
+  WebExtOnConnect, WebExtOnMessage,
+  WebExtPort, WebExtRuntime, WebExtSender
+} from './type-guards'
 
 import { OSRA_KEY } from '../types'
 import {
@@ -11,6 +12,64 @@ import {
   isWebExtensionOnConnect, isWebExtensionOnMessage,
   isWebExtensionPort, isWebExtensionRuntime, isWebSocket, isWindow, isSharedWorker
 } from './type-guards'
+
+export type CustomTransport =
+  { isJson?: boolean }
+  & (
+    | {
+      receive: ReceivePlatformTransport | ((listener: (event: Message, messageContext: MessageContext) => void) => void)
+      emit: EmitPlatformTransport | ((message: Message, transferables?: Transferable[]) => void)
+    }
+    | { receive: ReceivePlatformTransport | ((listener: (event: Message, messageContext: MessageContext) => void) => void) }
+    | { emit: EmitPlatformTransport | ((message: Message, transferables?: Transferable[]) => void) }
+  )
+
+export type CustomEmitTransport = Extract<CustomTransport, { emit: any }>
+export type CustomReceiveTransport = Extract<CustomTransport, { receive: any }>
+
+export type EmitJsonPlatformTransport =
+  | WebSocket
+  | WebExtPort
+  | WebExtRuntime
+
+export type ReceiveJsonPlatformTransport =
+  | WebSocket
+  | WebExtPort
+  | WebExtOnConnect
+  | WebExtOnMessage
+  | WebExtRuntime
+
+export type JsonPlatformTransport =
+  | { isJson: true }
+  | EmitJsonPlatformTransport
+  | ReceiveJsonPlatformTransport
+
+export type EmitPlatformTransport =
+  | EmitJsonPlatformTransport
+  | Window
+  | ServiceWorker
+  | Worker
+  | SharedWorker
+  | MessagePort
+
+export type ReceivePlatformTransport =
+  | ReceiveJsonPlatformTransport
+  | Window
+  | ServiceWorker
+  | Worker
+  | SharedWorker
+  | MessagePort
+
+export type PlatformTransport =
+  | EmitPlatformTransport
+  | ReceivePlatformTransport
+
+export type EmitTransport = EmitPlatformTransport & Extract<CustomTransport, { emit: any }>
+export type ReceiveTransport = ReceivePlatformTransport & Extract<CustomTransport, { receive: any }>
+
+export type Transport =
+  | PlatformTransport
+  | CustomTransport
 
 export const getWebExtensionGlobal = () => globalThis.browser ?? globalThis.chrome
 export const getWebExtensionRuntime = () => getWebExtensionGlobal()?.runtime

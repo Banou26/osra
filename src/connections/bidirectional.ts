@@ -1,9 +1,9 @@
 import type {
   Capable,
   MessageEventTarget,
-  Transport,
   Uuid
 } from '../types'
+import type { Transport } from '../utils/transport'
 import type { DefaultRevivableModules, RevivableModule } from '../revivables'
 import type { DeepReplaceWithBox } from '../utils/replace'
 

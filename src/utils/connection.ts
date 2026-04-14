@@ -2,9 +2,9 @@ import type {
   Capable,
   Message,
   MessageEventTarget,
-  Transport,
   Uuid
 } from '../types'
+import type { Transport } from './transport'
 import type { ConnectionMessage } from '../connections'
 import type { MessageChannelAllocator } from './allocator'
 import type { TypedEventPort } from './typed-message-channel'

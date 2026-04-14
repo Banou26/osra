@@ -1,10 +1,5 @@
-import type {
-  WebExtOnConnect,
-  WebExtOnMessage,
-  WebExtPort,
-  WebExtRuntime,
-  WebExtSender
-} from './utils/type-guards'
+import type { WebExtPort, WebExtSender } from './utils/type-guards'
+import type { ReceivePlatformTransport } from './utils/transport'
 
 import type { ConnectionMessage } from './connections'
 
@@ -120,61 +115,3 @@ export type MessageEventMap<
 export type MessageEventTarget<
   TModules extends readonly RevivableModule[] = DefaultRevivableModules
 > = TypedEventTarget<MessageEventMap<TModules>>
-
-export type CustomTransport =
-  { isJson?: boolean }
-  & (
-    | {
-      receive: ReceivePlatformTransport | ((listener: (event: Message, messageContext: MessageContext) => void) => void)
-      emit: EmitPlatformTransport | ((message: Message, transferables?: Transferable[]) => void)
-    }
-    | { receive: ReceivePlatformTransport | ((listener: (event: Message, messageContext: MessageContext) => void) => void) }
-    | { emit: EmitPlatformTransport | ((message: Message, transferables?: Transferable[]) => void) }
-  )
-
-export type CustomEmitTransport = Extract<CustomTransport, { emit: any }>
-export type CustomReceiveTransport = Extract<CustomTransport, { receive: any }>
-
-export type EmitJsonPlatformTransport =
-  | WebSocket
-  | WebExtPort
-  | WebExtRuntime
-
-export type ReceiveJsonPlatformTransport =
-  | WebSocket
-  | WebExtPort
-  | WebExtOnConnect
-  | WebExtOnMessage
-  | WebExtRuntime
-
-export type JsonPlatformTransport =
-  | { isJson: true }
-  | EmitJsonPlatformTransport
-  | ReceiveJsonPlatformTransport
-
-export type EmitPlatformTransport =
-  | EmitJsonPlatformTransport
-  | Window
-  | ServiceWorker
-  | Worker
-  | SharedWorker
-  | MessagePort
-
-export type ReceivePlatformTransport =
-  | ReceiveJsonPlatformTransport
-  | Window
-  | ServiceWorker
-  | Worker
-  | SharedWorker
-  | MessagePort
-
-export type PlatformTransport =
-  | EmitPlatformTransport
-  | ReceivePlatformTransport
-
-export type EmitTransport = EmitPlatformTransport & Extract<CustomTransport, { emit: any }>
-export type ReceiveTransport = ReceivePlatformTransport & Extract<CustomTransport, { receive: any }>
-
-export type Transport =
-  | PlatformTransport
-  | CustomTransport

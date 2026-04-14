@@ -1,14 +1,15 @@
 import type { Runtime } from 'webextension-polyfill'
+import type { Message } from '../types'
 import type {
   CustomEmitTransport, CustomReceiveTransport,
   CustomTransport, EmitJsonPlatformTransport,
   EmitTransport, JsonPlatformTransport,
-  Message, ReceiveJsonPlatformTransport,
+  ReceiveJsonPlatformTransport,
   ReceiveTransport, Transport
-} from '../types'
+} from './transport'
 
 import { OSRA_KEY } from '../types'
-import { getWebExtensionRuntime } from './platform'
+import { getWebExtensionRuntime } from './transport'
 
 const typedArrayConstructors = [
   Int8Array,

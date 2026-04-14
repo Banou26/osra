@@ -2,9 +2,9 @@ import type { DefaultRevivableModules, RevivableModule } from '.'
 import type {
   Message,
   MessageEventTarget,
-  Transport,
   Uuid
 } from '../types'
+import type { Transport } from '../utils/transport'
 
 import { OSRA_BOX } from '../types'
 

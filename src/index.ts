@@ -1,9 +1,10 @@
 import type {
-  EmitTransport, Message,
+  Message,
   MessageContext, MessageVariant,
-  Capable, Transport,
+  Capable,
   MessageEventMap
 } from './types'
+import type { EmitTransport, Transport } from './utils/transport'
 import type {
   ConnectionContext,
   BidirectionalConnectionContext
