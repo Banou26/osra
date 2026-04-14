@@ -44,10 +44,8 @@ export type {
 declare const ErrorMessage: unique symbol
 declare const BadValueType: unique symbol
 type CapableCheck<T> =
-  T extends infer U
-    ? U extends Capable
-      ? T
-      : { [ErrorMessage]: 'Value type must resolve to a Capable'; [BadValueType]: U }
+  T extends Capable
+    ? T
     : { [ErrorMessage]: 'Value type must resolve to a Capable'; [BadValueType]: T }
 
 /**
@@ -60,11 +58,11 @@ type CapableCheck<T> =
  * - JSON mode
  */
 export const expose = async <
-  T,
-  T2 extends CapableCheck<T>,
+  T = unknown,
+  const TValue = Capable,
   const TUserModules extends readonly RevivableModule[] = readonly RevivableModule[]
 >(
-  value: T2,
+  value: CapableCheck<TValue>,
   {
     transport: _transport,
     name,
@@ -84,7 +82,7 @@ export const expose = async <
     logger?: {}
     revivableModules?: TUserModules
   }
-): Promise<T2> => {
+): Promise<T> => {
   const transport = {
     isJson:
       'isJson' in _transport && _transport.isJson !== undefined
@@ -108,9 +106,9 @@ export const expose = async <
   ] as const
   const connectionContexts = new Map<string, ConnectionContext<typeof mergedRevivableModules>>()
 
-  const { promise, resolve } = Promise.withResolvers<T2>()
-  let resolveRemoteValue: (connection: T2) => void
-  const remoteValuePromise = new Promise<T2>((resolve) => {
+  const { promise, resolve } = Promise.withResolvers<T>()
+  let resolveRemoteValue: (connection: T) => void
+  const remoteValuePromise = new Promise<T>((resolve) => {
     resolveRemoteValue = resolve
   })
 
@@ -167,7 +165,7 @@ export const expose = async <
         type: 'bidirectional',
         eventTarget,
         connection:
-          startBidirectionalConnection<T2, typeof mergedRevivableModules>({
+          startBidirectionalConnection<Capable, typeof mergedRevivableModules>({
             transport,
             value,
             uuid,
@@ -180,7 +178,7 @@ export const expose = async <
       } satisfies BidirectionalConnectionContext<typeof mergedRevivableModules>
       connectionContexts.set(message.uuid, connectionContext)
       connectionContext.connection.remoteValue.then((remoteValue) =>
-        resolveRemoteValue(remoteValue as T2)
+        resolveRemoteValue(remoteValue as T)
       )
     } else if (message.type === 'reject-uuid-taken') {
       if (message.remoteUuid !== uuid) return
@@ -228,7 +226,7 @@ export const expose = async <
 
   // Unidirectional emitting mode
   if (isEmitTransport(transport) && !isReceiveTransport(transport)) {
-    const { remoteValueProxy } = startUnidirectionalEmittingConnection<T2>({
+    const { remoteValueProxy } = startUnidirectionalEmittingConnection<Capable>({
       value,
       uuid,
       send: (message: MessageVariant) => sendMessage(transport, message),
