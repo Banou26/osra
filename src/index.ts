@@ -94,7 +94,7 @@ export const expose = async <
     ),
     ...userRevivableModules,
   ] as const
-  const connectionContexts = new Map<string, ConnectionContext>()
+  const connectionContexts = new Map<string, ConnectionContext<typeof mergedRevivableModules>>()
 
   let resolveRemoteValue: (connection: T) => void
   const remoteValuePromise = new Promise<T>((resolve) => {
@@ -149,12 +149,12 @@ export const expose = async <
       // Send announce back so the other side can also create a connection
       // (in case they missed our initial announce due to timing)
       sendMessage(transport, { type: 'announce', remoteUuid: message.uuid })
-      const eventTarget = new EventTarget() as TypedEventTarget<MessageEventMap>
+      const eventTarget = new EventTarget() as TypedEventTarget<MessageEventMap<typeof mergedRevivableModules>>
       const connectionContext = {
         type: 'bidirectional',
         eventTarget,
         connection:
-          startBidirectionalConnection({
+          startBidirectionalConnection<T, typeof mergedRevivableModules>({
             transport,
             value,
             uuid,
@@ -164,7 +164,7 @@ export const expose = async <
             close: () => void connectionContexts.delete(message.uuid),
             revivableModules: mergedRevivableModules
           })
-      } satisfies BidirectionalConnectionContext
+      } satisfies BidirectionalConnectionContext<typeof mergedRevivableModules>
       connectionContexts.set(message.uuid, connectionContext)
       connectionContext.connection.remoteValue.then((remoteValue) =>
         resolveRemoteValue(remoteValue as T)

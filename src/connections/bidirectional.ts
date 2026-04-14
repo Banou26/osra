@@ -1,17 +1,19 @@
 import type {
   Capable,
-  ConnectionMessage,
   MessageEventTarget,
   Transport,
   Uuid
 } from '../types'
 import type { DefaultRevivableModules, RevivableModule } from '../revivables'
+import type { DeepReplaceWithBox } from '../utils/replace'
 
 import { recursiveBox, recursiveRevive } from '../revivables'
 
-export type BidirectionalConnectionContext = {
+export type BidirectionalConnectionContext<
+  TModules extends readonly RevivableModule[] = DefaultRevivableModules
+> = {
   type: 'bidirectional'
-  eventTarget: MessageEventTarget
+  eventTarget: MessageEventTarget<TModules>
   connection: BidirectionalConnection
 }
 
@@ -21,7 +23,7 @@ export type InitMessage<
 > = {
   type: 'init'
   remoteUuid: Uuid
-  data: T
+  data: DeepReplaceWithBox<T, TModules[number]>
 }
 
 export type Messages<
@@ -30,17 +32,19 @@ export type Messages<
 > =
   | InitMessage<TModules, T>
 
-export type ConnectionContext =
-  | BidirectionalConnectionContext
+export type ConnectionContext<
+  TModules extends readonly RevivableModule[] = DefaultRevivableModules
+> =
+  | BidirectionalConnectionContext<TModules>
 
 export type ConnectionRevivableContext<
   TModules extends readonly RevivableModule[] = DefaultRevivableModules
 > = {
   transport: Transport
   remoteUuid: Uuid
-  sendMessage: (message: ConnectionMessage) => void
+  sendMessage: (message: Messages<TModules>) => void
   revivableModules: TModules
-  eventTarget: MessageEventTarget
+  eventTarget: MessageEventTarget<TModules>
 }
 
 // export type BidirectionalConnection<T extends Capable = Capable> = {
@@ -56,11 +60,11 @@ export const startBidirectionalConnection = <
   { transport, value, remoteUuid, eventTarget, send, revivableModules }:
   {
     transport: Transport
-    value: Capable
+    value: Capable<TModules>
     uuid: Uuid
     remoteUuid: Uuid
-    eventTarget: MessageEventTarget
-    send: (message: ConnectionMessage) => void
+    eventTarget: MessageEventTarget<TModules>
+    send: (message: Messages<TModules>) => void
     close: () => void
     revivableModules: TModules
   }
@@ -80,9 +84,10 @@ export const startBidirectionalConnection = <
   const { promise, resolve } = Promise.withResolvers<InitMessage<TModules>['data']>()
 
   eventTarget.addEventListener('message', function listener ({ detail }) {
-    if (detail.type !== 'init') return
-    resolve(detail.data)
-    eventTarget.removeEventListener('message', listener)
+    if (detail.type === 'init') {
+      resolve(detail.data)
+      eventTarget.removeEventListener('message', listener)
+    }
   })
 
   send({
@@ -102,3 +107,5 @@ export const startBidirectionalConnection = <
         )
   }
 }
+
+export type BidirectionalConnection = ReturnType<typeof startBidirectionalConnection>

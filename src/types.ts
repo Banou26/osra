@@ -6,8 +6,10 @@ import type {
   WebExtSender
 } from './utils/type-guards'
 
+import type { ConnectionMessage } from './connections'
+
 import { DefaultRevivableModules, RevivableModule } from './revivables'
-import { InferRevivables } from './revivables/utils'
+import { InferMessages, InferRevivables } from './revivables/utils'
 import { TypedEventTarget } from './utils'
 
 export const OSRA_KEY = '__OSRA_KEY__' as const
@@ -88,26 +90,18 @@ export type ProtocolMessage =
     remoteUuid: Uuid
   }
 
-export type BidirectionalConnectionMessage =
-  | {
-    type: 'init'
-    remoteUuid: Uuid
-    data: Capable
-  }
-
-export type UnidirectionalConnectionMessage = unknown
-
-export type ConnectionMessage =
-  | BidirectionalConnectionMessage
-  // | UnidirectionalConnectionMessage
-
-export type MessageVariant =
+export type MessageVariant<
+  TModules extends readonly RevivableModule[] = DefaultRevivableModules
+> =
   | ProtocolMessage
-  | ConnectionMessage
+  | ConnectionMessage<TModules>
+  | InferMessages<TModules>
 
-export type Message =
-  | MessageBase
-  & MessageVariant
+export type Message<
+  TModules extends readonly RevivableModule[] = DefaultRevivableModules
+> =
+  & MessageBase
+  & MessageVariant<TModules>
 
 export type MessageContext = {
   port?: MessagePort | WebExtPort // WebExtension
@@ -116,11 +110,15 @@ export type MessageContext = {
   source?: MessageEventSource | null // Window, Worker, WebSocket, ect...
 }
 
-export type MessageEventMap = {
-  message: CustomEvent<Message>
+export type MessageEventMap<
+  TModules extends readonly RevivableModule[] = DefaultRevivableModules
+> = {
+  message: CustomEvent<Message<TModules>>
 }
 
-export type MessageEventTarget = TypedEventTarget<MessageEventMap>
+export type MessageEventTarget<
+  TModules extends readonly RevivableModule[] = DefaultRevivableModules
+> = TypedEventTarget<MessageEventMap<TModules>>
 
 export type CustomTransport =
   { isJson?: boolean }
