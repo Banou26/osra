@@ -1,16 +1,16 @@
 import type {
   EmitTransport, Message,
   MessageContext, MessageVariant,
-  Capable, Transport,
-  MessageEventMap
+  Capable, Transport
 } from './types'
 export type { UnderlyingType } from './revivables/utils'
 import type {
   ConnectionContext,
   BidirectionalConnectionContext
 } from './utils'
+import type { RevivablesMessageEventMap } from './revivables/utils'
 
-import type { RevivableModule } from './revivables'
+import type { RevivableModule, InferMessages } from './revivables'
 
 import { OSRA_DEFAULT_KEY, OSRA_KEY } from './types'
 import { defaultRevivableModules } from './revivables'
@@ -95,7 +95,9 @@ export const expose = async <
     ),
     ...userRevivableModules,
   ] as const
-  const connectionContexts = new Map<string, ConnectionContext>()
+  type MergedModules = typeof mergedRevivableModules
+  type SendableMessage = MessageVariant | InferMessages<MergedModules>
+  const connectionContexts = new Map<string, ConnectionContext<MergedModules>>()
 
   let resolveRemoteValue: (connection: T) => void
   const remoteValuePromise = new Promise<T>((resolve) => {
@@ -112,7 +114,7 @@ export const expose = async <
     })
   }
 
-  const sendMessage = (transport: EmitTransport, message: MessageVariant) => {
+  const sendMessage = (transport: EmitTransport, message: SendableMessage) => {
     if (aborted) return
     const transferables = getTransferableObjects(message)
     sendOsraMessage(
@@ -121,8 +123,8 @@ export const expose = async <
         [OSRA_KEY]: key,
         name,
         uuid,
-        ...message
-      },
+        ...(message as object)
+      } as Message,
       origin,
       transferables
     )
@@ -150,22 +152,23 @@ export const expose = async <
       // Send announce back so the other side can also create a connection
       // (in case they missed our initial announce due to timing)
       sendMessage(transport, { type: 'announce', remoteUuid: message.uuid })
-      const eventTarget = new EventTarget() as TypedEventTarget<MessageEventMap>
+      const eventTarget = new TypedEventTarget<RevivablesMessageEventMap<MergedModules>>()
       const connectionContext = {
         type: 'bidirectional',
         eventTarget,
         connection:
-          startBidirectionalConnection({
+          startBidirectionalConnection<T, MergedModules>({
             transport,
             value,
             uuid,
             remoteUuid: message.uuid,
             eventTarget,
-            send: (message: MessageVariant) => sendMessage(transport, message),
+            send: (message: SendableMessage) => sendMessage(transport, message),
             close: () => void connectionContexts.delete(message.uuid),
-            revivableModules: mergedRevivableModules
+            revivableModules: mergedRevivableModules,
+            unregisterSignal,
           })
-      } satisfies BidirectionalConnectionContext
+      } satisfies BidirectionalConnectionContext<MergedModules>
       connectionContexts.set(message.uuid, connectionContext)
       connectionContext.connection.remoteValue.then((remoteValue) =>
         resolveRemoteValue(remoteValue as T)
@@ -184,7 +187,7 @@ export const expose = async <
       }
       connectionContext.connection.close()
       connectionContexts.delete(message.uuid)
-    } else { //  "init" | "message" | "message-port-close"
+    } else { // 'init' + module-owned message types (dispatched via event target)
       if (message.remoteUuid !== uuid) return
       const connection = connectionContexts.get(message.uuid)
       // We just drop the message if the remote uuid hasn't announced itself

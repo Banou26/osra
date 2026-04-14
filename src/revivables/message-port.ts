@@ -1,18 +1,83 @@
-import type { Capable, ConnectionMessage, Message, StructurableTransferable, Uuid } from '../types'
+import type { Capable, StructurableTransferable, Uuid } from '../types'
 import type { TypedMessagePort } from '../utils/typed-message-channel'
-import type { RevivableContext, BoxBase as BoxBaseType, UnderlyingType } from './utils'
+import type { MessageChannelAllocator } from '../utils'
+import type { CustomMessageEvent, RevivableContext, BoxBase as BoxBaseType, UnderlyingType } from './utils'
 
 import { BoxBase } from './utils'
 import { recursiveBox, recursiveRevive } from '.'
 import { OSRA_BOX } from '../types'
-import { getTransferableObjects, isJsonOnlyTransport } from '../utils'
+import { getTransferableObjects, isJsonOnlyTransport, makeMessageChannelAllocator } from '../utils'
+
+/**
+ * Wire messages owned by this module. Flow through `context.sendMessage` and
+ * are dispatched via the shared connection event target.
+ */
+export type Messages =
+  | {
+    type: 'message'
+    remoteUuid: Uuid
+    data: Capable
+    /** uuid of the messagePort that the message was sent through */
+    portId: Uuid
+  }
+  | {
+    type: 'message-port-close'
+    remoteUuid: Uuid
+    /** uuid of the messagePort that closed */
+    portId: string
+  }
+
+export declare const Messages: Messages
+
+/**
+ * Per-connection state. Lives in a module-local WeakMap keyed by the
+ * RevivableContext — keeps message-port internals out of the shared context.
+ */
+type ConnectionState = {
+  messageChannels: MessageChannelAllocator
+}
+
+const connectionStateMap = new WeakMap<RevivableContext, ConnectionState>()
+
+const getState = (context: RevivableContext): ConnectionState => {
+  const existing = connectionStateMap.get(context)
+  if (existing) return existing
+  const state: ConnectionState = {
+    messageChannels: makeMessageChannelAllocator(),
+  }
+  connectionStateMap.set(context, state)
+  return state
+}
+
+/**
+ * Wire up this module's dispatcher on the connection. Routes incoming
+ * 'message' wire events to the per-portId allocator channel so each
+ * box/revive only pays O(1) listener cost.
+ */
+export const init = (context: RevivableContext) => {
+  const state = getState(context)
+  const listener = (event: Event) => {
+    const { detail } = event as CustomMessageEvent
+    if (detail.type === 'message') {
+      const portId = (detail as Messages & { type: 'message' }).portId
+      const messageChannel = state.messageChannels.getOrAlloc(portId)
+      const transferables = getTransferableObjects(detail)
+      ;(messageChannel.port2 as MessagePort)?.postMessage(detail, { transfer: transferables })
+    }
+  }
+  context.eventTarget.addEventListener('message', listener)
+  context.unregisterSignal?.addEventListener('abort', () => {
+    context.eventTarget.removeEventListener('message', listener)
+    connectionStateMap.delete(context)
+  }, { once: true })
+}
 
 /**
  * FinalizationRegistry for automatically cleaning up MessagePorts when they are garbage collected.
  * This is used in JSON-only mode where MessagePorts can't be transferred directly.
  */
 type PortCleanupInfo = {
-  sendMessage: (message: ConnectionMessage) => void
+  sendMessage: (message: Messages) => void
   remoteUuid: Uuid
   portId: string
   cleanup: () => void
@@ -60,7 +125,7 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
     const messagePort = value as TypedMessagePort<ExtractStructurableTransferable<T>>
     // Only generate a unique UUID, don't store the port in the allocator.
     // Storing the port would create a strong reference that prevents GC and FinalizationRegistry cleanup.
-    const portId = context.messageChannels.getUniqueUuid()
+    const portId = getState(context).messageChannels.getUniqueUuid()
 
     // Use WeakRef to allow messagePort to be garbage collected.
     // The eventTargetListener would otherwise hold a strong reference preventing GC.
@@ -68,10 +133,11 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
 
     // The ReceiveTransport received a message from the other side so we call it on our own side's MessagePort after reviving it
     // Define listener before registering with FinalizationRegistry so we can remove it in cleanup
-    const eventTargetListener = ({ detail: message }: CustomEvent<Message>) => {
+    const eventTargetListener = (event: Event) => {
+      const { detail: message } = event as CustomMessageEvent
       if (message.type === 'message-port-close') {
         if (message.portId !== portId) return
-        context.messageChannels.free(portId)
+        getState(context).messageChannels.free(portId)
         const port = messagePortRef.deref()
         if (port) {
           // Unregister from FinalizationRegistry to prevent double-close
@@ -109,7 +175,7 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
       remoteUuid: context.remoteUuid,
       portId,
       cleanup: () => {
-        context.messageChannels.free(portId)
+        getState(context).messageChannels.free(portId)
         context.eventTarget.removeEventListener('message', eventTargetListener)
         messagePortRef.deref()?.removeEventListener('message', messagePortListener)
         messagePortRef.deref()?.close()
@@ -144,16 +210,17 @@ export const revive = <T extends StructurableTransferable, T2 extends RevivableC
     const { portId } = value
     const { port1: userPort, port2: internalPort } = new MessageChannel()
 
-    const existingChannel = context.messageChannels.get(value.portId)
+    const existingChannel = getState(context).messageChannels.get(value.portId)
     const { port1 } =
       existingChannel
         ? existingChannel
-        : context.messageChannels.alloc(value.portId as Uuid)
+        : getState(context).messageChannels.alloc(value.portId as Uuid)
 
     const userPortRef = new WeakRef(userPort)
 
     // Define all listeners before registering so they can be removed in cleanup
-    const eventTargetListener = ({ detail: message }: CustomEvent<Message>) => {
+    const eventTargetListener = (event: Event) => {
+      const { detail: message } = event as CustomMessageEvent
       if (message.type !== 'message-port-close' || message.portId !== portId) return
       const port = userPortRef.deref()
       if (port) {
@@ -201,14 +268,14 @@ export const revive = <T extends StructurableTransferable, T2 extends RevivableC
       internalPort.close()
       // Close the allocator's MessageChannel ports before freeing
       // The allocator creates a MessageChannel with port1 and port2 - both must be closed
-      const allocatedChannel = context.messageChannels.get(portId)
+      const allocatedChannel = getState(context).messageChannels.get(portId)
       if (allocatedChannel) {
         allocatedChannel.port1.close()
         if (allocatedChannel.port2) {
           allocatedChannel.port2.close()
         }
       }
-      context.messageChannels.free(portId)
+      getState(context).messageChannels.free(portId)
     }
 
     // Register the userPort for automatic cleanup when garbage collected

@@ -1,5 +1,5 @@
-import type { BoxBase, RevivableContext } from './utils'
-export type { UnderlyingType } from './utils'
+import type { BoxBase, RevivableContext, MessageFields } from './utils'
+export type { UnderlyingType, MessageFields } from './utils'
 import type { DeepReplaceWithBox, DeepReplaceWithRevive, ReplaceWithBox, ReplaceWithRevive } from '../utils/replace'
 
 import { Capable } from '../types'
@@ -24,12 +24,30 @@ export { transfer } from './transfer'
 
 export * from './utils'
 
-export type RevivableModule<T extends string = string, T2 = any, T3 extends BoxBase<T> = any> = {
+export type RevivableModule<
+  T extends string = string,
+  T2 = any,
+  T3 extends BoxBase<T> = any,
+  T4 extends MessageFields = MessageFields
+> = {
   readonly type: T
   readonly isType: (value: unknown) => value is T2
   readonly box: ((value: T2, context: RevivableContext) => T3) | ((...args: any[]) => any)
   readonly revive: (value: T3, context: RevivableContext) => T2
+  readonly init?: (context: RevivableContext) => void
+  readonly Messages?: T4
 }
+
+/**
+ * Extract the Messages type from a revivable module, or never if it doesn't have one.
+ */
+export type ExtractMessages<T> = T extends { Messages: infer M } ? M : never
+
+/**
+ * Infer the union of all Messages types from an array of revivable modules.
+ */
+export type InferMessages<TModules extends readonly RevivableModule[]> =
+  ExtractMessages<TModules[number]>
 
 export const defaultRevivableModules = [
   transfer,

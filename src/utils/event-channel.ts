@@ -1,42 +1,9 @@
 import type { TypedMessagePort, TypedMessagePortEventMap } from './typed-message-channel'
+import type { UnderlyingType } from './type'
 
-export class EventChannelPort<T> extends EventTarget {
-  addEventListener<K extends keyof TypedMessagePortEventMap<T> & string>(
-    type: K,
-    listener: ((event: TypedMessagePortEventMap<T>[K]) => void) | null,
-    options?: boolean | AddEventListenerOptions
-  ): void
-  addEventListener(
-    type: string,
-    listener: EventListenerOrEventListenerObject | null,
-    options?: boolean | AddEventListenerOptions
-  ): void
-  addEventListener(
-    type: string,
-    listener: ((event: any) => void) | EventListenerOrEventListenerObject | null,
-    options?: boolean | AddEventListenerOptions
-  ): void {
-    super.addEventListener(type, listener as EventListener, options)
-  }
+import { TypedEventTarget } from './typed-event-target'
 
-  removeEventListener<K extends keyof TypedMessagePortEventMap<T> & string>(
-    type: K,
-    listener: ((event: TypedMessagePortEventMap<T>[K]) => void) | null,
-    options?: boolean | EventListenerOptions
-  ): void
-  removeEventListener(
-    type: string,
-    listener: EventListenerOrEventListenerObject | null,
-    options?: boolean | EventListenerOptions
-  ): void
-  removeEventListener(
-    type: string,
-    listener: ((event: any) => void) | EventListenerOrEventListenerObject | null,
-    options?: boolean | EventListenerOptions
-  ): void {
-    super.removeEventListener(type, listener as EventListener, options)
-  }
-
+export class EventChannelPort<T> extends TypedEventTarget<TypedMessagePortEventMap<T>> {
   _peer: EventChannelPort<any> | undefined
   _queue: MessageEvent<T>[] = []
   _started = false
@@ -93,7 +60,7 @@ export class EventChannelPort<T> extends EventTarget {
 export interface EventChannelPort<T>
   extends Omit<
     TypedMessagePort<T>,
-    'addEventListener' | 'removeEventListener'
+    'addEventListener' | 'removeEventListener' | typeof UnderlyingType
   > {}
 
 export class EventChannel<T1 = unknown, T2 = unknown> {

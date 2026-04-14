@@ -1,6 +1,6 @@
-import type { DefaultRevivableModules, RevivableModule } from '.'
-import type { ConnectionMessage, MessageEventTarget, Transport, Uuid } from '../types'
-import type { MessageChannelAllocator } from '../utils'
+import type { DefaultRevivableModules, InferMessages, RevivableModule } from '.'
+import type { Message, MessageVariant, Transport, Uuid } from '../types'
+import type { TypedEventTarget } from '../utils/typed-event-target'
 
 import { OSRA_BOX } from '../types'
 
@@ -16,14 +16,37 @@ export type BoxBase<T extends string = string> =
   & typeof BoxBase
   & { type: T }
 
+/**
+ * Base constraint for module-owned wire messages.
+ * Modules that send messages declare `export type Messages` extending this.
+ */
+export type MessageFields = { type: string; remoteUuid: Uuid }
+
+/**
+ * CustomEvent detail for the connection's shared event target.
+ * Parameterized by active modules so the union reflects available messages.
+ */
+export type CustomMessageEvent<TModules extends readonly RevivableModule[] = DefaultRevivableModules> =
+  CustomEvent<Message | InferMessages<TModules>>
+
+/**
+ * Event map for the connection's typed event target.
+ */
+export type RevivablesMessageEventMap<TModules extends readonly RevivableModule[] = DefaultRevivableModules> = {
+  message: CustomMessageEvent<TModules>
+}
+
+export type RevivablesMessageEventTarget<TModules extends readonly RevivableModule[] = DefaultRevivableModules> =
+  TypedEventTarget<RevivablesMessageEventMap<TModules>>
+
 export type RevivableContext<TModules extends readonly RevivableModule[] = DefaultRevivableModules> = {
   transport: Transport
   remoteUuid: Uuid
   messagePorts: Set<MessagePort>
-  messageChannels: MessageChannelAllocator
-  sendMessage: (message: ConnectionMessage) => void
+  sendMessage: (message: MessageVariant | InferMessages<TModules>) => void
   revivableModules: TModules
-  eventTarget: MessageEventTarget
+  eventTarget: RevivablesMessageEventTarget<TModules>
+  unregisterSignal?: AbortSignal
 }
 
 export type ExtractModule<T> = T extends { isType: (value: unknown) => value is infer S } ? S : never

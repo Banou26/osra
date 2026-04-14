@@ -76,42 +76,22 @@ export type ProtocolMessage =
     remoteUuid: Uuid
   }
 
-export type BidirectionalConnectionMessage =
-  | {
-    type: 'init'
-    remoteUuid: Uuid
-    data: Capable
-  }
-  /** message not needed if transferring MessagePort is supported */
-  | {
-    type: 'message'
-    remoteUuid: Uuid
-    data: Capable
-    /** uuid of the messagePort that the message was sent through */
-    portId: Uuid
-  }
-  /** message not needed if transferring MessagePort is supported */
-  | {
-    type: 'message-port-close'
-    remoteUuid: Uuid
-    /** uuid of the messagePort that closed */
-    portId: string
-  }
-  /** identity-wrapped value was garbage collected on the sender — drop the
-   *  receiver-side cached revived value so both sides converge. */
-  | {
-    type: 'identity-dispose'
-    remoteUuid: Uuid
-    /** id of the identity-wrapped value that was collected */
-    id: string
-  }
-
-export type UnidirectionalConnectionMessage = {
-  type: 'message'
+/**
+ * Core bidirectional connection messages. Module-specific messages
+ * (like 'message', 'message-port-close', 'identity-dispose') are now
+ * defined in their respective revivable modules via `Messages` type.
+ */
+export type BidirectionalConnectionMessage = {
+  type: 'init'
   remoteUuid: Uuid
   data: Capable
-  portId: Uuid
 }
+
+/**
+ * Unidirectional connection messages. The 'message' type with portId
+ * is now defined in the message-port revivable module.
+ */
+export type UnidirectionalConnectionMessage = never
 
 export type ConnectionMessage =
   | BidirectionalConnectionMessage

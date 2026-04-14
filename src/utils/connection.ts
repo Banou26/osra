@@ -1,91 +1,91 @@
 import type {
-  Capable, ConnectionMessage,
+  Capable,
   Message,
-  MessageEventTarget,
+  MessageVariant,
   Transport,
   Uuid
 } from '../types'
-import type { MessageChannelAllocator } from './allocator'
 import type { TypedMessagePort } from './typed-message-channel'
+import type {
+  RevivablesMessageEventTarget,
+  RevivableContext,
+  InferMessages
+} from '../revivables'
 
-import { makeMessageChannelAllocator } from './allocator'
 import { DefaultRevivableModules, recursiveBox, recursiveRevive, RevivableModule } from '../revivables'
-import { getTransferableObjects } from './transferable'
 
-export type BidirectionalConnectionContext = {
+export type BidirectionalConnectionContext<TModules extends readonly RevivableModule[] = DefaultRevivableModules> = {
   type: 'bidirectional'
-  eventTarget: MessageEventTarget
+  eventTarget: RevivablesMessageEventTarget<TModules>
   connection: BidirectionalConnection
 }
 export type UnidirectionalEmittingConnectionContext = {
   type: 'unidirectional-emitting'
   connection: UnidirectionalEmittingConnection
 }
-export type UnidirectionalReceivingConnectionContext = {
+export type UnidirectionalReceivingConnectionContext<TModules extends readonly RevivableModule[] = DefaultRevivableModules> = {
   type: 'unidirectional-receiving'
-  eventTarget: MessageEventTarget
+  eventTarget: RevivablesMessageEventTarget<TModules>
   connection: UnidirectionalReceivingConnection
 }
 
-export type ConnectionContext =
-  | BidirectionalConnectionContext
+export type ConnectionContext<TModules extends readonly RevivableModule[] = DefaultRevivableModules> =
+  | BidirectionalConnectionContext<TModules>
   | UnidirectionalEmittingConnectionContext
-  | UnidirectionalReceivingConnectionContext
+  | UnidirectionalReceivingConnectionContext<TModules>
 
-export type ConnectionRevivableContext<TModules extends readonly RevivableModule[] = DefaultRevivableModules> = {
-  transport: Transport
-  remoteUuid: Uuid
-  messagePorts: Set<MessagePort>
-  messageChannels: MessageChannelAllocator
-  sendMessage: (message: ConnectionMessage) => void
-  revivableModules: TModules
-  eventTarget: MessageEventTarget
-}
+/**
+ * @deprecated Use RevivableContext from '../revivables' instead
+ */
+export type ConnectionRevivableContext<TModules extends readonly RevivableModule[] = DefaultRevivableModules> =
+  RevivableContext<TModules>
 
 export type BidirectionalConnection<T extends Capable = Capable> = {
-  revivableContext: ConnectionRevivableContext<readonly RevivableModule[]>
+  revivableContext: RevivableContext<readonly RevivableModule[]>
   close: () => void
   remoteValue: Promise<T>
 }
+
+type SendableMessage<TModules extends readonly RevivableModule[]> =
+  MessageVariant | InferMessages<TModules>
 
 export const startBidirectionalConnection = <
   T extends Capable,
   TModules extends readonly RevivableModule[] = DefaultRevivableModules
 >(
-  { transport, value, uuid, remoteUuid, eventTarget, send, close, revivableModules }:
+  { transport, value, uuid, remoteUuid, eventTarget, send, close, revivableModules, unregisterSignal }:
   {
     transport: Transport
     value: Capable
     uuid: Uuid
     remoteUuid: Uuid
-    eventTarget: MessageEventTarget
-    send: (message: ConnectionMessage) => void
+    eventTarget: RevivablesMessageEventTarget<TModules>
+    send: (message: SendableMessage<TModules>) => void
     close: () => void
     revivableModules: TModules
+    unregisterSignal?: AbortSignal
   }
 ) => {
-  const revivableContext = {
+  const revivableContext: RevivableContext<TModules> = {
     transport,
     remoteUuid,
     messagePorts: new Set(),
-    messageChannels: makeMessageChannelAllocator(),
     sendMessage: send,
     eventTarget,
-    revivableModules
-  } satisfies ConnectionRevivableContext<TModules>
-  let initResolve: ((message: ConnectionMessage & { type: 'init' }) => void)
-  const initMessage = new Promise<ConnectionMessage & { type: 'init' }>((resolve, reject) => {
-    initResolve = resolve
-  })
+    revivableModules,
+    unregisterSignal,
+  }
+  type InitMessage = { type: 'init'; remoteUuid: Uuid; data: Capable }
+  const { promise: initMessage, resolve: initResolve } = Promise.withResolvers<InitMessage>()
 
-  eventTarget.addEventListener('message', ({ detail }) => {
+  for (const module of revivableModules) {
+    module.init?.(revivableContext as unknown as RevivableContext)
+  }
+
+  eventTarget.addEventListener('message', (event) => {
+    const detail = (event as CustomEvent).detail as { type: string }
     if (detail.type === 'init') {
-      initResolve(detail)
-      return
-    } else if (detail.type === 'message') {
-      const messageChannel = revivableContext.messageChannels.getOrAlloc(detail.portId)
-      const transferables = getTransferableObjects(detail)
-      ;(messageChannel.port2 as MessagePort)?.postMessage(detail, { transfer: transferables })
+      initResolve(detail as unknown as InitMessage)
     }
   })
 
