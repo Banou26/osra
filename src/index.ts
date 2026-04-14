@@ -1,15 +1,16 @@
 import type {
-  Message,
-  MessageContext, MessageVariant,
-  Capable,
-  MessageEventMap
+  Message, MessageVariant,
+  Capable, MessageEventMap
 } from './types'
-import type { EmitTransport, Transport } from './utils/transport'
+import type {
+  EmitTransport,
+  MessageContext,
+  Transport
+} from './utils/transport'
 import type {
   ConnectionContext,
   BidirectionalConnectionContext
 } from './utils'
-
 import type { RevivableModule } from './revivables'
 
 import { OSRA_DEFAULT_KEY, OSRA_KEY } from './types'
@@ -40,6 +41,15 @@ export type {
   AsCapable
 }
 
+declare const ErrorMessage: unique symbol
+declare const BadValueType: unique symbol
+type CapableCheck<T> =
+  T extends infer U
+    ? U extends Capable
+      ? T
+      : { [ErrorMessage]: 'Value type must resolve to a Capable'; [BadValueType]: U }
+    : { [ErrorMessage]: 'Value type must resolve to a Capable'; [BadValueType]: T }
+
 /**
  * Protocol mode:
  * - Bidirectional mode
@@ -50,10 +60,11 @@ export type {
  * - JSON mode
  */
 export const expose = async <
-  T extends Capable,
+  T,
+  T2 extends CapableCheck<T>,
   const TUserModules extends readonly RevivableModule[] = readonly RevivableModule[]
 >(
-  value: Capable,
+  value: T2,
   {
     transport: _transport,
     name,
@@ -73,7 +84,7 @@ export const expose = async <
     logger?: {}
     revivableModules?: TUserModules
   }
-): Promise<T> => {
+): Promise<T2> => {
   const transport = {
     isJson:
       'isJson' in _transport && _transport.isJson !== undefined
@@ -97,8 +108,9 @@ export const expose = async <
   ] as const
   const connectionContexts = new Map<string, ConnectionContext<typeof mergedRevivableModules>>()
 
-  let resolveRemoteValue: (connection: T) => void
-  const remoteValuePromise = new Promise<T>((resolve) => {
+  const { promise, resolve } = Promise.withResolvers<T2>()
+  let resolveRemoteValue: (connection: T2) => void
+  const remoteValuePromise = new Promise<T2>((resolve) => {
     resolveRemoteValue = resolve
   })
 
@@ -128,7 +140,7 @@ export const expose = async <
     )
   }
 
-  const listener = async (message: Message, messageContext: MessageContext) => {
+  const listener = async (message: Message, _: MessageContext) => {
     // means that our own message looped back on the channel
     if (message.uuid === uuid) return
     // Unidirectional receiving mode
@@ -155,7 +167,7 @@ export const expose = async <
         type: 'bidirectional',
         eventTarget,
         connection:
-          startBidirectionalConnection<T, typeof mergedRevivableModules>({
+          startBidirectionalConnection<T2, typeof mergedRevivableModules>({
             transport,
             value,
             uuid,
@@ -168,7 +180,7 @@ export const expose = async <
       } satisfies BidirectionalConnectionContext<typeof mergedRevivableModules>
       connectionContexts.set(message.uuid, connectionContext)
       connectionContext.connection.remoteValue.then((remoteValue) =>
-        resolveRemoteValue(remoteValue as T)
+        resolveRemoteValue(remoteValue as T2)
       )
     } else if (message.type === 'reject-uuid-taken') {
       if (message.remoteUuid !== uuid) return
@@ -216,7 +228,7 @@ export const expose = async <
 
   // Unidirectional emitting mode
   if (isEmitTransport(transport) && !isReceiveTransport(transport)) {
-    const { remoteValueProxy } = startUnidirectionalEmittingConnection<T>({
+    const { remoteValueProxy } = startUnidirectionalEmittingConnection<T2>({
       value,
       uuid,
       send: (message: MessageVariant) => sendMessage(transport, message),

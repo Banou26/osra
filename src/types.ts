@@ -1,11 +1,9 @@
-import type { WebExtPort, WebExtSender } from './utils/type-guards'
-import type { ReceivePlatformTransport } from './utils/transport'
-
 import type { ConnectionMessage } from './connections'
-
-import { DefaultRevivableModules, RevivableModule } from './revivables'
-import { InferMessages, InferRevivables } from './revivables/utils'
-import { TypedEventTarget } from './utils'
+import type { TypedEventTarget } from './utils'
+import type {
+  DefaultRevivableModules, RevivableModule,
+  InferMessages, InferRevivables
+} from './revivables'
 
 export const OSRA_KEY = '__OSRA_KEY__' as const
 export const OSRA_DEFAULT_KEY = '__OSRA_DEFAULT_KEY__' as const
@@ -40,7 +38,7 @@ export type Structurable =
   | Array<Structurable>
   | Map<Structurable, Structurable>
   | Set<Structurable>
-  
+
 export type StructurableTransferable =
   | Structurable
   | Transferable
@@ -90,7 +88,6 @@ export type MessageVariant<
 > =
   | ProtocolMessage
   | ConnectionMessage<TModules>
-  | InferMessages<DefaultRevivableModules>
   | InferMessages<TModules>
 
 export type Message<
@@ -98,13 +95,6 @@ export type Message<
 > =
   & MessageBase
   & MessageVariant<TModules>
-
-export type MessageContext = {
-  port?: MessagePort | WebExtPort // WebExtension
-  sender?: WebExtSender // WebExtension
-  receiveTransport?: ReceivePlatformTransport
-  source?: MessageEventSource | null // Window, Worker, WebSocket, ect...
-}
 
 export type MessageEventMap<
   TModules extends readonly RevivableModule[] = DefaultRevivableModules
@@ -114,4 +104,4 @@ export type MessageEventMap<
 
 export type MessageEventTarget<
   TModules extends readonly RevivableModule[] = DefaultRevivableModules
-> = TypedEventTarget<MessageEventMap<TModules>>
+  > = TypedEventTarget<MessageEventMap<TModules>>

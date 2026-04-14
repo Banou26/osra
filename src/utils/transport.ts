@@ -1,6 +1,4 @@
-import type {
-  Message, MessageContext
-} from '../types'
+import type { Message} from '../types'
 import type {
   WebExtOnConnect, WebExtOnMessage,
   WebExtPort, WebExtRuntime, WebExtSender
@@ -12,6 +10,13 @@ import {
   isWebExtensionOnConnect, isWebExtensionOnMessage,
   isWebExtensionPort, isWebExtensionRuntime, isWebSocket, isWindow, isSharedWorker
 } from './type-guards'
+
+export type MessageContext = {
+  port?: MessagePort | WebExtPort // WebExtension
+  sender?: WebExtSender // WebExtension
+  receiveTransport?: ReceivePlatformTransport
+  source?: MessageEventSource | null // Window, Worker, WebSocket, ect...
+}
 
 export type CustomTransport =
   { isJson?: boolean }
