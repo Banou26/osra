@@ -4,7 +4,6 @@ import type {
   Capable, Transport,
   MessageEventMap
 } from './types'
-export type { UnderlyingType } from './revivables/utils'
 import type {
   ConnectionContext,
   BidirectionalConnectionContext
