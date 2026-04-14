@@ -59,8 +59,10 @@ export type ExtractBox<T> =
     : never
 
 export type ExtractMessages<T> =
-  T extends { Messages: infer B }
-    ? B extends { type: string } ? B : never
+  T extends { Messages?: infer B }
+    ? B extends { type: string }
+      ? string extends B['type'] ? never : B
+      : never
     : never
 
 export type InferMessages<TModules extends readonly unknown[]> =

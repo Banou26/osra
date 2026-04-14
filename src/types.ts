@@ -95,6 +95,7 @@ export type MessageVariant<
 > =
   | ProtocolMessage
   | ConnectionMessage<TModules>
+  | InferMessages<DefaultRevivableModules>
   | InferMessages<TModules>
 
 export type Message<

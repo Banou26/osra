@@ -47,12 +47,6 @@ export type ConnectionRevivableContext<
   eventTarget: MessageEventTarget<TModules>
 }
 
-// export type BidirectionalConnection<T extends Capable = Capable> = {
-//   revivableContext: ConnectionRevivableContext<readonly RevivableModule[]>
-//   close: () => void
-//   remoteValue: Promise<T>
-// }
-
 export const startBidirectionalConnection = <
   T extends Capable,
   TModules extends readonly RevivableModule[] = DefaultRevivableModules
