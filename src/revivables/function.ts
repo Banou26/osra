@@ -33,6 +33,13 @@ const functionRegistry = new FinalizationRegistry<FunctionCleanupInfo>((info) =>
   } catch { /* Port may already be closed */ }
 })
 
+// Pins caller-side return-value ports between send and result arriving. The
+// cycle (localPort↔listener↔remotePort) has no external anchor after the
+// Promise executor returns, so under memory pressure GC can collect it before
+// the result arrives — the Promise hangs forever. We remove the entries in
+// the once-listener (and on reject).
+const inFlightReturnPorts = new Set<EventPort<any>>()
+
 export type CallContext = [
   /** Return-value port that the callee will post the result on. */
   EventPort<Capable>,
@@ -111,6 +118,12 @@ export const revive = <T extends BoxedFunction, T2 extends RevivableContext>(
       const channel = new EventChannel<ResultMessage, ResultMessage>()
       const returnValueLocalPort = channel.port1
       const returnValueRemotePort = channel.port2
+      // Pin ports to a module-level Set so GC can't collect the
+      // port↔listener cycle while the call is in flight. Without this,
+      // under memory pressure the listener (and thus `resolve`) can be
+      // collected before the result arrives — the Promise hangs forever.
+      inFlightReturnPorts.add(returnValueLocalPort)
+      inFlightReturnPorts.add(returnValueRemotePort)
       port.postMessage([returnValueRemotePort as unknown as EventPort<Capable>, args])
 
       returnValueLocalPort.addEventListener('message', ({ data: result }) => {
@@ -121,6 +134,8 @@ export const revive = <T extends BoxedFunction, T2 extends RevivableContext>(
         // tears down handler state on this connection so per-call state
         // doesn't accumulate across iterations.
         returnValueRemotePort.close()
+        inFlightReturnPorts.delete(returnValueLocalPort)
+        inFlightReturnPorts.delete(returnValueRemotePort)
       }, { once: true })
       returnValueLocalPort.start()
     })

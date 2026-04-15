@@ -227,25 +227,17 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
   // sending the wrapping message would crash with DataCloneError.
   if (isJsonOnlyTransport(context.transport) || value instanceof EventPort) {
     const { messageChannels, portHandlers } = getState(context)
-    const messagePort = value as unknown as AnyPort<T>
+    const liveRef = value as unknown as AnyPort<T>
     // Only generate a unique UUID, don't store the port in the allocator.
-    // Storing the port would create a strong reference that prevents GC and FinalizationRegistry cleanup.
     const portId = messageChannels.getUniqueUuid()
-
-    // Use WeakRef to allow messagePort to be garbage collected.
-    // The handler would otherwise hold a strong reference preventing GC.
-    const messagePortRef = new WeakRef(messagePort as object)
 
     let cleanedUp = false
     const performCleanup = () => {
       if (cleanedUp) return
       cleanedUp = true
       portHandlers.delete(portId)
-      const port = messagePortRef.deref() as AnyPort<T> | undefined
-      if (port) {
-        messagePortRegistry.unregister(port as object)
-        port.removeEventListener('message', messagePortListener as EventListener)
-      }
+      messagePortRegistry.unregister(liveRef as object)
+      liveRef.removeEventListener('message', messagePortListener as EventListener)
     }
 
     // Incoming: remote side wrote to its revived port — deliver the payload
@@ -253,17 +245,11 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
     const handler = (message: Messages) => {
       if (message.type === 'message-port-close') {
         performCleanup()
-        const port = messagePortRef.deref() as AnyPort<T> | undefined
-        port?.close()
-        return
-      }
-      const port = messagePortRef.deref() as AnyPort<T> | undefined
-      if (!port) {
-        performCleanup()
+        liveRef.close()
         return
       }
       const revivedData = recursiveRevive(message.data, context) as T
-      ;(port as EventPort<T>).postMessage(revivedData, getTransferableObjects(revivedData))
+      ;(liveRef as EventPort<T>).postMessage(revivedData, getTransferableObjects(revivedData))
     }
 
     // Outgoing: whatever was written into our side of the user's channel gets
@@ -277,32 +263,30 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
       })
     }
 
-    const liveRef = messagePortRef.deref() as AnyPort<T> | undefined
-    if (liveRef) {
-      // Register for automatic cleanup when garbage collected.
-      // Use the port itself as the unregister token.
-      messagePortRegistry.register(liveRef as object, {
-        sendMessage: context.sendMessage,
-        remoteUuid: context.remoteUuid,
-        portId,
-        cleanup: performCleanup
-      }, liveRef as object)
+    // Register for automatic cleanup when garbage collected. Note the handler
+    // (stored in portHandlers) holds `liveRef` strongly via closure, so GC
+    // will only fire once the Map entry is deleted (in performCleanup).
+    messagePortRegistry.register(liveRef as object, {
+      sendMessage: context.sendMessage,
+      remoteUuid: context.remoteUuid,
+      portId,
+      cleanup: performCleanup
+    }, liveRef as object)
 
-      liveRef.addEventListener('message', messagePortListener as EventListener)
-      liveRef.start()
+    liveRef.addEventListener('message', messagePortListener as EventListener)
+    liveRef.start()
 
-      // For synthetic EventPorts, close() is how the owning side signals it's
-      // done — wire it up so we tear down listeners and notify the remote.
-      if (liveRef instanceof EventPort) {
-        liveRef._onClose = () => {
-          if (cleanedUp) return
-          context.sendMessage({
-            type: 'message-port-close',
-            remoteUuid: context.remoteUuid,
-            portId
-          })
-          performCleanup()
-        }
+    // For synthetic EventPorts, close() is how the owning side signals it's
+    // done — wire it up so we tear down listeners and notify the remote.
+    if (liveRef instanceof EventPort) {
+      liveRef._onClose = () => {
+        if (cleanedUp) return
+        context.sendMessage({
+          type: 'message-port-close',
+          remoteUuid: context.remoteUuid,
+          portId
+        })
+        performCleanup()
       }
     }
 
