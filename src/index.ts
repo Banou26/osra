@@ -72,7 +72,7 @@ type CapableCheck<
  */
 export const expose = async <
   T = unknown,
-  const TUserModules extends readonly RevivableModule[] = readonly RevivableModule[],
+  const TUserModules extends readonly RevivableModule[] = readonly [],
   const TValue = Capable<[...DefaultRevivableModules, ...TUserModules]>
 >(
   value: CapableCheck<TValue, [...DefaultRevivableModules, ...TUserModules]>,
@@ -180,11 +180,11 @@ export const expose = async <
         connection:
           startBidirectionalConnection<Capable, typeof mergedRevivableModules>({
             transport,
-            value,
+            value: value as Capable<typeof mergedRevivableModules>,
             uuid,
             remoteUuid: message.uuid,
             eventTarget,
-            send: (message: MessageVariant) => sendMessage(transport, message),
+            send: (message) => sendMessage(transport, message as MessageVariant),
             close: () => void connectionContexts.delete(message.uuid),
             revivableModules: mergedRevivableModules
           })
@@ -250,3 +250,15 @@ export const expose = async <
 
   return remoteValuePromise
 }
+
+expose(
+  {
+    foo: 'str',
+    bar: {
+      qux: Symbol()
+    }
+  },
+  {
+    transport: undefined as unknown as any,
+  },
+)

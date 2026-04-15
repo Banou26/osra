@@ -1,5 +1,6 @@
 import type { Capable } from '../types'
 import type { RevivableContext } from './utils'
+import type { UnderlyingType } from '../utils/type'
 
 import { BoxBase } from './utils'
 import { EventChannel } from '../utils/event-channel'
