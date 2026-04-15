@@ -54,7 +54,10 @@ type CapableCheck<
 > =
   T extends Capable<TModules>
     ? T
-    : {
+    // Intersect with T so the user's keys are already present on the target —
+    // without this, TS's excess-property check flags the first user key (e.g.
+    // `foo`) instead of reporting the failure against the whole argument.
+    : T & {
         [ErrorMessage]: 'Value type must resolve to a Capable'
         [BadValue]: BadFieldValue<T, Capable<TModules>>
         [Path]: BadFieldPath<T, Capable<TModules>>
@@ -250,15 +253,3 @@ export const expose = async <
 
   return remoteValuePromise
 }
-
-expose(
-  {
-    foo: 'str',
-    bar: {
-      qux: Symbol()
-    }
-  },
-  {
-    transport: undefined as unknown as any,
-  },
-)
