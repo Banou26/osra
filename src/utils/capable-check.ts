@@ -1,5 +1,3 @@
-import type { Capable } from '../types'
-
 export declare const ErrorMessage: unique symbol
 export declare const BadValue: unique symbol
 export declare const Path: unique symbol
@@ -63,20 +61,3 @@ export type BadFieldPath<T, TConstraint> =
  */
 export type BadFieldParent<T, TConstraint> =
   FindBadField<T, TConstraint> extends { parent: infer P } ? P : T
-
-/**
- * Checks that `T` resolves to a `Capable`.
- * On failure, returns an object with the deep field path of the first
- * non-`Capable` value, its actual type, and its parent object —
- * surfaced through symbol-keyed fields so the error is still
- * structurally compatible with `{ [key: string]: Capable }`.
- */
-export type CapableCheck<T> =
-  T extends Capable
-    ? T
-    : {
-        [ErrorMessage]: 'Value type must resolve to a Capable'
-        [BadValue]: BadFieldValue<T, Capable>
-        [Path]: BadFieldPath<T, Capable>
-        [ParentObject]: BadFieldParent<T, Capable>
-      }

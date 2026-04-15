@@ -28,9 +28,12 @@ import {
   isCustomTransport,
   DeepReplace,
   DeepReplaceAsync,
-  AsCapable,
-  CapableCheck
+  AsCapable
 } from './utils'
+import type {
+  BadFieldValue, BadFieldPath, BadFieldParent,
+  ErrorMessage, BadValue, Path, ParentObject
+} from './utils/capable-check'
 import { TypedEventTarget } from './utils/typed-event-target'
 
 export * from './types'
@@ -41,6 +44,16 @@ export type {
   DeepReplaceAsync,
   AsCapable
 }
+
+type CapableCheck<T> =
+  T extends Capable
+    ? T
+    : {
+        [ErrorMessage]: 'Value type must resolve to a Capable'
+        [BadValue]: BadFieldValue<T, Capable>
+        [Path]: BadFieldPath<T, Capable>
+        [ParentObject]: BadFieldParent<T, Capable>
+      }
 
 /**
  * Protocol mode:
