@@ -1,15 +1,11 @@
-import type { Capable, StructurableTransferable } from '../types'
 import type { RevivableContext } from './utils'
-import type { TypedMessageChannel, TypedMessagePort } from '../utils/typed-message-channel'
 import type { UnderlyingType } from '.'
 
 import { BoxBase } from './utils'
-import { recursiveBox, recursiveRevive } from '.'
-import { getTransferableObjects } from '../utils'
+import { EventChannel } from '../utils/event-channel'
 import {
   box as boxMessagePort,
   revive as reviveMessagePort,
-  registerInternalPort,
   BoxedMessagePort
 } from './message-port'
 
@@ -18,6 +14,8 @@ export const type = 'readableStream' as const
 export type PullContext = {
   type: 'pull' | 'cancel'
 }
+
+type ChunkMessage<T = unknown> = Promise<ReadableStreamReadResult<T>>
 
 export type BoxedReadableStream<T extends ReadableStream = ReadableStream> = {
   __OSRA_BOX__: 'revivable'
@@ -33,17 +31,17 @@ export const box = <T extends ReadableStream, T2 extends RevivableContext>(
   value: T,
   context: T2
 ): BoxedReadableStream<T> => {
-  const { port1: localPort, port2: remotePort } = new MessageChannel() as unknown as TypedMessageChannel<StructurableTransferable, StructurableTransferable>
-  registerInternalPort(context, remotePort as unknown as MessagePort)
+  type Msg = PullContext | ChunkMessage
+  // EventChannel (pass-by-reference) — live Promises etc. flow through
+  // unchanged; message-port boxes on the wire.
+  const { port1: localPort, port2: remotePort } = new EventChannel<Msg, Msg>()
 
   const reader = value.getReader()
 
-  ;(localPort as MessagePort).addEventListener('message', async ({ data }) => {
-    const { type } = recursiveRevive(data, context) as PullContext
-    if (type === 'pull') {
-      const pullResult = reader.read()
-      const boxedResult = recursiveBox(pullResult, context)
-      ;(localPort as MessagePort).postMessage(boxedResult, getTransferableObjects(boxedResult))
+  localPort.addEventListener('message', ({ data }) => {
+    const pull = data as PullContext
+    if (pull.type === 'pull') {
+      localPort.postMessage(reader.read())
     } else {
       reader.cancel()
       localPort.close()
@@ -54,7 +52,7 @@ export const box = <T extends ReadableStream, T2 extends RevivableContext>(
   return {
     ...BoxBase,
     type,
-    port: boxMessagePort(remotePort as MessagePort as TypedMessagePort<Record<string, StructurableTransferable>>, context)
+    port: boxMessagePort(remotePort, context)
   } as BoxedReadableStream<T>
 }
 
@@ -62,17 +60,15 @@ export const revive = <T extends BoxedReadableStream, T2 extends RevivableContex
   value: T,
   context: T2
 ): T[UnderlyingType] => {
-  const port = reviveMessagePort(value.port as unknown as BoxedMessagePort, context) as MessagePort
-  registerInternalPort(context, port as MessagePort)
+  const port = reviveMessagePort(value.port as unknown as BoxedMessagePort<PullContext | ChunkMessage>, context)
   port.start()
 
   return new ReadableStream({
     start(_controller) {},
     pull(controller) {
       return new Promise((resolve, reject) => {
-        port.addEventListener('message', async ({ data }) => {
-          const result = recursiveRevive(data, context) as Promise<ReadableStreamReadResult<any>>
-          result
+        port.addEventListener('message', ({ data }) => {
+          ;(data as ChunkMessage)
             .then(result => {
               if (result.done) controller.close()
               else controller.enqueue(result.value)
@@ -80,11 +76,11 @@ export const revive = <T extends BoxedReadableStream, T2 extends RevivableContex
             })
             .catch(reject)
         }, { once: true })
-        port.postMessage(recursiveBox({ type: 'pull' }, context))
+        port.postMessage({ type: 'pull' })
       })
     },
     cancel() {
-      port.postMessage(recursiveBox({ type: 'cancel' }, context))
+      port.postMessage({ type: 'cancel' })
       port.close()
     }
   }) as T[UnderlyingType]

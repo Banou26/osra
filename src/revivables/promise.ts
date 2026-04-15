@@ -1,6 +1,5 @@
 import type { Capable } from '../types'
 import type { RevivableContext } from './utils'
-import type { TypedMessagePort } from '../utils/typed-message-channel'
 import type { UnderlyingType } from '.'
 import type {
   BadFieldValue, BadFieldPath, BadFieldParent,
@@ -8,13 +7,10 @@ import type {
 } from '../utils/capable-check'
 
 import { BoxBase } from './utils'
-import { recursiveBox, recursiveRevive } from '.'
-import { getTransferableObjects } from '../utils'
+import { EventChannel } from '../utils/event-channel'
 import {
   box as boxMessagePort,
   revive as reviveMessagePort,
-  registerInternalPort,
-  unregisterInternalPort,
   BoxedMessagePort
 } from './message-port'
 
@@ -63,15 +59,13 @@ export const box = <T, T2 extends RevivableContext>(
 ): BoxedPromise<ExtractCapable<T>> => {
   if (!isCapablePromise(value)) throw new TypeError('Expected Promise')
   const promise = value
-  const { port1: localPort, port2: remotePort } = new MessageChannel()
-  registerInternalPort(context, remotePort)
+  // EventChannel (pass-by-reference) — we can post live values raw; the
+  // message-port revivable will box them when they cross the transport.
+  const { port1: localPort, port2: remotePort } = new EventChannel<Context, Context>()
 
   const sendResult = (result: Context) => {
-    const boxedResult = recursiveBox(result, context)
-    localPort.postMessage(boxedResult, getTransferableObjects(boxedResult))
+    localPort.postMessage(result)
     localPort.close()
-    // Clean up the remote port from the set (it was transferred earlier)
-    unregisterInternalPort(context, remotePort)
   }
 
   promise
@@ -81,7 +75,7 @@ export const box = <T, T2 extends RevivableContext>(
   return {
     ...BoxBase,
     type,
-    port: boxMessagePort(remotePort as unknown as TypedMessagePort<string>, context)
+    port: boxMessagePort(remotePort, context)
   } as unknown as BoxedPromise<ExtractCapable<T>>
 }
 
@@ -89,18 +83,14 @@ export const revive = <T extends BoxedPromise, T2 extends RevivableContext>(
   value: T,
   context: T2
 ) => {
-  const port = reviveMessagePort(value.port as unknown as BoxedMessagePort<string>, context)
-  registerInternalPort(context, port as MessagePort)
+  const port = reviveMessagePort(value.port as unknown as BoxedMessagePort<Context>, context)
   return new Promise<T[UnderlyingType]>((resolve, reject) => {
-    port.addEventListener('message', (event) => {
-      const data = (event as unknown as MessageEvent<Context>).data
-      const result = recursiveRevive(data, context) as Context
+    port.addEventListener('message', ({ data: result }) => {
       if (result.type === 'resolve') {
         resolve(result.data as T[UnderlyingType])
       } else {
         reject(result.error)
       }
-      unregisterInternalPort(context, port as MessagePort)
       port.close()
     }, { once: true })
     port.start()
