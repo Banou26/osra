@@ -2,6 +2,10 @@ import type { Capable, Message, StructurableTransferable, Uuid } from '../types'
 import type { EventChannel } from '../utils/event-channel'
 import type { RevivableContext, BoxBase as BoxBaseType } from './utils'
 import type { UnderlyingType } from '../utils/type'
+import type {
+  BadFieldValue, BadFieldPath, BadFieldParent,
+  ErrorMessage, BadValue, Path, ParentObject
+} from '../utils/capable-check'
 
 import { BoxBase } from './utils'
 import { recursiveBox, recursiveRevive } from '.'
@@ -54,10 +58,14 @@ export type BoxedMessagePort<T extends StructurableTransferable = StructurableTr
   & ({ portId: string } | { port: EventChannel<T> })
   & { [UnderlyingType]: EventChannel<T> }
 
-declare const StructurableTransferableError: unique symbol
-  type StructurableTransferablePort<T> = T extends StructurableTransferable
-    ? EventChannel<T>
-    : { [StructurableTransferableError]: 'Message type must extend StructurableTransferable'; __badType__: T }
+type StructurableTransferablePort<T> = T extends StructurableTransferable
+  ? EventChannel<T>
+  : {
+      [ErrorMessage]: 'Message type must extend StructurableTransferable'
+      [BadValue]: BadFieldValue<T, StructurableTransferable>
+      [Path]: BadFieldPath<T, StructurableTransferable>
+      [ParentObject]: BadFieldParent<T, StructurableTransferable>
+    }
 
 type ExtractStructurableTransferable<T> = T extends StructurableTransferable ? T : never
 
