@@ -10,7 +10,7 @@ import type {
 import { BoxBase } from './utils'
 import { recursiveBox, recursiveRevive } from '.'
 import { OSRA_BOX } from '../types'
-import { getTransferableObjects, isJsonOnlyTransport } from '../utils'
+import { getMustTransferOnly, getTransferableObjects, isJsonOnlyTransport } from '../utils'
 import { EventChannel, EventPort } from '../utils/event-channel'
 
 /**
@@ -208,7 +208,11 @@ export const init = (context: RevivableContext): void => {
   context.eventTarget.addEventListener('message', ({ detail }) => {
     if (detail.type !== 'message') return
     const messageChannel = state.messageChannels.getOrAlloc(detail.portId)
-    const transferables = getTransferableObjects(detail)
+    // Use only must-transfer types here (MessagePort, streams, etc.) so the
+    // in-process re-postMessage doesn't detach ArrayBuffers in `detail` —
+    // any other listener on context.eventTarget (notably the box side's
+    // eventTargetListener for this portId) needs to see the buffer intact.
+    const transferables = getMustTransferOnly(detail)
     ;(messageChannel.port2 as unknown as MessagePort | undefined)?.postMessage(detail, { transfer: transferables })
   })
 }
@@ -220,7 +224,10 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
   value: StructurableTransferablePort<T>,
   context: T2
 ) => {
-  if (isJsonOnlyTransport(context.transport)) {
+  // Synthetic EventPorts are not structured-clonable, so even when the
+  // transport supports cloning we have to route them via portId — otherwise
+  // sending the wrapping message would crash with DataCloneError.
+  if (isJsonOnlyTransport(context.transport) || value instanceof EventPort) {
     const { messageChannels } = getState(context)
     const messagePort = value as unknown as AnyPort<T>
     // Only generate a unique UUID, don't store the port in the allocator.
