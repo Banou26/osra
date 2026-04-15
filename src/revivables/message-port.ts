@@ -71,9 +71,12 @@ export type BoxedMessagePort<T = Capable> =
 
 // `[T] extends [Capable]` disables distributive conditionals so unions like
 // `A | B` give back `AnyPort<A | B>`, not `AnyPort<A> | AnyPort<B>`.
+// The error branch intersects with AnyPort<T> so the user's port-shaped keys
+// are present on the target — otherwise TS's excess-property check flags a
+// port key instead of reporting the failure against the whole argument.
 type StructurableTransferablePort<T> = [T] extends [Capable]
   ? AnyPort<T>
-  : {
+  : AnyPort<T> & {
       [ErrorMessage]: 'Message type must extend Capable'
       [BadValue]: BadFieldValue<T, Capable>
       [Path]: BadFieldPath<T, Capable>

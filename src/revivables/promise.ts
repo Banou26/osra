@@ -20,16 +20,19 @@ export type Context =
   | { type: 'resolve', data: Capable }
   | { type: 'reject', error: string }
 
+// Error branches intersect with T so the user's own keys are present on the
+// target — otherwise TS's excess-property check flags the first user key
+// (e.g. `foo`) instead of reporting the failure against the whole argument.
 type CapablePromise<T> = T extends Promise<infer U>
   ? U extends Capable
     ? T
-    : {
+    : T & {
         [ErrorMessage]: 'Value type must extend a Promise that resolves to a Capable'
         [BadValue]: BadFieldValue<U, Capable>
         [Path]: BadFieldPath<U, Capable>
         [ParentObject]: BadFieldParent<U, Capable>
       }
-  : {
+  : T & {
       [ErrorMessage]: 'Value type must extend a Promise that resolves to a Capable'
       [BadValue]: T
       [Path]: ''
