@@ -1,12 +1,17 @@
 import type { Capable, StructurableTransferable } from '../types'
 import type { RevivableContext } from './utils'
-import type { TypedEventChannel, TypedEventPort } from '../utils/typed-message-channel'
+import type { TypedMessageChannel, TypedMessagePort } from '../utils/typed-message-channel'
 import type { UnderlyingType } from '.'
 
 import { BoxBase } from './utils'
 import { recursiveBox, recursiveRevive } from '.'
 import { getTransferableObjects } from '../utils'
-import { box as boxMessagePort, revive as reviveMessagePort, BoxedMessagePort } from './message-port'
+import {
+  box as boxMessagePort,
+  revive as reviveMessagePort,
+  registerInternalPort,
+  BoxedMessagePort
+} from './message-port'
 
 export const type = 'readableStream' as const
 
@@ -28,8 +33,8 @@ export const box = <T extends ReadableStream, T2 extends RevivableContext>(
   value: T,
   context: T2
 ): BoxedReadableStream<T> => {
-  const { port1: localPort, port2: remotePort } = new MessageChannel() as TypedEventChannel<StructurableTransferable, StructurableTransferable>
-  context.messagePorts.add(remotePort as MessagePort)
+  const { port1: localPort, port2: remotePort } = new MessageChannel() as unknown as TypedMessageChannel<StructurableTransferable, StructurableTransferable>
+  registerInternalPort(context, remotePort as unknown as MessagePort)
 
   const reader = value.getReader()
 
@@ -49,7 +54,7 @@ export const box = <T extends ReadableStream, T2 extends RevivableContext>(
   return {
     ...BoxBase,
     type,
-    port: boxMessagePort(remotePort as MessagePort as TypedEventPort<Record<string, StructurableTransferable>>, context)
+    port: boxMessagePort(remotePort as MessagePort as TypedMessagePort<Record<string, StructurableTransferable>>, context)
   } as BoxedReadableStream<T>
 }
 
@@ -58,7 +63,7 @@ export const revive = <T extends BoxedReadableStream, T2 extends RevivableContex
   context: T2
 ): T[UnderlyingType] => {
   const port = reviveMessagePort(value.port as unknown as BoxedMessagePort, context) as MessagePort
-  context.messagePorts.add(port as MessagePort)
+  registerInternalPort(context, port as MessagePort)
   port.start()
 
   return new ReadableStream({

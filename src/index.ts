@@ -11,19 +11,21 @@ import type {
 import type {
   ConnectionContext,
   BidirectionalConnectionContext
-} from './utils'
+} from './connections'
 import type { RevivableModule } from './revivables'
 
 import { OSRA_DEFAULT_KEY, OSRA_KEY } from './types'
 import { defaultRevivableModules } from './revivables'
 export { BoxBase } from './revivables/utils'
 import {
+  startBidirectionalConnection,
+  startUnidirectionalEmittingConnection
+} from './connections'
+import {
   registerOsraMessageListener,
   sendOsraMessage,
-  startBidirectionalConnection,
   isReceiveTransport,
   isEmitTransport,
-  startUnidirectionalEmittingConnection,
   getTransferableObjects,
   isJsonOnlyTransport,
   isCustomTransport,

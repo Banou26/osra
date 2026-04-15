@@ -1,5 +1,6 @@
 import type { Capable, Message, StructurableTransferable, Uuid } from '../types'
-import type { EventChannel } from '../utils/event-channel'
+import type { EventPort } from '../utils/event-channel'
+import type { TypedMessageChannel, TypedMessagePort } from '../utils/typed-message-channel'
 import type { RevivableContext, BoxBase as BoxBaseType } from './utils'
 import type { UnderlyingType } from '../utils/type'
 import type {
@@ -10,7 +11,7 @@ import type {
 import { BoxBase } from './utils'
 import { recursiveBox, recursiveRevive } from '.'
 import { OSRA_BOX } from '../types'
-import { getTransferableObjects, isJsonOnlyTransport, MessageChannelAllocator } from '../utils'
+import { getTransferableObjects, isJsonOnlyTransport } from '../utils'
 
 /**
  * FinalizationRegistry for automatically cleaning up MessagePorts when they are garbage collected.
@@ -53,13 +54,20 @@ export type Messages =
 
 export declare const Messages: Messages
 
+/** Any port-shape the message-port revivable is happy to accept. Real
+ *  MessagePorts (from `new MessageChannel()`) and synthetic EventPorts
+ *  (from `new EventChannel()`) both flow through here. */
+export type AnyPort<T extends StructurableTransferable = StructurableTransferable> =
+  | TypedMessagePort<T>
+  | EventPort<T>
+
 export type BoxedMessagePort<T extends StructurableTransferable = StructurableTransferable> =
   & BoxBaseType<typeof type>
-  & ({ portId: string } | { port: EventChannel<T> })
-  & { [UnderlyingType]: EventChannel<T> }
+  & ({ portId: string } | { port: AnyPort<T> })
+  & { [UnderlyingType]: AnyPort<T> }
 
 type StructurableTransferablePort<T> = T extends StructurableTransferable
-  ? EventChannel<T>
+  ? AnyPort<T>
   : {
       [ErrorMessage]: 'Message type must extend StructurableTransferable'
       [BadValue]: BadFieldValue<T, StructurableTransferable>
@@ -69,11 +77,157 @@ type StructurableTransferablePort<T> = T extends StructurableTransferable
 
 type ExtractStructurableTransferable<T> = T extends StructurableTransferable ? T : never
 
+// -------------------------------------------------------------------------
+// Per-connection message channel allocator
+//
+// Each bidirectional connection gets its own pool of local MessageChannels
+// keyed by portId. These channels exist so JSON-only transports can emulate
+// MessagePort semantics: when a message arrives for a given portId on the
+// main transport, the connection routes it into the allocator's port2, and
+// the revived user-facing port (port1 side) picks it up locally.
+// -------------------------------------------------------------------------
+
+type AllocatedMessageChannel<
+  T extends StructurableTransferable = StructurableTransferable,
+  T2 extends StructurableTransferable = StructurableTransferable
+> = {
+  uuid: Uuid
+  /** Local port */
+  port1: TypedMessagePort<T>
+  /** Remote port that gets transferred, might be undefined if a remote context created the channel */
+  port2?: TypedMessagePort<T2>
+}
+
+type MessageChannelAllocator = {
+  getUniqueUuid: () => Uuid
+  set: (uuid: Uuid, messagePorts: { port1: TypedMessagePort, port2?: TypedMessagePort }) => void
+  alloc: (
+    uuid?: Uuid,
+    messagePorts?: { port1: TypedMessagePort, port2?: TypedMessagePort }
+  ) => AllocatedMessageChannel
+  has: (uuid: string) => boolean
+  get: (uuid: string) => AllocatedMessageChannel | undefined
+  free: (uuid: string) => boolean
+  getOrAlloc: (
+    uuid?: Uuid,
+    messagePorts?: { port1: TypedMessagePort, port2?: TypedMessagePort }
+  ) => AllocatedMessageChannel
+}
+
+const makeMessageChannelAllocator = (): MessageChannelAllocator => {
+  const channels = new Map<string, AllocatedMessageChannel>()
+
+  const result: MessageChannelAllocator = {
+    getUniqueUuid: () => {
+      let uuid: Uuid = globalThis.crypto.randomUUID()
+      while (channels.has(uuid)) {
+        uuid = globalThis.crypto.randomUUID()
+      }
+      return uuid
+    },
+    set: (uuid, messagePorts) => {
+      channels.set(uuid, { uuid, ...messagePorts } as AllocatedMessageChannel)
+    },
+    alloc: (
+      uuid: Uuid | undefined = result.getUniqueUuid(),
+      messagePorts?: { port1: TypedMessagePort, port2?: TypedMessagePort }
+    ) => {
+      if (messagePorts) {
+        const allocatedMessageChannel = { uuid, ...messagePorts } as AllocatedMessageChannel
+        channels.set(uuid, allocatedMessageChannel)
+        return allocatedMessageChannel
+      }
+      const messageChannel = new MessageChannel() as unknown as TypedMessageChannel
+      const allocatedMessageChannel = {
+        uuid,
+        port1: messageChannel.port1,
+        port2: messageChannel.port2
+      } as AllocatedMessageChannel
+      channels.set(uuid, allocatedMessageChannel)
+      return allocatedMessageChannel
+    },
+    has: (uuid: string) => channels.has(uuid),
+    get: (uuid: string) => channels.get(uuid),
+    free: (uuid: string) => channels.delete(uuid),
+    getOrAlloc: (
+      uuid: Uuid | undefined = result.getUniqueUuid(),
+      messagePorts?: { port1: TypedMessagePort, port2?: TypedMessagePort }
+    ) => {
+      const existingChannel = result.get(uuid)
+      if (existingChannel) return existingChannel!
+      return result.alloc(uuid, messagePorts)
+    }
+  }
+  return result
+}
+
+// -------------------------------------------------------------------------
+// Per-connection state
+//
+// The WeakMap ties per-connection message-port state to the connection's
+// RevivableContext — when the context is collected, the allocator and the
+// internal port set go with it.
+// -------------------------------------------------------------------------
+
 type ConnectionMessagePortState = {
   messageChannels: MessageChannelAllocator
+  /** Internal ports owned by osra (e.g. the internal side of revived
+   *  Promise/Function/ReadableStream/AbortSignal). Data flowing through
+   *  these is proxied as-is without an extra box/revive pass. */
+  messagePorts: Set<MessagePort>
 }
 
 const connectionStateMap = new WeakMap<RevivableContext, ConnectionMessagePortState>()
+
+const getState = (context: RevivableContext): ConnectionMessagePortState => {
+  const state = connectionStateMap.get(context)
+  if (!state) {
+    throw new Error('osra message-port: connection state missing; did init() run?')
+  }
+  return state
+}
+
+/**
+ * Register an internal osra-owned MessagePort for this connection so the
+ * message-port revive path knows to proxy messages through without re-boxing.
+ * Called by revivables that create their own private MessageChannel
+ * (Promise, Function, ReadableStream, AbortSignal).
+ */
+export const registerInternalPort = (context: RevivableContext, port: MessagePort): void => {
+  getState(context).messagePorts.add(port)
+}
+
+/**
+ * Counterpart to registerInternalPort — remove a port once its revivable no
+ * longer needs to be proxied (e.g. after a Promise settled).
+ */
+export const unregisterInternalPort = (context: RevivableContext, port: MessagePort): void => {
+  getState(context).messagePorts.delete(port)
+}
+
+// -------------------------------------------------------------------------
+// init hook
+//
+// Called once per connection by the bidirectional connection bootstrap.
+// Sets up the per-connection allocator + internal port set and installs the
+// event-target listener that routes incoming 'message' envelopes to the
+// correct local MessageChannel.
+// -------------------------------------------------------------------------
+
+export const init = (context: RevivableContext): void => {
+  const state: ConnectionMessagePortState = {
+    messageChannels: makeMessageChannelAllocator(),
+    messagePorts: new Set()
+  }
+  connectionStateMap.set(context, state)
+
+  context.eventTarget.addEventListener('message', ({ detail }) => {
+    if (detail.type !== 'message') return
+    const messageChannel = state.messageChannels.getOrAlloc(detail.portId)
+    const transferables = getTransferableObjects(detail)
+    ;(messageChannel.port2 as unknown as MessagePort | undefined)?.postMessage(detail, { transfer: transferables })
+  })
+}
 
 export const isType = (value: unknown): value is MessagePort =>
   value instanceof MessagePort
@@ -89,32 +243,33 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
   context: T2
 ) => {
   if (isJsonOnlyTransport(context.transport)) {
-    const messagePort = value as EventChannel<ExtractStructurableTransferable<T>>
+    const { messageChannels } = getState(context)
+    const messagePort = value as unknown as AnyPort<ExtractStructurableTransferable<T>>
     // Only generate a unique UUID, don't store the port in the allocator.
     // Storing the port would create a strong reference that prevents GC and FinalizationRegistry cleanup.
-    const portId = context.messageChannels.getUniqueUuid()
+    const portId = messageChannels.getUniqueUuid()
 
     // Use WeakRef to allow messagePort to be garbage collected.
     // The eventTargetListener would otherwise hold a strong reference preventing GC.
-    const messagePortRef = new WeakRef(messagePort)
+    const messagePortRef = new WeakRef(messagePort as object)
 
     // The ReceiveTransport received a message from the other side so we call it on our own side's MessagePort after reviving it
     // Define listener before registering with FinalizationRegistry so we can remove it in cleanup
     const eventTargetListener = ({ detail: message }: CustomEvent<Message>) => {
       if (message.type === 'message-port-close') {
         if (message.portId !== portId) return
-        context.messageChannels.free(portId)
-        const port = messagePortRef.deref()
+        messageChannels.free(portId)
+        const port = messagePortRef.deref() as AnyPort<ExtractStructurableTransferable<T>> | undefined
         if (port) {
           // Unregister from FinalizationRegistry to prevent double-close
-          messagePortRegistry.unregister(port)
+          messagePortRegistry.unregister(port as object)
           port.close()
         }
         context.eventTarget.removeEventListener('message', eventTargetListener)
         return
       }
       if (message.type !== 'message' || message.portId !== portId) return
-      const port = messagePortRef.deref()
+      const port = messagePortRef.deref() as AnyPort<ExtractStructurableTransferable<T>> | undefined
       if (!port) {
         // Port was garbage collected, remove this listener
         context.eventTarget.removeEventListener('message', eventTargetListener)
@@ -134,53 +289,59 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
       })
     }
 
-    // Register the messagePort for automatic cleanup when garbage collected
-    // Use messagePort itself as the unregister token
-    messagePortRegistry.register(messagePortRef.deref()!, {
-      sendMessage: context.sendMessage,
-      remoteUuid: context.remoteUuid,
-      portId,
-      cleanup: () => {
-        context.messageChannels.free(portId)
-        context.eventTarget.removeEventListener('message', eventTargetListener)
-        messagePortRef.deref()?.removeEventListener('message', messagePortListener)
-        messagePortRef.deref()?.close()
-      }
-    }, messagePortRef.deref())
+    const liveRef = messagePortRef.deref() as AnyPort<ExtractStructurableTransferable<T>> | undefined
+    if (liveRef) {
+      // Register the messagePort for automatic cleanup when garbage collected
+      // Use messagePort itself as the unregister token
+      messagePortRegistry.register(liveRef as object, {
+        sendMessage: context.sendMessage,
+        remoteUuid: context.remoteUuid,
+        portId,
+        cleanup: () => {
+          messageChannels.free(portId)
+          context.eventTarget.removeEventListener('message', eventTargetListener)
+          ;(messagePortRef.deref() as AnyPort<ExtractStructurableTransferable<T>> | undefined)
+            ?.removeEventListener('message', messagePortListener as EventListener)
+          ;(messagePortRef.deref() as AnyPort<ExtractStructurableTransferable<T>> | undefined)?.close()
+        }
+      }, liveRef as object)
 
-    messagePortRef.deref()?.addEventListener('message', messagePortListener)
-    messagePortRef.deref()?.start()
+      liveRef.addEventListener('message', messagePortListener as EventListener)
+      liveRef.start()
+    }
 
     context.eventTarget.addEventListener('message', eventTargetListener)
-  
+
     const result = {
       ...BoxBase,
       type,
       portId
     }
-    return result as typeof result & { [UnderlyingType]: EventChannel<ExtractStructurableTransferable<T>> }
+    return result as typeof result & { [UnderlyingType]: AnyPort<ExtractStructurableTransferable<T>> }
   }
   const result = {
     ...BoxBase,
     type,
     port: value
   }
-  return result as typeof result & { [UnderlyingType]: EventChannel<ExtractStructurableTransferable<T>> }
+  return result as typeof result & { [UnderlyingType]: AnyPort<ExtractStructurableTransferable<T>> }
 }
 
 export const revive = <T extends StructurableTransferable, T2 extends RevivableContext>(
   value: BoxedMessagePort<T>,
   context: T2
-): EventChannel<T> => {
+): AnyPort<T> => {
   if ('portId' in value) {
+    const { messageChannels, messagePorts } = getState(context)
     const { portId } = value
     const { port1: userPort, port2: internalPort } = new MessageChannel()
 
-    const existingChannel = context.messageChannels.get(value.portId)
+    const existingChannel = messageChannels.get(value.portId)
     const { port1 } =
       existingChannel
         ? existingChannel
-        : context.messageChannels.alloc(value.portId as Uuid)
+        : messageChannels.alloc(value.portId as Uuid)
+    const port1AsMessagePort = port1 as unknown as MessagePort
 
     const userPortRef = new WeakRef(userPort)
 
@@ -206,7 +367,7 @@ export const revive = <T extends StructurableTransferable, T2 extends RevivableC
       }
 
       // if the returned messagePort has been registered as internal message port, then we proxy the data without reviving it
-      if (context.messagePorts.has(port)) {
+      if (messagePorts.has(port)) {
         internalPort.postMessage(message.data)
       } else {
         // In this case, userPort is actually passed by the user of osra and we should revive all the message data
@@ -228,19 +389,19 @@ export const revive = <T extends StructurableTransferable, T2 extends RevivableC
 
     const performCleanup = () => {
       context.eventTarget.removeEventListener('message', eventTargetListener)
-      port1.removeEventListener('message', port1Listener)
+      port1AsMessagePort.removeEventListener('message', port1Listener)
       internalPort.removeEventListener('message', internalPortListener)
       internalPort.close()
       // Close the allocator's MessageChannel ports before freeing
       // The allocator creates a MessageChannel with port1 and port2 - both must be closed
-      const allocatedChannel = context.messageChannels.get(portId)
+      const allocatedChannel = messageChannels.get(portId)
       if (allocatedChannel) {
         allocatedChannel.port1.close()
         if (allocatedChannel.port2) {
           allocatedChannel.port2.close()
         }
       }
-      context.messageChannels.free(portId)
+      messageChannels.free(portId)
     }
 
     // Register the userPort for automatic cleanup when garbage collected
@@ -259,21 +420,21 @@ export const revive = <T extends StructurableTransferable, T2 extends RevivableC
     context.eventTarget.addEventListener('message', eventTargetListener)
 
     // The ReceiveTransport received a message from the other side so we call it on our own side's MessagePort after reviving it
-    port1.addEventListener('message', port1Listener)
-    port1.start()
+    port1AsMessagePort.addEventListener('message', port1Listener)
+    port1AsMessagePort.start()
 
-    return userPort as EventChannel<T>
+    return userPort as unknown as AnyPort<T>
   }
-  return value.port
+  return value.port as AnyPort<T>
 }
 
 const typeCheck = () => {
-  const port = new MessageChannel().port1 as EventChannel<{ foo: string }>
+  const port = new MessageChannel().port1 as unknown as TypedMessagePort<{ foo: string }>
   const boxed = box(port, {} as RevivableContext)
   const revived = revive(boxed, {} as RevivableContext)
-  const expected: EventChannel<{ foo: string }> = revived
+  const expected: AnyPort<{ foo: string }> = revived
   // @ts-expect-error - wrong message type
-  const wrongType: EventChannel<{ bar: number }> = revived
+  const wrongType: AnyPort<{ bar: number }> = revived
   // @ts-expect-error - non-StructurableTransferable message type
-  box(new MessageChannel().port1 as EventChannel<Promise<string>>, {} as RevivableContext)
+  box(new MessageChannel().port1 as unknown as TypedMessagePort<Promise<string>>, {} as RevivableContext)
 }

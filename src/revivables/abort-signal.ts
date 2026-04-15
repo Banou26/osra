@@ -1,9 +1,13 @@
-import type { StructurableTransferable } from '../types'
-import { EventChannel } from '../utils/typed-event-channel'
 import type { RevivableContext } from './utils'
 
 import { BoxBase } from './utils'
-import { box as boxMessagePort, revive as reviveMessagePort, type BoxedMessagePort } from './message-port'
+import { EventChannel } from '../utils/event-channel'
+import {
+  box as boxMessagePort,
+  revive as reviveMessagePort,
+  registerInternalPort,
+  type BoxedMessagePort
+} from './message-port'
 
 export const type = 'abortSignal' as const
 
@@ -51,7 +55,7 @@ export const revive = <T extends ReturnType<typeof box>, T2 extends RevivableCon
   }
 
   const port = reviveMessagePort(value.port, context) as MessagePort
-  context.messagePorts.add(port)
+  registerInternalPort(context, port)
   port.start()
 
   port.addEventListener('message', ({ data }) => {

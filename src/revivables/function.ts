@@ -4,7 +4,13 @@ import type { UnderlyingType, RevivableContext, BoxBase as BoxBaseType } from '.
 import { BoxBase } from './utils'
 import { recursiveBox, recursiveRevive } from '.'
 import { getTransferableObjects } from '../utils'
-import { box as boxMessagePort, revive as reviveMessagePort, BoxedMessagePort } from './message-port'
+import {
+  box as boxMessagePort,
+  revive as reviveMessagePort,
+  registerInternalPort,
+  unregisterInternalPort,
+  BoxedMessagePort
+} from './message-port'
 
 export const type = 'function' as const
 
@@ -51,10 +57,10 @@ export const box = <T extends (...args: any[]) => any, T2 extends RevivableConte
   context: T2
 ): BoxedFunction<T> => {
   const { port1: localPort, port2: remotePort } = new MessageChannel()
-  context.messagePorts.add(remotePort)
+  registerInternalPort(context, remotePort)
 
   const cleanup = () => {
-    context.messagePorts.delete(remotePort)
+    unregisterInternalPort(context, remotePort)
     localPort.close()
   }
 
@@ -88,11 +94,11 @@ export const revive = <T extends BoxedFunction, T2 extends RevivableContext>(
   const func = (...args: Capable[]) =>
     new Promise((resolve, reject) => {
       const { port1: returnValueLocalPort, port2: returnValueRemotePort } = new MessageChannel()
-      context.messagePorts.add(returnValueRemotePort)
+      registerInternalPort(context, returnValueRemotePort)
       const callContext = recursiveBox([returnValueRemotePort, args] as const, context)
       ;(port as MessagePort).postMessage(callContext, getTransferableObjects(callContext))
       // Remove the remote port from the set after transfer (it's neutered now)
-      context.messagePorts.delete(returnValueRemotePort)
+      unregisterInternalPort(context, returnValueRemotePort)
 
       returnValueLocalPort.addEventListener('message', ({ data }: MessageEvent<Capable>) => {
         const result = recursiveRevive(data, context) as Promise<Capable>
