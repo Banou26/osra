@@ -11,6 +11,10 @@ import {
 
 export const type = 'function' as const
 
+type ResultMessage =
+  | { __osra_ok__: true, value: Capable }
+  | { __osra_err__: true, error: string }
+
 type CallMessage = CallContext | { __osra_close__: true }
 
 /**
@@ -60,6 +64,10 @@ export const box = <T extends (...args: any[]) => any, T2 extends RevivableConte
 
   const cleanup = () => {
     localPort.close()
+    // remotePort was wrapped by message-port.box; closing it fires the
+    // _onClose hook which frees allocator entries and context.eventTarget
+    // listeners on this side.
+    remotePort.close()
   }
 
   localPort.addEventListener('message', ({ data }) => {
@@ -68,8 +76,20 @@ export const box = <T extends (...args: any[]) => any, T2 extends RevivableConte
       return
     }
     const [returnValuePort, args] = data as CallContext
-    const result = (async () => value(...(args as Parameters<T>)))()
-    returnValuePort.postMessage(result)
+    const returnPort = returnValuePort as unknown as EventPort<ResultMessage>
+    ;(async () => value(...(args as Parameters<T>)))()
+      .then(
+        (resolved) => returnPort.postMessage({ __osra_ok__: true, value: resolved as Capable }),
+        (error: unknown) => returnPort.postMessage({
+          __osra_err__: true,
+          error: (error as Error)?.stack ?? String(error)
+        })
+      )
+      .finally(() => {
+        // Close after the message has flushed through the microtask queue so
+        // the result actually dispatches before we tear the channel down.
+        queueMicrotask(() => returnPort.close())
+      })
   })
   localPort.start()
 
@@ -88,17 +108,19 @@ export const revive = <T extends BoxedFunction, T2 extends RevivableContext>(
 
   const func = (...args: Capable[]) =>
     new Promise((resolve, reject) => {
-      const { port1: returnValueLocalPort, port2: returnValueRemotePort } = new EventChannel<Capable, Capable>()
-      port.postMessage([returnValueRemotePort, args])
+      const channel = new EventChannel<ResultMessage, ResultMessage>()
+      const returnValueLocalPort = channel.port1
+      const returnValueRemotePort = channel.port2
+      port.postMessage([returnValueRemotePort as unknown as EventPort<Capable>, args])
 
       returnValueLocalPort.addEventListener('message', ({ data: result }) => {
-        // data is already revived (message-port handed us live values)
-        ;(result as Promise<Capable>)
-          .then(resolve)
-          .catch(reject)
-          .finally(() => {
-            returnValueLocalPort.close()
-          })
+        if ('__osra_ok__' in result) resolve(result.value)
+        else reject(result.error)
+        returnValueLocalPort.close()
+        // Close remote side too — its _onClose (set by message-port.box)
+        // tears down handler state on this connection so per-call state
+        // doesn't accumulate across iterations.
+        returnValueRemotePort.close()
       }, { once: true })
       returnValueLocalPort.start()
     })

@@ -178,6 +178,9 @@ const makeMessageChannelAllocator = (): MessageChannelAllocator => {
 
 type ConnectionMessagePortState = {
   messageChannels: MessageChannelAllocator
+  /** Direct per-portId dispatch — O(1) lookup avoids the O(N) addEventListener
+   *  scan that was the bottleneck for tight-loop RPC traffic. */
+  portHandlers: Map<string, (message: Messages) => void>
 }
 
 const connectionStateMap = new WeakMap<RevivableContext, ConnectionMessagePortState>()
@@ -201,19 +204,14 @@ const getState = (context: RevivableContext): ConnectionMessagePortState => {
 
 export const init = (context: RevivableContext): void => {
   const state: ConnectionMessagePortState = {
-    messageChannels: makeMessageChannelAllocator()
+    messageChannels: makeMessageChannelAllocator(),
+    portHandlers: new Map()
   }
   connectionStateMap.set(context, state)
 
   context.eventTarget.addEventListener('message', ({ detail }) => {
-    if (detail.type !== 'message') return
-    const messageChannel = state.messageChannels.getOrAlloc(detail.portId)
-    // Use only must-transfer types here (MessagePort, streams, etc.) so the
-    // in-process re-postMessage doesn't detach ArrayBuffers in `detail` —
-    // any other listener on context.eventTarget (notably the box side's
-    // eventTargetListener for this portId) needs to see the buffer intact.
-    const transferables = getMustTransferOnly(detail)
-    ;(messageChannel.port2 as unknown as MessagePort | undefined)?.postMessage(detail, { transfer: transferables })
+    if (detail.type !== 'message' && detail.type !== 'message-port-close') return
+    state.portHandlers.get(detail.portId)?.(detail)
   })
 }
 
@@ -228,36 +226,40 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
   // transport supports cloning we have to route them via portId — otherwise
   // sending the wrapping message would crash with DataCloneError.
   if (isJsonOnlyTransport(context.transport) || value instanceof EventPort) {
-    const { messageChannels } = getState(context)
+    const { messageChannels, portHandlers } = getState(context)
     const messagePort = value as unknown as AnyPort<T>
     // Only generate a unique UUID, don't store the port in the allocator.
     // Storing the port would create a strong reference that prevents GC and FinalizationRegistry cleanup.
     const portId = messageChannels.getUniqueUuid()
 
     // Use WeakRef to allow messagePort to be garbage collected.
-    // The eventTargetListener would otherwise hold a strong reference preventing GC.
+    // The handler would otherwise hold a strong reference preventing GC.
     const messagePortRef = new WeakRef(messagePort as object)
+
+    let cleanedUp = false
+    const performCleanup = () => {
+      if (cleanedUp) return
+      cleanedUp = true
+      portHandlers.delete(portId)
+      const port = messagePortRef.deref() as AnyPort<T> | undefined
+      if (port) {
+        messagePortRegistry.unregister(port as object)
+        port.removeEventListener('message', messagePortListener as EventListener)
+      }
+    }
 
     // Incoming: remote side wrote to its revived port — deliver the payload
     // on our local port after reviving it back into a live value.
-    const eventTargetListener = ({ detail: message }: CustomEvent<Message>) => {
+    const handler = (message: Messages) => {
       if (message.type === 'message-port-close') {
-        if (message.portId !== portId) return
-        messageChannels.free(portId)
+        performCleanup()
         const port = messagePortRef.deref() as AnyPort<T> | undefined
-        if (port) {
-          // Unregister from FinalizationRegistry to prevent double-close
-          messagePortRegistry.unregister(port as object)
-          port.close()
-        }
-        context.eventTarget.removeEventListener('message', eventTargetListener)
+        port?.close()
         return
       }
-      if (message.type !== 'message' || message.portId !== portId) return
       const port = messagePortRef.deref() as AnyPort<T> | undefined
       if (!port) {
-        // Port was garbage collected, remove this listener
-        context.eventTarget.removeEventListener('message', eventTargetListener)
+        performCleanup()
         return
       }
       const revivedData = recursiveRevive(message.data, context) as T
@@ -283,20 +285,28 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
         sendMessage: context.sendMessage,
         remoteUuid: context.remoteUuid,
         portId,
-        cleanup: () => {
-          messageChannels.free(portId)
-          context.eventTarget.removeEventListener('message', eventTargetListener)
-          ;(messagePortRef.deref() as AnyPort<T> | undefined)
-            ?.removeEventListener('message', messagePortListener as EventListener)
-          ;(messagePortRef.deref() as AnyPort<T> | undefined)?.close()
-        }
+        cleanup: performCleanup
       }, liveRef as object)
 
       liveRef.addEventListener('message', messagePortListener as EventListener)
       liveRef.start()
+
+      // For synthetic EventPorts, close() is how the owning side signals it's
+      // done — wire it up so we tear down listeners and notify the remote.
+      if (liveRef instanceof EventPort) {
+        liveRef._onClose = () => {
+          if (cleanedUp) return
+          context.sendMessage({
+            type: 'message-port-close',
+            remoteUuid: context.remoteUuid,
+            portId
+          })
+          performCleanup()
+        }
+      }
     }
 
-    context.eventTarget.addEventListener('message', eventTargetListener)
+    portHandlers.set(portId, handler)
 
     const result = {
       ...BoxBase,
@@ -318,41 +328,39 @@ export const revive = <T extends Capable, T2 extends RevivableContext>(
   context: T2
 ): EventPort<T> => {
   if ('portId' in value) {
-    const { messageChannels } = getState(context)
+    const { portHandlers } = getState(context)
     const { portId } = value
     // Use an EventChannel (pass-by-reference) rather than a real MessageChannel,
     // so reviving data with non-cloneable live values (Promises, Functions,
     // ReadableStreams, …) doesn't trip structured clone.
     const { port1: userPort, port2: internalPort } = new EventChannel<T, T>()
 
-    const existingChannel = messageChannels.get(value.portId)
-    const { port1 } =
-      existingChannel
-        ? existingChannel
-        : messageChannels.alloc(value.portId as Uuid)
-    const port1AsMessagePort = port1 as unknown as MessagePort
-
     const userPortRef = new WeakRef(userPort)
 
-    const eventTargetListener = ({ detail: message }: CustomEvent<Message>) => {
-      if (message.type !== 'message-port-close' || message.portId !== portId) return
+    let cleanedUp = false
+
+    const performCleanup = () => {
+      if (cleanedUp) return
+      cleanedUp = true
+      portHandlers.delete(portId)
+      internalPort.removeEventListener('message', internalPortListener)
+      internalPort.close()
       const port = userPortRef.deref()
-      if (port) {
-        // Unregister from FinalizationRegistry to prevent double-close
-        messagePortRegistry.unregister(port)
-      }
-      performCleanup()
+      if (port) messagePortRegistry.unregister(port)
     }
 
-    const port1Listener = ({ data: message }: MessageEvent) => {
-      if (message.type !== 'message' || message.portId !== portId) return
-
+    const handler = (message: Messages) => {
+      if (message.type === 'message-port-close') {
+        performCleanup()
+        const port = userPortRef.deref()
+        port?.close()
+        return
+      }
       const port = userPortRef.deref()
       if (!port) {
         performCleanup()
         return
       }
-
       // Data on the wire is always boxed — revive and hand the live value to
       // the caller. No structured clone happens here because internalPort is
       // an EventPort (pass-by-ref), so live Promises/Functions etc. flow
@@ -372,22 +380,6 @@ export const revive = <T extends Capable, T2 extends RevivableContext>(
       })
     }
 
-    const performCleanup = () => {
-      context.eventTarget.removeEventListener('message', eventTargetListener)
-      port1AsMessagePort.removeEventListener('message', port1Listener)
-      internalPort.removeEventListener('message', internalPortListener)
-      internalPort.close()
-      // Close the allocator's MessageChannel ports before freeing
-      const allocatedChannel = messageChannels.get(portId)
-      if (allocatedChannel) {
-        allocatedChannel.port1.close()
-        if (allocatedChannel.port2) {
-          allocatedChannel.port2.close()
-        }
-      }
-      messageChannels.free(portId)
-    }
-
     messagePortRegistry.register(userPort, {
       sendMessage: context.sendMessage,
       remoteUuid: context.remoteUuid,
@@ -395,13 +387,22 @@ export const revive = <T extends Capable, T2 extends RevivableContext>(
       cleanup: performCleanup
     }, userPort)
 
+    // When the user explicitly closes userPort, tear down local listeners
+    // and notify the remote side so it can do the same.
+    userPort._onClose = () => {
+      if (cleanedUp) return
+      context.sendMessage({
+        type: 'message-port-close',
+        remoteUuid: context.remoteUuid,
+        portId
+      })
+      performCleanup()
+    }
+
     internalPort.addEventListener('message', internalPortListener)
     internalPort.start()
 
-    context.eventTarget.addEventListener('message', eventTargetListener)
-
-    port1AsMessagePort.addEventListener('message', port1Listener)
-    port1AsMessagePort.start()
+    portHandlers.set(portId, handler)
 
     return userPort as unknown as EventPort<T>
   }
