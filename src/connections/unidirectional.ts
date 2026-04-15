@@ -1,6 +1,9 @@
 import type { Capable, Message, MessageEventTarget, Uuid } from '../types'
 import type { DefaultRevivableModules, RevivableModule } from '../revivables'
 import type { TypedMessagePort } from '../utils/typed-message-channel'
+import type { ProtocolContext } from './utils'
+
+import { isEmitTransport, isReceiveTransport } from '../utils/type-guards'
 
 export type UnidirectionalEmittingConnection<T extends Capable = Capable> = {
   close: () => void
@@ -62,5 +65,46 @@ export const startUnidirectionalReceivingConnection = (
   return {
     close: () => {
     }
+  }
+}
+
+/**
+ * Emit-only mode: transport can send but not receive. We can't do a
+ * handshake, so we just build a proxy that serializes calls over the wire
+ * and resolve the remote value immediately.
+ */
+export const unidirectionalEmitting = {
+  type: 'unidirectional-emitting' as const,
+  init: <TModules extends readonly RevivableModule[]>(
+    ctx: ProtocolContext<TModules>
+  ): void => {
+    if (!(isEmitTransport(ctx.transport) && !isReceiveTransport(ctx.transport))) return
+
+    const { remoteValueProxy } = startUnidirectionalEmittingConnection<Capable>({
+      value: ctx.value,
+      uuid: ctx.getUuid(),
+      send: (message) => ctx.sendMessage(message as Message),
+      close: () => ctx.connectionContexts.delete(ctx.getUuid())
+    })
+    ctx.resolveRemoteValue(remoteValueProxy)
+
+    ctx.sendMessage({ type: 'announce' })
+  }
+}
+
+/**
+ * Receive-only mode: transport can receive but not send. No handshake is
+ * possible, so any inbound message is currently a protocol error.
+ */
+export const unidirectionalReceiving = {
+  type: 'unidirectional-receiving' as const,
+  init: <TModules extends readonly RevivableModule[]>(
+    ctx: ProtocolContext<TModules>
+  ): void => {
+    if (!(isReceiveTransport(ctx.transport) && !isEmitTransport(ctx.transport))) return
+
+    ctx.protocolEventTarget.addEventListener('message', () => {
+      throw new Error('Unidirectional receiving mode not implemented')
+    })
   }
 }
