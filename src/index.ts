@@ -42,11 +42,61 @@ export type {
 }
 
 declare const ErrorMessage: unique symbol
-declare const BadValueType: unique symbol
+declare const BadValue: unique symbol
+declare const Path: unique symbol
+declare const ParentObject: unique symbol
+
+type IsPlainCapableObject<T> =
+  T extends object
+    ? T extends readonly unknown[]
+      ? false
+      : T extends (...args: any[]) => any
+        ? false
+        : T extends Date | RegExp | Blob | File | FileList | ArrayBuffer | ArrayBufferView | ImageBitmap | ImageData | Map<any, any> | Set<any> | Promise<any>
+          ? false
+          : true
+    : false
+
+type FindBadCapableField<T, TPath extends string = '', TParent = T> =
+  T extends Capable
+    ? never
+    : T extends readonly unknown[]
+      ? {
+          [K in Extract<keyof T, `${number}`>]:
+            T[K] extends Capable
+              ? never
+              : FindBadCapableField<T[K], `${TPath}[${K}]`, T>
+        }[Extract<keyof T, `${number}`>] extends infer R
+          ? [R] extends [never]
+            ? { value: T; path: TPath; parent: TParent }
+            : R
+          : never
+      : IsPlainCapableObject<T> extends true
+        ? {
+            [K in Extract<keyof T, string>]:
+              T[K] extends Capable
+                ? never
+                : FindBadCapableField<T[K], TPath extends '' ? K : `${TPath}.${K}`, T>
+          }[Extract<keyof T, string>] extends infer R
+            ? [R] extends [never]
+              ? { value: T; path: TPath; parent: TParent }
+              : R
+            : never
+        : { value: T; path: TPath; parent: TParent }
+
+type FindBadCapableValue<T> = FindBadCapableField<T> extends { value: infer V } ? V : T
+type FindBadCapablePath<T> = FindBadCapableField<T> extends { path: infer P extends string } ? P : ''
+type FindBadCapableParent<T> = FindBadCapableField<T> extends { parent: infer P } ? P : T
+
 type CapableCheck<T> =
   T extends Capable
     ? T
-    : { [ErrorMessage]: 'Value type must resolve to a Capable'; [BadValueType]: T }
+    : {
+        [ErrorMessage]: 'Value type must resolve to a Capable'
+        [BadValue]: FindBadCapableValue<T>
+        [Path]: FindBadCapablePath<T>
+        [ParentObject]: FindBadCapableParent<T>
+      }
 
 /**
  * Protocol mode:
