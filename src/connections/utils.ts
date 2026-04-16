@@ -65,6 +65,5 @@ export type StartConnectionsOptions<
   key?: string
   origin?: string
   unregisterSignal?: AbortSignal
-  logger?: {}
   revivableModules?: TUserModules
 }

@@ -1,8 +1,7 @@
 import type { BoxBase, RevivableContext } from './utils'
 import type { DeepReplaceWithBox, DeepReplaceWithRevive, ReplaceWithBox, ReplaceWithRevive } from '../utils/replace'
-import type { MessageFields } from '../types'
+import type { MessageFields, Capable } from '../types'
 
-import { Capable } from '../types'
 import { isRevivableBox } from './utils'
 import * as arrayBuffer from './array-buffer'
 import * as date from './date'

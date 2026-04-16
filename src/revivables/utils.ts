@@ -34,23 +34,8 @@ export type CustomMessageEvent<
 > =
   | CustomEvent<Message<TModules>>
 
-export type ExtractModule<T> =
-  T extends { isType: (value: unknown) => value is infer S }
-    ? S
-    : never
-
 export type ExtractType<T> =
   T extends { isType: (value: unknown) => value is infer S }
-    ? S
-    : never
-
-export type ExtractBoxInput<T> =
-  T extends { box: (value: infer S) => value is any }
-    ? S
-    : never
-
-export type ExtractReviveInput<T> =
-  T extends { revive: (value: infer S) => value is any }
     ? S
     : never
 

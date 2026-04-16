@@ -60,8 +60,8 @@ export const typedArrayToType = <T extends TypedArray>(value: T) => {
   if (type === undefined) throw new Error('Unknown typed array type')
   return type
 }
-export type TypeArrayType = ReturnType<typeof typedArrayToType>
-export const typedArrayTypeToTypedArrayConstructor = (value: TypeArrayType): TypedArrayConstructor => {
+export type TypedArrayType = ReturnType<typeof typedArrayToType>
+export const typedArrayTypeToTypedArrayConstructor = (value: TypedArrayType): TypedArrayConstructor => {
   const typedArray =
     value === 'Int8Array' ? Int8Array :
     value === 'Uint8Array' ? Uint8Array :
@@ -94,13 +94,6 @@ export const isArrayBuffer = (value: any) => value instanceof ArrayBuffer
 export const isReadableStream = (value: any) => value instanceof ReadableStream
 export const isDate = (value: any) => value instanceof Date
 export const isError = (value: any) => value instanceof Error
-
-export const isAlwaysBox = (value: any): value is Function | Promise<any> | Date | Error =>
-  isFunction(value)
-  || isPromise(value)
-  || isTypedArray(value)
-  || isDate(value)
-  || isError(value)
 
 export const isOsraMessage = (value: any): value is Message =>
   Boolean(

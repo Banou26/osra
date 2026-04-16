@@ -503,47 +503,6 @@ try {
 }
 ```
 
-### Custom Logger
-
-```typescript
-const logger = {
-  log: (...args) => {
-    console.log('[Osra]', new Date().toISOString(), ...args)
-  },
-  error: (...args) => {
-    console.error('[Osra ERROR]', new Date().toISOString(), ...args)
-  },
-  warn: (...args) => {
-    console.warn('[Osra WARN]', new Date().toISOString(), ...args)
-  }
-}
-
-const api = await expose<API>({}, {
-  transport: worker,
-  logger
-})
-```
-
-### Debug Mode
-
-```typescript
-// Enable verbose logging
-if (process.env.NODE_ENV === 'development') {
-  const api = await expose<API>({}, {
-    transport: worker,
-    logger: {
-      log: (...args) => {
-        console.group('Osra Message')
-        console.log('Timestamp:', Date.now())
-        console.log('Data:', ...args)
-        console.trace()
-        console.groupEnd()
-      }
-    }
-  })
-}
-```
-
 ## Security Considerations
 
 ### Origin Validation

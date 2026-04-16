@@ -40,10 +40,6 @@ export type ConnectionContext<
   connection: BidirectionalConnection<TModules>
 }
 
-export declare const ConnectionContext: <
-  TModules extends readonly RevivableModule[] = DefaultRevivableModules
->(modules: TModules) => ConnectionContext<TModules>
-
 export type ConnectionRevivableContext<
   TModules extends readonly RevivableModule[] = DefaultRevivableModules,
   T extends Capable<TModules> = Capable<TModules>
@@ -67,7 +63,6 @@ export const startBidirectionalConnection = <
     remoteUuid: Uuid
     eventTarget: MessageEventTarget<TModules>
     send: (message: Messages<TModules>) => void
-    close: () => void
     revivableModules: TModules
   }
 ) => {
@@ -100,8 +95,6 @@ export const startBidirectionalConnection = <
 
   return {
     revivableContext,
-    close: () => {
-    },
     remoteValue:
       promise
         .then(initData =>
@@ -114,7 +107,6 @@ export type BidirectionalConnection<
   TModules extends readonly RevivableModule[] = DefaultRevivableModules
 > = {
   revivableContext: ConnectionRevivableContext<TModules>
-  close: () => void
   remoteValue: Promise<Capable>
 }
 
@@ -154,7 +146,6 @@ export const init = <TModules extends readonly RevivableModule[]>(
             remoteUuid: message.uuid,
             eventTarget,
             send: (m) => ctx.sendMessage(m as MessageVariant),
-            close: () => void ctx.connectionContexts.delete(message.uuid),
             revivableModules: ctx.revivableModules
           })
       } satisfies ConnectionContext<TModules>
@@ -172,23 +163,15 @@ export const init = <TModules extends readonly RevivableModule[]>(
     }
     if (message.type === 'close') {
       if (message.remoteUuid !== ctx.getUuid()) return
-      const connectionContext = ctx.connectionContexts.get(message.uuid)
-      // drop the message if the remote uuid hasn't announced itself
-      if (!connectionContext) {
-        console.warn(`Connection not found for remoteUuid: ${message.uuid}`)
-        return
-      }
-      connectionContext.connection.close()
       ctx.connectionContexts.delete(message.uuid)
       return
     }
     // "init" | "message" | "message-port-close"
     if (message.remoteUuid !== ctx.getUuid()) return
     const connection = ctx.connectionContexts.get(message.uuid)
-    if (!connection) {
-      console.warn(`Connection not found for remoteUuid: ${message.uuid}`)
-      return
-    }
+    // drop messages that arrive before the remote has announced itself,
+    // or after its connection has been torn down
+    if (!connection) return
     connection.eventTarget.dispatchEvent(
       new CustomEvent('message', { detail: message })
     )
