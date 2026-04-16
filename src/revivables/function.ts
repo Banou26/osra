@@ -1,12 +1,12 @@
 import type { Capable } from '../types'
 import type { UnderlyingType, RevivableContext, BoxBase as BoxBaseType } from './utils'
+import type { TypedMessagePort } from '../utils/typed-message-channel'
 
 import { BoxBase } from './utils'
 import { EventChannel, EventPort } from '../utils/event-channel'
 import {
   box as boxMessagePort,
   revive as reviveMessagePort,
-  AnyPort,
   BoxedMessagePort,
 } from './message-port'
 
@@ -22,7 +22,7 @@ type CallMessage = CallContext | { __osra_close__: true }
  * FinalizationRegistry for automatically cleaning up function ports when the revived function is garbage collected.
  */
 type FunctionCleanupInfo = {
-  port: AnyPort<CallMessage>
+  port: TypedMessagePort<CallMessage>
 }
 
 const functionRegistry = new FinalizationRegistry<FunctionCleanupInfo>((info) => {

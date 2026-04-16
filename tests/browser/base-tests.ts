@@ -95,6 +95,10 @@ export const userMessagePort = async (transport: Transport) => {
 
   const { port1 } = await expose<typeof value>({}, { transport })
 
+  // A user-owned MessagePort must revive as a real MessagePort regardless
+  // of whether the transport supports structured clone or is JSON-only.
+  expect(port1).to.be.instanceOf(MessagePort)
+
   let port1Resolve: ((value: number) => void)
   const port1Promise = new Promise<number>(resolve => port1Resolve = resolve)
   port1.addEventListener('message', event => {
@@ -102,7 +106,7 @@ export const userMessagePort = async (transport: Transport) => {
   })
   port1.start()
   port1.postMessage(1)
-  
+
   let port2Resolve: ((value: number) => void)
   const port2Promise = new Promise<number>(resolve => port2Resolve = resolve)
   port2.addEventListener('message', event => {
@@ -110,7 +114,7 @@ export const userMessagePort = async (transport: Transport) => {
   })
   port2.start()
   port2.postMessage(2)
-  
+
   await expect(port1Promise).to.eventually.equal(2)
   await expect(port2Promise).to.eventually.equal(1)
 }
