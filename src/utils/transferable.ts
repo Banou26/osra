@@ -1,6 +1,6 @@
 import { OSRA_BOX } from '../types'
 import { transfer } from '../revivables/transfer'
-import { isClonable, isTransferable } from './type-guards'
+import { instanceOfAny, isClonable, isTransferable } from './type-guards'
 
 export { transfer }
 
@@ -9,13 +9,13 @@ export { transfer }
 // the user opted in with `transfer()`. MessagePort is the canonical case —
 // cloning one would leave the remote side unable to respond.
 const isMustTransfer = (value: unknown): value is Transferable =>
-  Boolean(
-       (typeof MessagePort !== 'undefined' && value instanceof MessagePort)
-    || (typeof ReadableStream !== 'undefined' && value instanceof ReadableStream)
-    || (typeof WritableStream !== 'undefined' && value instanceof WritableStream)
-    || (typeof TransformStream !== 'undefined' && value instanceof TransformStream)
-    || (typeof OffscreenCanvas !== 'undefined' && value instanceof OffscreenCanvas),
-  )
+  instanceOfAny(value, [
+    globalThis.MessagePort,
+    globalThis.ReadableStream,
+    globalThis.WritableStream,
+    globalThis.TransformStream,
+    globalThis.OffscreenCanvas,
+  ])
 
 /**
  * Variant of getTransferableObjects that only collects must-transfer types

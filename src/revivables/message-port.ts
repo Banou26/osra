@@ -1,5 +1,5 @@
-import type { Capable, Message, StructurableTransferable, Uuid } from '../types'
-import type { TypedMessageChannel, TypedMessagePort } from '../utils/typed-message-channel'
+import type { Capable, StructurableTransferable, Uuid } from '../types'
+import type { TypedMessagePort } from '../utils/typed-message-channel'
 import type { RevivableContext, BoxBase as BoxBaseType } from './utils'
 import type { UnderlyingType } from '../utils/type'
 import type {
@@ -9,8 +9,7 @@ import type {
 
 import { BoxBase } from './utils'
 import { recursiveBox, recursiveRevive } from '.'
-import { OSRA_BOX } from '../types'
-import { getMustTransferOnly, getTransferableObjects, isJsonOnlyTransport } from '../utils'
+import { getTransferableObjects, isJsonOnlyTransport } from '../utils'
 import { EventChannel, EventPort } from '../utils/event-channel'
 
 /**
@@ -84,100 +83,14 @@ type StructurableTransferablePort<T> = [T] extends [Capable]
     }
 
 // -------------------------------------------------------------------------
-// Per-connection message channel allocator
-//
-// Each bidirectional connection gets its own pool of local channels keyed
-// by portId. These channels exist so JSON-only transports can emulate
-// MessagePort semantics: when a message arrives for a given portId on the
-// main transport, the connection routes it into the allocator's port2, and
-// the revived user-facing port (port1 side) picks it up locally.
-// -------------------------------------------------------------------------
-
-type AllocatedMessageChannel<
-  T extends StructurableTransferable = StructurableTransferable,
-  T2 extends StructurableTransferable = StructurableTransferable
-> = {
-  uuid: Uuid
-  /** Local port */
-  port1: TypedMessagePort<T>
-  /** Remote port that gets transferred, might be undefined if a remote context created the channel */
-  port2?: TypedMessagePort<T2>
-}
-
-type MessageChannelAllocator = {
-  getUniqueUuid: () => Uuid
-  set: (uuid: Uuid, messagePorts: { port1: TypedMessagePort, port2?: TypedMessagePort }) => void
-  alloc: (
-    uuid?: Uuid,
-    messagePorts?: { port1: TypedMessagePort, port2?: TypedMessagePort }
-  ) => AllocatedMessageChannel
-  has: (uuid: string) => boolean
-  get: (uuid: string) => AllocatedMessageChannel | undefined
-  free: (uuid: string) => boolean
-  getOrAlloc: (
-    uuid?: Uuid,
-    messagePorts?: { port1: TypedMessagePort, port2?: TypedMessagePort }
-  ) => AllocatedMessageChannel
-}
-
-const makeMessageChannelAllocator = (): MessageChannelAllocator => {
-  const channels = new Map<string, AllocatedMessageChannel>()
-
-  const result: MessageChannelAllocator = {
-    getUniqueUuid: () => {
-      let uuid: Uuid = globalThis.crypto.randomUUID()
-      while (channels.has(uuid)) {
-        uuid = globalThis.crypto.randomUUID()
-      }
-      return uuid
-    },
-    set: (uuid, messagePorts) => {
-      channels.set(uuid, { uuid, ...messagePorts } as AllocatedMessageChannel)
-    },
-    alloc: (
-      uuid: Uuid | undefined = result.getUniqueUuid(),
-      messagePorts?: { port1: TypedMessagePort, port2?: TypedMessagePort }
-    ) => {
-      if (messagePorts) {
-        const allocatedMessageChannel = { uuid, ...messagePorts } as AllocatedMessageChannel
-        channels.set(uuid, allocatedMessageChannel)
-        return allocatedMessageChannel
-      }
-      const messageChannel = new MessageChannel() as unknown as TypedMessageChannel
-      const allocatedMessageChannel = {
-        uuid,
-        port1: messageChannel.port1,
-        port2: messageChannel.port2
-      } as AllocatedMessageChannel
-      channels.set(uuid, allocatedMessageChannel)
-      return allocatedMessageChannel
-    },
-    has: (uuid: string) => channels.has(uuid),
-    get: (uuid: string) => channels.get(uuid),
-    free: (uuid: string) => channels.delete(uuid),
-    getOrAlloc: (
-      uuid: Uuid | undefined = result.getUniqueUuid(),
-      messagePorts?: { port1: TypedMessagePort, port2?: TypedMessagePort }
-    ) => {
-      const existingChannel = result.get(uuid)
-      if (existingChannel) return existingChannel!
-      return result.alloc(uuid, messagePorts)
-    }
-  }
-  return result
-}
-
-// -------------------------------------------------------------------------
 // Per-connection state
 //
 // The WeakMap ties per-connection message-port state to the connection's
-// RevivableContext — when the context is collected, the allocator goes
-// with it. State lives only here; no sibling revivable has to know about
-// it.
+// RevivableContext — when the context is collected, the state goes with it.
+// State lives only here; no sibling revivable has to know about it.
 // -------------------------------------------------------------------------
 
 type ConnectionMessagePortState = {
-  messageChannels: MessageChannelAllocator
   /** Direct per-portId dispatch — O(1) lookup avoids the O(N) addEventListener
    *  scan that was the bottleneck for tight-loop RPC traffic. */
   portHandlers: Map<string, (message: Messages) => void>
@@ -197,14 +110,13 @@ const getState = (context: RevivableContext): ConnectionMessagePortState => {
 // init hook
 //
 // Called once per connection by the bidirectional connection bootstrap.
-// Sets up the per-connection allocator and installs the event-target
+// Sets up the per-connection port-handler map and installs the event-target
 // listener that routes incoming 'message' envelopes to the correct local
-// channel.
+// handler.
 // -------------------------------------------------------------------------
 
 export const init = (context: RevivableContext): void => {
   const state: ConnectionMessagePortState = {
-    messageChannels: makeMessageChannelAllocator(),
     portHandlers: new Map()
   }
   connectionStateMap.set(context, state)
@@ -226,10 +138,9 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
   // transport supports cloning we have to route them via portId — otherwise
   // sending the wrapping message would crash with DataCloneError.
   if (isJsonOnlyTransport(context.transport) || value instanceof EventPort) {
-    const { messageChannels, portHandlers } = getState(context)
+    const { portHandlers } = getState(context)
     const liveRef = value as unknown as AnyPort<T>
-    // Only generate a unique UUID, don't store the port in the allocator.
-    const portId = messageChannels.getUniqueUuid()
+    const portId: Uuid = globalThis.crypto.randomUUID()
 
     let cleanedUp = false
     const performCleanup = () => {

@@ -109,18 +109,25 @@ export const isOsraMessage = (value: any): value is Message =>
     && (value as Message)[OSRA_KEY]
   )
 
+/** True if `value` is an instance of any of the given (possibly undefined-on-this-platform)
+ *  constructors. Tolerates missing globals so callers don't have to guard each one. */
+export const instanceOfAny = (value: unknown, ctors: readonly (Function | undefined)[]): boolean => {
+  for (const ctor of ctors) if (ctor && value instanceof ctor) return true
+  return false
+}
+
 export const isClonable = (value: any) =>
-    globalThis.SharedArrayBuffer && value instanceof globalThis.SharedArrayBuffer ? true
-  : false
+  instanceOfAny(value, [globalThis.SharedArrayBuffer])
 
 export const isTransferable = (value: any): value is Transferable =>
-    globalThis.ArrayBuffer && value instanceof globalThis.ArrayBuffer ? true
-  : globalThis.MessagePort && value instanceof globalThis.MessagePort ? true
-  : globalThis.ReadableStream && value instanceof globalThis.ReadableStream ? true
-  : globalThis.WritableStream && value instanceof globalThis.WritableStream ? true
-  : globalThis.TransformStream && value instanceof globalThis.TransformStream ? true
-  : globalThis.ImageBitmap && value instanceof globalThis.ImageBitmap ? true
-  : false
+  instanceOfAny(value, [
+    globalThis.ArrayBuffer,
+    globalThis.MessagePort,
+    globalThis.ReadableStream,
+    globalThis.WritableStream,
+    globalThis.TransformStream,
+    globalThis.ImageBitmap,
+  ])
 
 export type WebExtRuntime = typeof browser.runtime
 export const isWebExtensionRuntime = (value: any): value is WebExtRuntime => {

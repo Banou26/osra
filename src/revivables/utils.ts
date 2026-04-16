@@ -12,7 +12,6 @@ export type { UnderlyingType } from '../utils/type'
 
 export const BoxBase = {
   [OSRA_BOX]: 'revivable',
-  type: '' as string
 } as const
 
 export type BoxBase<T extends string = string> =
