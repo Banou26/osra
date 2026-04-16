@@ -51,7 +51,6 @@ export const defaultRevivableModules = [
 ] as const
 
 export type DefaultRevivableModules = typeof defaultRevivableModules
-
 export type DefaultRevivableModule = DefaultRevivableModules[number]
 
 const findBoxModule = (

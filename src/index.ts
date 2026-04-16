@@ -1,30 +1,18 @@
-import type {
-  Capable
-} from './types'
+import type { Capable } from './types'
 import type { DefaultRevivableModules } from './revivables'
 import type { RevivableModule } from './revivables'
 import type { StartConnectionsOptions } from './connections/utils'
-
-export { BoxBase } from './revivables/utils'
-import {
-  DeepReplace,
-  DeepReplaceAsync,
-  AsCapable,
-  startConnections
-} from './utils'
 import type {
   BadFieldValue, BadFieldPath, BadFieldParent,
   ErrorMessage, BadValue, Path, ParentObject
 } from './utils/capable-check'
 
+import { startConnections } from './utils'
+
 export * from './types'
 export * from './revivables'
+export * from './connections'
 export * from './utils'
-export type {
-  DeepReplace,
-  DeepReplaceAsync,
-  AsCapable
-}
 
 type CapableCheck<
   T,
@@ -32,9 +20,6 @@ type CapableCheck<
 > =
   T extends Capable<TModules>
     ? T
-    // Intersect with T so the user's keys are already present on the target —
-    // without this, TS's excess-property check flags the first user key (e.g.
-    // `foo`) instead of reporting the failure against the whole argument.
     : T & {
         [ErrorMessage]: 'Value type must resolve to a Capable'
         [BadValue]: BadFieldValue<T, Capable<TModules>>

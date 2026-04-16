@@ -9,7 +9,6 @@ import type { TypedEventTarget } from '../utils/typed-event-target'
 
 import { defaultRevivableModules } from '../revivables'
 import { isJsonOnlyTransport, isCustomTransport } from '../utils/type-guards'
-import * as bidirectional from './bidirectional'
 
 export const normalizeTransport = (transport: Transport): Transport => {
   const isJson =
@@ -56,15 +55,6 @@ export type ProtocolContext<
   resolveRemoteValue: (value: unknown) => void
   createConnectionEventTarget: () => TypedEventTarget<MessageEventMap<TModules>>
 }
-
-export type ConnectionModule = {
-  readonly type: string
-  readonly init: (ctx: ProtocolContext<any>) => void
-}
-
-export const connections = [
-  bidirectional
-] as const satisfies readonly ConnectionModule[]
 
 export type StartConnectionsOptions<
   TUserModules extends readonly RevivableModule[] = readonly []
