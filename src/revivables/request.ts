@@ -39,15 +39,15 @@ export const revive = <T extends ReturnType<typeof box>, T2 extends RevivableCon
     method: value.method,
     headers,
     body,
-    credentials: value.credentials as RequestCredentials,
-    cache: value.cache as RequestCache,
-    redirect: value.redirect as RequestRedirect,
+    credentials: value.credentials,
+    cache: value.cache,
+    redirect: value.redirect,
     referrer: value.referrer,
-    referrerPolicy: value.referrerPolicy as ReferrerPolicy,
+    referrerPolicy: value.referrerPolicy,
     integrity: value.integrity,
     keepalive: value.keepalive,
     // @ts-expect-error - duplex is needed for streaming bodies
-    duplex: 'half'
+    duplex: 'half',
   })
 }
 

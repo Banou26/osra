@@ -36,6 +36,6 @@ export const expose = async <
   options: StartConnectionsOptions<TUserModules>
 ): Promise<T> =>
   startConnections<T, TUserModules>(
-    value as unknown as Capable<[...DefaultRevivableModules, ...TUserModules]>,
+    value as Capable<[...DefaultRevivableModules, ...TUserModules]>,
     options
   )

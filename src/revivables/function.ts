@@ -6,7 +6,8 @@ import { EventChannel, EventPort } from '../utils/event-channel'
 import {
   box as boxMessagePort,
   revive as reviveMessagePort,
-  BoxedMessagePort
+  AnyPort,
+  BoxedMessagePort,
 } from './message-port'
 
 export const type = 'function' as const
@@ -21,7 +22,7 @@ type CallMessage = CallContext | { __osra_close__: true }
  * FinalizationRegistry for automatically cleaning up function ports when the revived function is garbage collected.
  */
 type FunctionCleanupInfo = {
-  port: EventPort<CallMessage>
+  port: AnyPort<CallMessage>
 }
 
 const functionRegistry = new FinalizationRegistry<FunctionCleanupInfo>((info) => {
@@ -42,14 +43,14 @@ const inFlightReturnPorts = new Set<EventPort<any>>()
 
 export type CallContext = [
   /** Return-value port that the callee will post the result on. */
-  EventPort<Capable>,
+  EventPort<ResultMessage>,
   /** Arguments that will be passed to the function call */
   Capable[]
 ]
 
 export type BoxedFunction<T extends (...args: any[]) => any = (...args: any[]) => any> =
   & BoxBaseType<typeof type>
-  & { port: BoxedMessagePort }
+  & { port: BoxedMessagePort<CallMessage> }
   & { [UnderlyingType]: (...args: Parameters<T>) => Promise<Awaited<ReturnType<T>>> }
 
 type CapableFunction<T> = T extends (...args: infer P) => infer R
@@ -78,19 +79,19 @@ export const box = <T extends (...args: any[]) => any, T2 extends RevivableConte
   }
 
   localPort.addEventListener('message', ({ data }) => {
-    if (data && typeof data === 'object' && '__osra_close__' in data) {
+    if (!Array.isArray(data)) {
+      // __osra_close__ sentinel — only non-array message on this channel
       cleanup()
       return
     }
-    const [returnValuePort, args] = data as CallContext
-    const returnPort = returnValuePort as unknown as EventPort<ResultMessage>
+    const [returnPort, args] = data
     ;(async () => value(...(args as Parameters<T>)))()
       .then(
-        (resolved) => returnPort.postMessage({ __osra_ok__: true, value: resolved as Capable }),
+        (resolved) => returnPort.postMessage({ __osra_ok__: true, value: resolved }),
         (error: unknown) => returnPort.postMessage({
           __osra_err__: true,
-          error: (error as Error)?.stack ?? String(error)
-        })
+          error: error instanceof Error ? (error.stack ?? String(error)) : String(error),
+        }),
       )
       .finally(() => {
         // Close after the message has flushed through the microtask queue so
@@ -111,7 +112,7 @@ export const revive = <T extends BoxedFunction, T2 extends RevivableContext>(
   value: T,
   context: T2
 ): T[UnderlyingType] => {
-  const port = reviveMessagePort(value.port as unknown as BoxedMessagePort<CallMessage>, context)
+  const port = reviveMessagePort(value.port, context)
 
   const func = (...args: Capable[]) =>
     new Promise((resolve, reject) => {
@@ -124,7 +125,7 @@ export const revive = <T extends BoxedFunction, T2 extends RevivableContext>(
       // collected before the result arrives — the Promise hangs forever.
       inFlightReturnPorts.add(returnValueLocalPort)
       inFlightReturnPorts.add(returnValueRemotePort)
-      port.postMessage([returnValueRemotePort as unknown as EventPort<Capable>, args])
+      port.postMessage([returnValueRemotePort, args])
 
       returnValueLocalPort.addEventListener('message', ({ data: result }) => {
         if ('__osra_ok__' in result) resolve(result.value)

@@ -3,8 +3,8 @@ import type { DefaultRevivableModules, RevivableModule } from '../revivables'
 import type { DeepReplaceWithBox } from '../utils/replace'
 import type { ProtocolContext } from './utils'
 import type {
-  Capable, MessageEventTarget,
-  MessageVariant, Uuid
+  Capable, MessageEventTarget, MessageFields,
+  MessageVariant, Uuid,
 } from '../types'
 
 import { recursiveBox, recursiveRevive } from '../revivables'
@@ -41,19 +41,17 @@ export type ConnectionContext<
 }
 
 export type ConnectionRevivableContext<
-  TModules extends readonly RevivableModule[] = DefaultRevivableModules,
-  T extends Capable<TModules> = Capable<TModules>
+  TModules extends readonly RevivableModule[] = DefaultRevivableModules
 > = {
   transport: Transport
   remoteUuid: Uuid
-  sendMessage: (message: Messages<TModules, T>) => void
+  sendMessage: (message: MessageFields & Record<string, unknown>) => void
   revivableModules: TModules
   eventTarget: MessageEventTarget<TModules>
 }
 
 export const startBidirectionalConnection = <
-  T extends Capable,
-  TModules extends readonly RevivableModule[] = DefaultRevivableModules
+  TModules extends readonly RevivableModule[] = DefaultRevivableModules,
 >(
   { transport, value, remoteUuid, eventTarget, send, revivableModules }:
   {
@@ -62,9 +60,9 @@ export const startBidirectionalConnection = <
     uuid: Uuid
     remoteUuid: Uuid
     eventTarget: MessageEventTarget<TModules>
-    send: (message: Messages<TModules>) => void
+    send: (message: MessageFields & Record<string, unknown>) => void
     revivableModules: TModules
-  }
+  },
 ) => {
   const revivableContext = {
     transport,
@@ -97,9 +95,7 @@ export const startBidirectionalConnection = <
     revivableContext,
     remoteValue:
       promise
-        .then(initData =>
-          recursiveRevive(initData, revivableContext) as Promise<T>
-        )
+        .then(initData => recursiveRevive(initData, revivableContext) as Capable),
   }
 }
 
@@ -139,7 +135,7 @@ export const init = <TModules extends readonly RevivableModule[]>(
         type: 'bidirectional',
         eventTarget,
         connection:
-          startBidirectionalConnection<Capable, TModules>({
+          startBidirectionalConnection<TModules>({
             transport: ctx.transport,
             value: ctx.value,
             uuid: ctx.getUuid(),

@@ -27,18 +27,18 @@ export const isType = isTypedArray
 
 export const box = <T extends TypedArray, T2 extends RevivableContext>(
   value: T,
-  context: T2
+  context: T2,
 ): BoxedTypedArray<T, T2> =>
   (isJsonOnlyTransport(context.transport)
     ? { ...BoxBase, type, typedArrayType: typedArrayToType(value), base64Buffer: new Uint8Array(value.buffer).toBase64() }
     : { ...BoxBase, type, typedArrayType: typedArrayToType(value), arrayBuffer: value.buffer }
   ) as unknown as BoxedTypedArray<T, T2>
 
-export const revive = <T extends BoxedTypedArray<TypedArray, RevivableContext>, T2 extends RevivableContext>(
+export const revive = <T extends BoxedTypedArray<TypedArray, RevivableContext>>(
   value: T,
-  _context: T2
+  _context: RevivableContext,
 ): T[UnderlyingType] => {
-  const Ctor = typedArrayTypeToTypedArrayConstructor(value.typedArrayType as TypedArrayType)
+  const Ctor = typedArrayTypeToTypedArrayConstructor(value.typedArrayType)
   const arrayBuffer =
     'arrayBuffer' in value
       ? value.arrayBuffer

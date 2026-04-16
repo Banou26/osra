@@ -119,16 +119,19 @@ export const registerOsraMessageListener = (
       }
 
       if (isWebExtensionRuntime(receiveTransport)) {
-        listenOnWebExtOnMessage(receiveTransport.onMessage as WebExtOnMessage)
+        listenOnWebExtOnMessage(receiveTransport.onMessage)
       // WebExtOnConnect
       } else if (isWebExtensionOnConnect(receiveTransport)) {
         const _listener = (port: WebExtPort) => {
+          // Port.onMessage has a narrower (message, port) shape than the shared
+          // (message, sender) Runtime.onMessage — but our listener only reads
+          // `message` so the runtime shape covers both.
           listenOnWebExtOnMessage(port.onMessage as WebExtOnMessage, port)
         }
         receiveTransport.addListener(_listener)
         if (unregisterSignal) {
           unregisterSignal.addEventListener('abort', () =>
-            receiveTransport.removeListener(_listener)
+            receiveTransport.removeListener(_listener),
           )
         }
       // WebExtOnMessage

@@ -17,10 +17,12 @@ export type PullContext = {
 
 type ChunkMessage<T = unknown> = Promise<ReadableStreamReadResult<T>>
 
+type Msg = PullContext | ChunkMessage
+
 export type BoxedReadableStream<T extends ReadableStream = ReadableStream> = {
   __OSRA_BOX__: 'revivable'
   type: typeof type
-  port: BoxedMessagePort
+  port: BoxedMessagePort<Msg>
   [UnderlyingType]: T
 }
 
@@ -31,7 +33,6 @@ export const box = <T extends ReadableStream, T2 extends RevivableContext>(
   value: T,
   context: T2
 ): BoxedReadableStream<T> => {
-  type Msg = PullContext | ChunkMessage
   // EventChannel (pass-by-reference) — live Promises etc. flow through
   // unchanged; message-port boxes on the wire.
   const { port1: localPort, port2: remotePort } = new EventChannel<Msg, Msg>()
@@ -39,8 +40,7 @@ export const box = <T extends ReadableStream, T2 extends RevivableContext>(
   const reader = value.getReader()
 
   localPort.addEventListener('message', ({ data }) => {
-    const pull = data as PullContext
-    if (pull.type === 'pull') {
+    if ('type' in data && data.type === 'pull') {
       localPort.postMessage(reader.read())
     } else {
       reader.cancel()
@@ -60,15 +60,16 @@ export const revive = <T extends BoxedReadableStream, T2 extends RevivableContex
   value: T,
   context: T2
 ): T[UnderlyingType] => {
-  const port = reviveMessagePort(value.port as unknown as BoxedMessagePort<PullContext | ChunkMessage>, context)
+  const port = reviveMessagePort(value.port, context)
   port.start()
 
   return new ReadableStream({
     start(_controller) {},
     pull(controller) {
-      return new Promise((resolve, reject) => {
+      return new Promise<void>((resolve, reject) => {
         port.addEventListener('message', ({ data }) => {
-          ;(data as ChunkMessage)
+          if (!(data instanceof Promise)) return
+          data
             .then(result => {
               if (result.done) controller.close()
               else controller.enqueue(result.value)

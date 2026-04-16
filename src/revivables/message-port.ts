@@ -20,7 +20,7 @@ import { EventChannel, EventPort } from '../utils/event-channel'
 type PortCleanupInfo = {
   sendMessage: (message: Messages) => void
   remoteUuid: Uuid
-  portId: string
+  portId: Uuid
   cleanup: () => void
 }
 
@@ -49,7 +49,7 @@ export type Messages =
     type: 'message-port-close'
     remoteUuid: Uuid
     /** uuid of the messagePort that closed */
-    portId: string
+    portId: Uuid
   }
 
 export declare const Messages: Messages
@@ -65,7 +65,7 @@ export type AnyPort<T = Capable> =
 
 export type BoxedMessagePort<T = Capable> =
   & BoxBaseType<typeof type>
-  & ({ portId: string } | { port: AnyPort<T> })
+  & ({ portId: Uuid } | { port: AnyPort<T> })
   & { [UnderlyingType]: AnyPort<T> }
 
 // `[T] extends [Capable]` disables distributive conditionals so unions like
@@ -132,14 +132,14 @@ export const isType = (value: unknown): value is MessagePort | EventPort<Structu
 
 export const box = <T, T2 extends RevivableContext = RevivableContext>(
   value: StructurableTransferablePort<T>,
-  context: T2
-) => {
+  context: T2,
+): BoxedMessagePort<T> => {
   // Synthetic EventPorts are not structured-clonable, so even when the
   // transport supports cloning we have to route them via portId — otherwise
   // sending the wrapping message would crash with DataCloneError.
   if (isJsonOnlyTransport(context.transport) || value instanceof EventPort) {
     const { portHandlers } = getState(context)
-    const liveRef = value as unknown as AnyPort<T>
+    const liveRef: AnyPort<T> = value
     const portId: Uuid = globalThis.crypto.randomUUID()
 
     let cleanedUp = false
@@ -147,7 +147,7 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
       if (cleanedUp) return
       cleanedUp = true
       portHandlers.delete(portId)
-      messagePortRegistry.unregister(liveRef as object)
+      messagePortRegistry.unregister(liveRef)
       liveRef.removeEventListener('message', messagePortListener as EventListener)
     }
 
@@ -160,29 +160,29 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
         return
       }
       const revivedData = recursiveRevive(message.data, context) as T
-      ;(liveRef as EventPort<T>).postMessage(revivedData, getTransferableObjects(revivedData))
+      liveRef.postMessage(revivedData, getTransferableObjects(revivedData))
     }
 
     // Outgoing: whatever was written into our side of the user's channel gets
     // boxed and shipped over the main transport.
-    function messagePortListener({ data }: MessageEvent) {
+    function messagePortListener({ data }: MessageEvent<Capable>) {
       context.sendMessage({
         type: 'message',
         remoteUuid: context.remoteUuid,
-        data: recursiveBox(data as Capable, context) as Capable,
-        portId
+        data: recursiveBox(data, context),
+        portId,
       })
     }
 
     // Register for automatic cleanup when garbage collected. Note the handler
     // (stored in portHandlers) holds `liveRef` strongly via closure, so GC
     // will only fire once the Map entry is deleted (in performCleanup).
-    messagePortRegistry.register(liveRef as object, {
+    messagePortRegistry.register(liveRef, {
       sendMessage: context.sendMessage,
       remoteUuid: context.remoteUuid,
       portId,
       cleanup: performCleanup
-    }, liveRef as object)
+    }, liveRef)
 
     liveRef.addEventListener('message', messagePortListener as EventListener)
     liveRef.start()
@@ -203,25 +203,15 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
 
     portHandlers.set(portId, handler)
 
-    const result = {
-      ...BoxBase,
-      type,
-      portId
-    }
-    return result as typeof result & { [UnderlyingType]: AnyPort<T> }
+    return { ...BoxBase, type, portId } as BoxedMessagePort<T>
   }
-  const result = {
-    ...BoxBase,
-    type,
-    port: value
-  }
-  return result as typeof result & { [UnderlyingType]: AnyPort<T> }
+  return { ...BoxBase, type, port: value } as BoxedMessagePort<T>
 }
 
 export const revive = <T extends Capable, T2 extends RevivableContext>(
   value: BoxedMessagePort<T>,
-  context: T2
-): EventPort<T> => {
+  context: T2,
+): AnyPort<T> => {
   if ('portId' in value) {
     const { portHandlers } = getState(context)
     const { portId } = value
@@ -266,12 +256,12 @@ export const revive = <T extends Capable, T2 extends RevivableContext>(
 
     // Outgoing: whatever the caller posted to userPort gets boxed and
     // shipped across the main transport.
-    function internalPortListener({ data }: MessageEvent) {
+    function internalPortListener({ data }: MessageEvent<T>) {
       context.sendMessage({
         type: 'message',
         remoteUuid: context.remoteUuid,
         data: recursiveBox(data, context),
-        portId: portId as Uuid
+        portId,
       })
     }
 
@@ -299,13 +289,13 @@ export const revive = <T extends Capable, T2 extends RevivableContext>(
 
     portHandlers.set(portId, handler)
 
-    return userPort as unknown as EventPort<T>
+    return userPort
   }
-  return value.port as EventPort<T>
+  return value.port
 }
 
 const typeCheck = () => {
-  const port = new MessageChannel().port1 as unknown as TypedMessagePort<{ foo: string }>
+  const port = {} as TypedMessagePort<{ foo: string }>
   const boxed = box(port, {} as RevivableContext)
   const revived = revive(boxed, {} as RevivableContext)
   const expected: AnyPort<{ foo: string }> = revived
@@ -313,5 +303,5 @@ const typeCheck = () => {
   const wrongType: AnyPort<{ bar: number }> = revived
   // Promise-valued messages are fine now — EventChannel pass-by-reference
   // means we don't need StructurableTransferable here.
-  box(new MessageChannel().port1 as unknown as TypedMessagePort<Promise<string>>, {} as RevivableContext)
+  box({} as TypedMessagePort<Promise<string>>, {} as RevivableContext)
 }

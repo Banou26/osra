@@ -1,8 +1,8 @@
 import type { DefaultRevivableModules, RevivableModule } from '.'
 import type {
-  Message,
   MessageEventTarget,
-  Uuid
+  MessageFields,
+  Uuid,
 } from '../types'
 import type { Transport } from '../utils/transport'
 
@@ -24,15 +24,13 @@ export type RevivableContext<
   transport: Transport
   remoteUuid: Uuid
   unregisterSignal?: AbortSignal
-  sendMessage: (message: any) => void
+  /** Typed as a broad dispatcher so revivables can post their own message
+   *  variants without triggering contravariant function-parameter mismatches
+   *  across modules. The shape is enforced structurally via `MessageFields`. */
+  sendMessage: (message: MessageFields & Record<string, unknown>) => void
   revivableModules: TModules
   eventTarget: MessageEventTarget<TModules>
 }
-
-export type CustomMessageEvent<
-  TModules extends readonly RevivableModule[] = DefaultRevivableModules
-> =
-  | CustomEvent<Message<TModules>>
 
 export type ExtractType<T> =
   T extends { isType: (value: unknown) => value is infer S }
@@ -60,11 +58,8 @@ export type InferRevivables<TModules extends readonly unknown[]> =
 export type InferRevivableBox<TModules extends readonly unknown[]> =
   ExtractBox<TModules[number]>
 
-export const isRevivableBox = <
-  TModules extends readonly RevivableModule[],
-  T extends RevivableContext<TModules>
->(value: any, _context: T): value is InferRevivableBox<TModules> =>
-  value
+export const isRevivableBox = (value: unknown): value is BoxBase =>
+  !!value
   && typeof value === 'object'
   && OSRA_BOX in value
   && value[OSRA_BOX] === 'revivable'

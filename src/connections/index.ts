@@ -2,22 +2,21 @@ import type { DefaultRevivableModules, RevivableModule } from '../revivables'
 import type { ConnectionContext as BidirectionalConnectionContext } from './bidirectional'
 import type {
   ProtocolContext,
-  ProtocolEventTarget,
-  StartConnectionsOptions
+  StartConnectionsOptions,
 } from '../utils'
 import type {
   Message, MessageVariant, Uuid,
-  Capable, MessageEventMap
+  Capable,
 } from '../types'
 import type { MessageContext } from '../utils/transport'
-import type { TypedEventTarget } from '../utils/typed-event-target'
 
 import { OSRA_DEFAULT_KEY, OSRA_KEY } from '../types'
 import * as bidirectional from './bidirectional'
 import {
   isEmitTransport,
-  isReceiveTransport
+  isReceiveTransport,
 } from '../utils/type-guards'
+import { createTypedEventTarget } from '../utils/typed-event-target'
 import { getTransferableObjects } from '../utils/transferable'
 import { registerOsraMessageListener, sendOsraMessage } from '../utils/transport'
 import { mergeRevivableModules, normalizeTransport } from './utils'
@@ -73,10 +72,8 @@ export const startConnections = <
   type MergedModules = typeof mergedRevivableModules
   const connectionContexts = new Map<string, ConnectionContext<MergedModules>>()
 
-  let resolveRemoteValue: (connection: T) => void
-  const remoteValuePromise = new Promise<T>((resolve) => {
-    resolveRemoteValue = resolve
-  })
+  const { promise: remoteValuePromise, resolve: resolveRemoteValue } =
+    Promise.withResolvers<Capable<MergedModules>>()
 
   let uuid: Uuid = globalThis.crypto.randomUUID()
   let aborted = false
@@ -103,8 +100,7 @@ export const startConnections = <
     )
   }
 
-  const protocolEventTarget =
-    new EventTarget() as ProtocolEventTarget<MergedModules>
+  const protocolEventTarget = createTypedEventTarget<{ message: CustomEvent<Message<MergedModules>> }>()
 
   const ctx: ProtocolContext<MergedModules> = {
     transport,
@@ -115,16 +111,15 @@ export const startConnections = <
     rerollUuid: () => uuid = globalThis.crypto.randomUUID(),
     sendMessage,
     protocolEventTarget,
-    resolveRemoteValue: (v) => resolveRemoteValue(v as T),
-    createConnectionEventTarget: () =>
-      new EventTarget() as TypedEventTarget<MessageEventMap<MergedModules>>
+    resolveRemoteValue,
+    createConnectionEventTarget: createTypedEventTarget,
   }
 
-  const listener = async (message: Message, _: MessageContext) => {
+  const listener = async (message: Message<MergedModules>, _: MessageContext) => {
     // own message looped back on the channel
     if (message.uuid === uuid) return
     protocolEventTarget.dispatchEvent(
-      new CustomEvent('message', { detail: message as Message<MergedModules> })
+      new CustomEvent('message', { detail: message }),
     )
   }
 
@@ -139,8 +134,8 @@ export const startConnections = <
   }
 
   for (const connectionModule of connections) {
-    connectionModule.init(ctx as ProtocolContext<any>)
+    connectionModule.init(ctx)
   }
 
-  return remoteValuePromise
+  return remoteValuePromise as Promise<T>
 }

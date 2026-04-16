@@ -21,16 +21,16 @@ export const isType = (value: unknown): value is ArrayBuffer =>
 
 export const box = <T extends ArrayBuffer, T2 extends RevivableContext>(
   value: T,
-  context: T2
+  context: T2,
 ): BoxedArrayBuffer<T, T2> =>
   (isJsonOnlyTransport(context.transport)
     ? { ...BoxBase, type, base64Buffer: new Uint8Array(value).toBase64() }
     : { ...BoxBase, type, arrayBuffer: value }
   ) as unknown as BoxedArrayBuffer<T, T2>
 
-export const revive = <T extends BoxedArrayBuffer<ArrayBuffer, RevivableContext>, T2 extends RevivableContext>(
+export const revive = <T extends BoxedArrayBuffer<ArrayBuffer, RevivableContext>>(
   value: T,
-  _context: T2
+  _context: RevivableContext,
 ): T[UnderlyingType] =>
   ('arrayBuffer' in value
     ? value.arrayBuffer
