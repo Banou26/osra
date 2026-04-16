@@ -1,41 +1,41 @@
 import type { IsJsonOnlyTransport } from '../utils'
-import type { RevivableContext } from './utils'
+import type { RevivableContext, UnderlyingType } from './utils'
 
 import { BoxBase } from './utils'
 import { isJsonOnlyTransport } from '../utils'
 
 export const type = 'arrayBuffer' as const
 
+type BoxedArrayBuffer<T extends ArrayBuffer, T2 extends RevivableContext> =
+  & typeof BoxBase
+  & { type: typeof type }
+  & (
+      IsJsonOnlyTransport<T2['transport']> extends true ? { base64Buffer: string }
+    : IsJsonOnlyTransport<T2['transport']> extends false ? { arrayBuffer: ArrayBuffer }
+    : { base64Buffer: string } | { arrayBuffer: ArrayBuffer }
+  )
+  & { [UnderlyingType]: T }
+
 export const isType = (value: unknown): value is ArrayBuffer =>
   value instanceof ArrayBuffer
 
 export const box = <T extends ArrayBuffer, T2 extends RevivableContext>(
   value: T,
-  _context: T2
-) => ({
-  ...BoxBase,
-  type,
-  ...(
-    isJsonOnlyTransport(_context.transport)
-      ? { base64Buffer: new Uint8Array(value).toBase64() }
-      : { arrayBuffer: value }
-  ) as (
-      IsJsonOnlyTransport<T2['transport']> extends true ? { base64Buffer: string }
-    : IsJsonOnlyTransport<T2['transport']> extends false ? { arrayBuffer: ArrayBuffer }
-    : { base64Buffer: string } | { arrayBuffer: ArrayBuffer }
-  )
-})
+  context: T2
+): BoxedArrayBuffer<T, T2> =>
+  (isJsonOnlyTransport(context.transport)
+    ? { ...BoxBase, type, base64Buffer: new Uint8Array(value).toBase64() }
+    : { ...BoxBase, type, arrayBuffer: value }
+  ) as unknown as BoxedArrayBuffer<T, T2>
 
-export const revive = <T extends ReturnType<typeof box>, T2 extends RevivableContext>(
+export const revive = <T extends BoxedArrayBuffer<ArrayBuffer, RevivableContext>, T2 extends RevivableContext>(
   value: T,
   _context: T2
-) =>
-  'arrayBuffer' in value ? value.arrayBuffer
-  : (
-    Uint8Array
-      .fromBase64(value.base64Buffer)
-      .buffer
-  )
+): T[UnderlyingType] =>
+  ('arrayBuffer' in value
+    ? value.arrayBuffer
+    : Uint8Array.fromBase64(value.base64Buffer).buffer
+  ) as T[UnderlyingType]
 
 const typeCheck = () => {
   const boxed = box(new ArrayBuffer(10), {} as RevivableContext)
