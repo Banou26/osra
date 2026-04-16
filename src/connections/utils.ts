@@ -10,26 +10,18 @@ import type { TypedEventTarget } from '../utils/typed-event-target'
 import { defaultRevivableModules } from '../revivables'
 import { isJsonOnlyTransport, isCustomTransport } from '../utils/type-guards'
 import * as bidirectional from './bidirectional'
-import {
-  unidirectionalEmitting,
-  unidirectionalReceiving
-} from './unidirectional'
 
-export const normalizeTransport = (transport: Transport): Transport =>
-  ({
-    isJson:
-      'isJson' in transport && transport.isJson !== undefined
-        ? transport.isJson
-        : isJsonOnlyTransport(transport),
-    ...(
-      isCustomTransport(transport)
-        ? transport
-        : {
-          emit: transport,
-          receive: transport
-        }
-    )
-  } satisfies Transport)
+export const normalizeTransport = (transport: Transport): Transport => {
+  const isJson =
+    'isJson' in transport && transport.isJson !== undefined
+      ? transport.isJson
+      : isJsonOnlyTransport(transport)
+  const ports =
+    isCustomTransport(transport)
+      ? transport
+      : { emit: transport, receive: transport }
+  return { isJson, ...ports } satisfies Transport
+}
 
 export const mergeRevivableModules = <
   TUserModules extends readonly RevivableModule[]
@@ -71,9 +63,7 @@ export type ConnectionModule = {
 }
 
 export const connections = [
-  bidirectional,
-  unidirectionalEmitting,
-  unidirectionalReceiving
+  bidirectional
 ] as const satisfies readonly ConnectionModule[]
 
 export type StartConnectionsOptions<

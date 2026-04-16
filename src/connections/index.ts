@@ -4,10 +4,6 @@ import type {
   BidirectionalConnectionContext
 } from './bidirectional'
 import type {
-  UnidirectionalEmittingConnectionContext,
-  UnidirectionalReceivingConnectionContext
-} from './unidirectional'
-import type {
   ProtocolContext,
   ProtocolEventTarget,
   StartConnectionsOptions
@@ -27,16 +23,10 @@ import {
 import { getTransferableObjects } from '../utils/transferable'
 import { registerOsraMessageListener, sendOsraMessage } from '../utils/transport'
 
-import * as bidirectional from './bidirectional'
-import { mergeRevivableModules, normalizeTransport } from '../utils'
+import { connections, mergeRevivableModules, normalizeTransport } from './utils'
 
 export * from './bidirectional'
-export * from './unidirectional'
 export * from './utils'
-
-export const connections = [
-  bidirectional
-] as const
 
 export type ConnectionMessage<
   TModules extends readonly RevivableModule[] = DefaultRevivableModules
@@ -47,13 +37,10 @@ export type ConnectionContext<
   TModules extends readonly RevivableModule[] = DefaultRevivableModules
 > =
   | BidirectionalConnectionContext<TModules>
-  | UnidirectionalEmittingConnectionContext
-  | UnidirectionalReceivingConnectionContext<TModules>
 
 /**
   * Protocol mode:
   * - Bidirectional mode
-  * - Unidirectional mode
   *
   * Transport modes:
   * - Capable mode

@@ -180,11 +180,9 @@ export const init = <TModules extends readonly RevivableModule[]>(
       console.warn(`Connection not found for remoteUuid: ${message.uuid}`)
       return
     }
-    if (connection.type !== 'unidirectional-emitting') {
-      connection.eventTarget.dispatchEvent(
-        new CustomEvent('message', { detail: message })
-      )
-    }
+    connection.eventTarget.dispatchEvent(
+      new CustomEvent('message', { detail: message })
+    )
   })
 
   ctx.sendMessage({ type: 'announce' })
