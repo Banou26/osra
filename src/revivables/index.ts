@@ -106,6 +106,10 @@ export const recursiveBox = <
   context: RevivableContext<TModules>
 ): DeepReplaceWithBox<T, TModules[number]> => {
   type ReturnCastType = DeepReplaceWithBox<T, TModules[number]>
+  // Already-boxed values pass through — revivables (e.g. createRevivableChannel)
+  // may embed a pre-built BoxedX in their outgoing payload; descending into it
+  // would re-box raw ports nested inside.
+  if (isRevivableBox(value)) return value as ReturnCastType
   const handledByModule = findBoxModule(value, context.revivableModules)
   if (handledByModule) {
     return handledByModule.box(value, context) as ReturnCastType
