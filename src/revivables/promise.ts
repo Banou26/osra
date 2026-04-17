@@ -6,7 +6,7 @@ import type {
   ErrorMessage, BadValue, Path, ParentObject
 } from '../utils/capable-check'
 
-import { BoxBase } from './utils'
+import { BoxBase, serializeError } from './utils'
 import {
   createRevivableChannel,
   revive as reviveMessagePort,
@@ -73,7 +73,7 @@ export const box = <T, T2 extends RevivableContext>(
     .then((data: ExtractCapable<T>) => sendResult({ type: 'resolve', data }))
     .catch((error: unknown) => sendResult({
       type: 'reject',
-      error: error instanceof Error ? (error.stack ?? String(error)) : String(error),
+      error: serializeError(error),
     }))
 
   return { ...BoxBase, type, port: boxedRemote } as BoxedPromise<ExtractCapable<T>>

@@ -3,7 +3,7 @@ import type { UnderlyingType, RevivableContext, BoxBase as BoxBaseType } from '.
 import type { TypedMessagePort } from '../utils/typed-message-channel'
 import type { AnyPort } from './message-port'
 
-import { BoxBase } from './utils'
+import { BoxBase, serializeError } from './utils'
 import {
   createRevivableChannel,
   revive as reviveMessagePort,
@@ -86,7 +86,7 @@ export const box = <T extends (...args: any[]) => any, T2 extends RevivableConte
         (resolved) => returnPort.postMessage({ __osra_ok__: true, value: resolved }),
         (error: unknown) => returnPort.postMessage({
           __osra_err__: true,
-          error: error instanceof Error ? (error.stack ?? String(error)) : String(error),
+          error: serializeError(error),
         }),
       )
       .finally(() => {

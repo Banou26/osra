@@ -67,9 +67,9 @@ export class EventPort<T> extends EventTarget {
   postMessage(message: T, _options?: Transferable[] | StructuredSerializeOptions): void {
     const peer = this._peer
     if (!peer || peer._closed) return
-    const event = new MessageEvent('message', { data: message })
     queueMicrotask(() => {
       if (peer._closed) return
+      const event = new MessageEvent('message', { data: message })
       if (peer._started) {
         peer.dispatchEvent(event)
       } else {

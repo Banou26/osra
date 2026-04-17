@@ -17,39 +17,6 @@ const isMustTransfer = (value: unknown): value is Transferable =>
     globalThis.OffscreenCanvas,
   ])
 
-/**
- * Variant of getTransferableObjects that only collects must-transfer types
- * (MessagePort, streams, OffscreenCanvas). Used when re-postMessage'ing in
- * the same realm to route data via a real MessageChannel — clonable
- * transferables (ArrayBuffer, ImageBitmap) should be cloned, not detached,
- * so other listeners on the source can still read them.
- */
-export const getMustTransferOnly = (value: unknown): Transferable[] => {
-  const transferables: Transferable[] = []
-  const seen = new WeakSet<object>()
-
-  const recurse = (value: unknown): void => {
-    if (!value || typeof value !== 'object') return
-    if (seen.has(value)) return
-    seen.add(value)
-
-    if (isMustTransfer(value)) {
-      transferables.push(value)
-      return
-    }
-
-    if (Array.isArray(value)) {
-      for (const item of value) recurse(item)
-      return
-    }
-
-    for (const item of Object.values(value)) recurse(item)
-  }
-
-  recurse(value)
-  return transferables
-}
-
 // Structural check for a transfer revivable box. Uses the 'transfer' string
 // literal rather than importing the module's exported `type` constant, so the
 // walker stays decoupled from the module's full graph.

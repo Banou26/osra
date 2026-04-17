@@ -49,16 +49,10 @@ export const isTypedArray = (value: unknown): value is TypedArray =>
 export const isWebSocket = (value: unknown): value is WebSocket => value instanceof WebSocket
 export const isServiceWorkerContainer = (value: unknown): value is ServiceWorkerContainer => !!globalThis.ServiceWorkerContainer && value instanceof ServiceWorkerContainer
 export const isWorker = (value: unknown): value is Worker => !!globalThis.Worker && value instanceof Worker
-// @ts-expect-error
+// @ts-expect-error DedicatedWorkerGlobalScope is only present in worker scopes
 export const isDedicatedWorker = (value: unknown): value is DedicatedWorkerGlobalScope => !!globalThis.DedicatedWorkerGlobalScope && value instanceof DedicatedWorkerGlobalScope
 export const isSharedWorker = (value: unknown): value is SharedWorker => !!globalThis.SharedWorker && value instanceof SharedWorker
-export const isMessagePort = (value: unknown): value is MessagePort => value instanceof MessagePort
-export const isPromise = (value: unknown): value is Promise<unknown> => value instanceof Promise
-export const isFunction = (value: unknown): value is Function => typeof value === 'function'
-export const isArrayBuffer = (value: unknown): value is ArrayBuffer => value instanceof ArrayBuffer
-export const isReadableStream = (value: unknown): value is ReadableStream => value instanceof ReadableStream
-export const isDate = (value: unknown): value is Date => value instanceof Date
-export const isError = (value: unknown): value is Error => value instanceof Error
+const isMessagePort = (value: unknown): value is MessagePort => value instanceof MessagePort
 
 export const isOsraMessage = (value: unknown): value is Message =>
   !!value
@@ -66,9 +60,11 @@ export const isOsraMessage = (value: unknown): value is Message =>
   && OSRA_KEY in value
   && !!value[OSRA_KEY]
 
+type AnyConstructor = abstract new (...args: any[]) => unknown
+
 /** True if `value` is an instance of any of the given (possibly undefined-on-this-platform)
  *  constructors. Tolerates missing globals so callers don't have to guard each one. */
-export const instanceOfAny = (value: unknown, ctors: readonly (Function | undefined)[]): boolean => {
+export const instanceOfAny = (value: unknown, ctors: readonly (AnyConstructor | undefined)[]): boolean => {
   for (const ctor of ctors) if (ctor && value instanceof ctor) return true
   return false
 }

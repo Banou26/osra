@@ -1,9 +1,7 @@
-import type { IsJsonOnlyTransport } from '../utils'
-import type { RevivableContext, UnderlyingType } from './utils'
+import type { RevivableContext, UnderlyingType, BoxedBuffer } from './utils'
 import type { TypedArray, TypedArrayType } from '../utils/type-guards'
 
-import { BoxBase } from './utils'
-import { isJsonOnlyTransport } from '../utils'
+import { BoxBase, boxBuffer, reviveBuffer } from './utils'
 import {
   isTypedArray,
   typedArrayToType,
@@ -16,11 +14,7 @@ type BoxedTypedArray<T extends TypedArray, T2 extends RevivableContext> =
   & typeof BoxBase
   & { type: typeof type }
   & { typedArrayType: TypedArrayType }
-  & (
-      IsJsonOnlyTransport<T2['transport']> extends true ? { base64Buffer: string }
-    : IsJsonOnlyTransport<T2['transport']> extends false ? { arrayBuffer: ArrayBuffer }
-    : { base64Buffer: string } | { arrayBuffer: ArrayBuffer }
-  )
+  & BoxedBuffer<T2>
   & { [UnderlyingType]: T }
 
 export const isType = isTypedArray
@@ -29,22 +23,18 @@ export const box = <T extends TypedArray, T2 extends RevivableContext>(
   value: T,
   context: T2,
 ): BoxedTypedArray<T, T2> =>
-  (isJsonOnlyTransport(context.transport)
-    ? { ...BoxBase, type, typedArrayType: typedArrayToType(value), base64Buffer: new Uint8Array(value.buffer).toBase64() }
-    : { ...BoxBase, type, typedArrayType: typedArrayToType(value), arrayBuffer: value.buffer }
-  ) as unknown as BoxedTypedArray<T, T2>
+  ({
+    ...BoxBase,
+    type,
+    typedArrayType: typedArrayToType(value),
+    ...boxBuffer(value.buffer as ArrayBuffer, context),
+  }) as unknown as BoxedTypedArray<T, T2>
 
 export const revive = <T extends BoxedTypedArray<TypedArray, RevivableContext>>(
   value: T,
   _context: RevivableContext,
-): T[UnderlyingType] => {
-  const Ctor = typedArrayTypeToTypedArrayConstructor(value.typedArrayType)
-  const arrayBuffer =
-    'arrayBuffer' in value
-      ? value.arrayBuffer
-      : Uint8Array.fromBase64(value.base64Buffer).buffer
-  return new Ctor(arrayBuffer) as T[UnderlyingType]
-}
+): T[UnderlyingType] =>
+  new (typedArrayTypeToTypedArrayConstructor(value.typedArrayType))(reviveBuffer(value)) as T[UnderlyingType]
 
 const typeCheck = () => {
   const uint8Boxed = box(new Uint8Array(10), {} as RevivableContext)

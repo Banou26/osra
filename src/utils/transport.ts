@@ -91,7 +91,7 @@ const onAbort = (signal: AbortSignal | undefined, fn: () => void) =>
 export const registerOsraMessageListener = (
   { listener, transport, remoteName, key = OSRA_KEY, unregisterSignal }:
   {
-    listener: (message: Message, messageContext: MessageContext) => Promise<void>
+    listener: (message: Message, messageContext: MessageContext) => void
     transport: ReceiveTransport
     remoteName?: string
     key?: string

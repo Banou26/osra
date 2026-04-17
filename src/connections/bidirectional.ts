@@ -57,7 +57,6 @@ export const startBidirectionalConnection = <
   {
     transport: Transport
     value: Capable<TModules>
-    uuid: Uuid
     remoteUuid: Uuid
     eventTarget: MessageEventTarget<TModules>
     send: (message: MessageFields & Record<string, unknown>) => void
@@ -125,7 +124,6 @@ export const init = <TModules extends readonly RevivableModule[]>(
         return
       }
       if (message.remoteUuid !== ctx.getUuid()) return
-      // todo: re-add uuid collision handling
       if (ctx.connectionContexts.has(message.uuid)) return
       // Send announce back so the other side can also create a connection
       // (in case they missed our initial announce due to timing)
@@ -138,7 +136,6 @@ export const init = <TModules extends readonly RevivableModule[]>(
           startBidirectionalConnection<TModules>({
             transport: ctx.transport,
             value: ctx.value,
-            uuid: ctx.getUuid(),
             remoteUuid: message.uuid,
             eventTarget,
             send: (m) => ctx.sendMessage(m as MessageVariant),

@@ -17,12 +17,19 @@ import * as response from './response'
 import * as request from './request'
 import * as identity from './identity'
 import * as transfer from './transfer'
+import * as map from './map'
+import * as set from './set'
 
 export { identity } from './identity'
 export { transfer } from './transfer'
 
 export * from './utils'
 
+// Module-level signatures intentionally widen to `any` on the box/revive/init
+// parameters: each module's concrete box takes a narrower input than the
+// shared interface can express, and TS treats `readonly`-property function
+// types contravariantly. The `any`s here are the bivariance escape hatch that
+// lets concrete modules be assigned to `RevivableModule[]` at all.
 export type RevivableModule<
   T extends string = string,
   T2 = any,
@@ -51,7 +58,9 @@ export const defaultRevivableModules = [
   readableStream,
   abortSignal,
   response,
-  request
+  request,
+  map,
+  set,
 ] as const
 
 export type DefaultRevivableModules = typeof defaultRevivableModules

@@ -243,9 +243,7 @@ export const revive = <T extends Capable, T2 extends RevivableContext>(
     // transferred MessagePort so outgoing/incoming payloads auto-box/revive
     // and live values (Promises/Functions) flow through unchanged.
     if (value.autoBox) {
-      return new ProtocolPort<T>(
-        value.port as TypedMessagePort<Capable>, context,
-      ) as unknown as TypedMessagePort<T>
+      return createProtocolPort<T>(value.port as TypedMessagePort<Capable>, context)
     }
     return value.port
   }
@@ -263,33 +261,29 @@ export const revive = <T extends Capable, T2 extends RevivableContext>(
  * (addEventListener / postMessage / start / close) that transparently
  * carries live values (Promises, Functions, …) over a clone-only transport.
  */
-class ProtocolPort<T> extends EventTarget {
-  constructor(
-    private _port: TypedMessagePort<Capable>,
-    private _ctx: RevivableContext,
-  ) {
-    super()
-    _port.addEventListener('message', this._onMsg)
-  }
-
-  private _onMsg = ({ data }: MessageEvent<Capable>): void => {
-    this.dispatchEvent(new MessageEvent('message', {
-      data: recursiveRevive(data, this._ctx),
+const createProtocolPort = <T>(
+  port: TypedMessagePort<Capable>,
+  ctx: RevivableContext,
+): TypedMessagePort<T> => {
+  const target = new EventTarget() as TypedMessagePort<T>
+  const onMessage = ({ data }: MessageEvent<Capable>): void => {
+    target.dispatchEvent(new MessageEvent('message', {
+      data: recursiveRevive(data, ctx),
     }))
   }
-
-  postMessage(data: T, opt?: Transferable[] | StructuredSerializeOptions): void {
+  port.addEventListener('message', onMessage)
+  target.postMessage = (data: T, opt?: Transferable[] | StructuredSerializeOptions) => {
+    const boxed = recursiveBox(data as Capable, ctx)
+    const transferables = getTransferableObjects(boxed)
     const extra = Array.isArray(opt) ? opt : []
-    const boxed = recursiveBox(data as Capable, this._ctx)
-    this._port.postMessage(boxed, [...getTransferableObjects(boxed), ...extra])
+    port.postMessage(boxed, extra.length ? [...transferables, ...extra] : transferables)
   }
-
-  start(): void { this._port.start() }
-
-  close(): void {
-    this._port.removeEventListener('message', this._onMsg)
-    this._port.close()
+  target.start = () => port.start()
+  target.close = () => {
+    port.removeEventListener('message', onMessage)
+    port.close()
   }
+  return target
 }
 
 /**
@@ -317,7 +311,7 @@ export const createRevivableChannel = <T extends Capable>(
     port2: TypedMessagePort<Capable>
   }
   return {
-    localPort: new ProtocolPort<T>(port1, context) as unknown as AnyPort<T>,
+    localPort: createProtocolPort<T>(port1, context) as unknown as AnyPort<T>,
     boxedRemote: box(port2 as unknown as StructurableTransferablePort<T>, context, { autoBox: true }),
   }
 }
