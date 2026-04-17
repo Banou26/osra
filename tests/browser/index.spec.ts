@@ -1,96 +1,100 @@
-import type { TestConfig, TestObject } from '../global-types'
+import type { Page } from '@playwright/test'
 
 import { test } from '@playwright/test'
 import path from 'path'
-
-import tests from './_tests_'
 import { mkdir, writeFile } from 'fs/promises'
+
+import { transportTests, memoryTests, standaloneTests } from './registry'
+import { transports } from './transports'
+
+const MEMORY_TEST_TIMEOUT_MS = 60_000
 
 test.beforeEach(async ({ page }) => {
   await page.goto('http://localhost:3000')
-  // Uncomment for better debug experience, the devtools will have full context on the console's object's being logged.
-  await new Promise(resolve => setTimeout(resolve, 250))
   await page.addScriptTag({ path: './build/test.js', type: 'module' })
+  // The bundle exposes globalThis.__osraRun once side-effect imports settle.
+  await page.waitForFunction(() => '__osraRun' in globalThis)
 })
 
 test.afterEach(async ({ page }) => {
-  // Collect coverage after each test
-  const coverage = await page.evaluate(() => (window as any).__coverage__)
-  if (coverage) {
-    const coverageDir = path.join(process.cwd(), '.nyc_output')
-    await mkdir(coverageDir, { recursive: true }).catch(() => {})
-    const coverageFilePath = path.join(coverageDir, `coverage-${Date.now()}-${Math.random().toString(36).slice(2)}.json`)
-    await writeFile(coverageFilePath, JSON.stringify(coverage))
-  }
+  const coverage = await page.evaluate(() => (window as unknown as { __coverage__?: unknown }).__coverage__)
+  if (!coverage) return
+  const dir = path.join(process.cwd(), '.nyc_output')
+  await mkdir(dir, { recursive: true }).catch(() => {})
+  await writeFile(
+    path.join(dir, `coverage-${Date.now()}-${Math.random().toString(36).slice(2)}.json`),
+    JSON.stringify(coverage),
+  )
 })
 
-const recurseTests = (tests: TestObject, path: string[] = []) => {
-  for (const [key, value] of Object.entries(tests)) {
-    if (typeof value === 'function') {
-      test(key, async ({ page }) => {
-        const config =
-          path
-            .reduce<TestObject | undefined>(
-              (obj, key) => obj?.[key] as TestObject | undefined,
-              globalThis.tests
-            )
-            ?.config
-        if (config?.timeout) {
-          test.setTimeout(config.timeout)
-        }
-        const client = await page.context().newCDPSession(page)
-        if (config?.memoryTreshold) {
-          await client.send('Performance.enable')
-          await client.send('HeapProfiler.collectGarbage')
-        }
-        const initialHeap =
-          config?.memoryTreshold
-          ? (
-            (await client.send('Performance.getMetrics'))
-              .metrics
-              .find(m => m.name === 'JSHeapUsedSize')
-              ?.value
-          )
-          : undefined
-        if (config?.memoryTreshold && initialHeap === undefined) {
-          throw new Error('Memory threshold is set but initial heap size is not available')
-        }
-        await page.evaluate(async ([key, path]) => {
-          const findTest = () =>
-            path
-              .reduce<TestObject | undefined>(
-                (obj, key) => obj?.[key] as TestObject | undefined,
-                globalThis.tests
-              )
-              ?.[key]
-          let test = findTest()
-          while (typeof test !== 'function') {
-            await new Promise(resolve => setTimeout(resolve, 100))
-            test = findTest()
-          }
-          await test()
-        }, [key, path] as const)
-        if (initialHeap) {
-          for (let i = 0; i < 10; i++) {
-            await client.send('HeapProfiler.collectGarbage')
-            // Allow FinalizationRegistry callbacks to run after GC
-            await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 100)))
-            // Run GC again to collect any objects freed by finalization callbacks
-            await client.send('HeapProfiler.collectGarbage')
-          }
-          const finalMetrics = await client.send('Performance.getMetrics')
-          const finalHeap = finalMetrics.metrics.find(m => m.name === 'JSHeapUsedSize')?.value ?? 0
-          const memoryGrowth = finalHeap - initialHeap
-          if (config?.memoryTreshold && memoryGrowth > config.memoryTreshold) {
-            throw new Error(`Memory leak detected: ${memoryGrowth} bytes growth`)
-          }
-        }
-      })
-    } else if (typeof value === 'object' && key !== 'config') {
-      test.describe(key, () => {
-        recurseTests(value as TestObject, [...path, key])
-      })
+// Heap measurement bracket — call before the test body, await the returned
+// finalizer afterwards. Iterates GC + a microtask break so FinalizationRegistry
+// callbacks fire before the final measurement.
+const measureHeapGrowth = async (page: Page, threshold: number) => {
+  const client = await page.context().newCDPSession(page)
+  await client.send('Performance.enable')
+  await client.send('HeapProfiler.collectGarbage')
+  const initial = (await client.send('Performance.getMetrics')).metrics
+    .find(m => m.name === 'JSHeapUsedSize')?.value
+  if (initial === undefined) throw new Error('Initial heap size unavailable')
+
+  return async () => {
+    for (let i = 0; i < 10; i++) {
+      await client.send('HeapProfiler.collectGarbage')
+      await page.evaluate(() => new Promise(r => setTimeout(r, 100)))
+      await client.send('HeapProfiler.collectGarbage')
     }
+    const finalHeap = (await client.send('Performance.getMetrics')).metrics
+      .find(m => m.name === 'JSHeapUsedSize')?.value ?? 0
+    const growth = finalHeap - initial
+    if (growth > threshold) throw new Error(`Memory leak detected: ${growth} bytes growth`)
   }
 }
-recurseTests(tests)
+
+// Transport-parameterized matrix: every test in transportTests runs once per
+// registered transport. Adding a new transport in transports.ts grows the
+// matrix automatically; adding a new test in any registered module the same.
+for (const t of transports) {
+  test.describe(t.name, () => {
+    for (const [group, suite] of Object.entries(transportTests)) {
+      test.describe(group, () => {
+        for (const name of Object.keys(suite)) {
+          test(name, async ({ page }) => {
+            await page.evaluate(
+              async ([g, n, tn]) => globalThis.__osraRun.transport(g, n, tn as never),
+              [group, name, t.name] as const,
+            )
+          })
+        }
+      })
+    }
+
+    test.describe('MemoryLeaks', () => {
+      for (const name of Object.keys(memoryTests)) {
+        test(name, async ({ page }) => {
+          test.setTimeout(MEMORY_TEST_TIMEOUT_MS)
+          const finalize = await measureHeapGrowth(page, t.memoryThreshold)
+          await page.evaluate(
+            async ([n, tn]) => globalThis.__osraRun.memory(n, tn as never),
+            [name, t.name] as const,
+          )
+          await finalize()
+        })
+      }
+    })
+  })
+}
+
+// Standalone groups: not transport-parameterized.
+for (const [group, suite] of Object.entries(standaloneTests)) {
+  test.describe(group, () => {
+    for (const name of Object.keys(suite)) {
+      test(name, async ({ page }) => {
+        await page.evaluate(
+          async ([g, n]) => globalThis.__osraRun.standalone(g, n),
+          [group, name] as const,
+        )
+      })
+    }
+  })
+}

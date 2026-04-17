@@ -1,14 +1,11 @@
-export type TestConfig = {
-  iterations?: number
-  memoryTreshold?: number
-  timeout?: number
-}
-
-export type TestObject = {
-  config?: TestConfig
-  [key: string]: TestObject | TestConfig | ((...args: any[]) => any) | undefined
-}
+import type { TransportName } from './browser/transports'
 
 declare global {
-  var tests: TestObject
+  var __osraRun: {
+    transport: (group: string, name: string, transportName: TransportName) => Promise<void>
+    memory: (name: string, transportName: TransportName) => Promise<void>
+    standalone: (group: string, name: string) => Promise<void>
+  }
 }
+
+export {}

@@ -1,0 +1,20 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true,
+    "emitDeclarationOnly": false,
+    "declaration": false,
+    "declarationDir": null,
+    "types": [
+      "./tests/global-types.d.ts",
+      "@types/chai",
+      "@types/chai-as-promised",
+      "@types/node",
+      "@types/chrome",
+      "@types/firefox-webext-browser",
+      "@playwright/test"
+    ]
+  },
+  "include": ["src/**/*", "tests/browser/**/*"]
+}

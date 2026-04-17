@@ -20,7 +20,7 @@ export default defineConfig({
     lib: {
       name: 'osra',
       fileName: 'test',
-      entry: 'tests/browser/_tests_.ts',
+      entry: 'tests/browser/_run.ts',
       formats: ['es']
     }
   }
