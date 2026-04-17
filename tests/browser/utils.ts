@@ -14,6 +14,7 @@ export const makeJsonReceiver =
       )
 
 export const makeJsonTransport = (port: MessagePort) => ({
+  isJson: true as const,
   emit: makeJsonEmitter(port),
   receive: makeJsonReceiver(port)
 })

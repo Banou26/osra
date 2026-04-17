@@ -103,7 +103,11 @@ export const registerOsraMessageListener = (
 
   // Custom function handler
   if (typeof receiveTransport === 'function') {
-    receiveTransport(listener)
+    receiveTransport((message, ctx) => {
+      if (!checkOsraMessageKey(message, key)) return
+      if (remoteName && message.name !== remoteName) return
+      listener(message, ctx)
+    })
     return
   }
 

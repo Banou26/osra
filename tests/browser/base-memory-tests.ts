@@ -104,6 +104,33 @@ export const concurrentCallsNoLeak = async (transport: Transport, iterations = D
   }
 }
 
+export const mapRoundTripNoLeak = async (transport: Transport, iterations = DEFAULT_ITERATIONS) => {
+  const value = async (m: Map<string, number>) => m.size
+  expose(value, { transport })
+  const remote = await expose<typeof value>({}, { transport })
+  for (let i = 0; i < iterations; i++) {
+    await remote(new Map([['a', 1], ['b', 2], ['c', 3]]))
+  }
+}
+
+export const setRoundTripNoLeak = async (transport: Transport, iterations = DEFAULT_ITERATIONS) => {
+  const value = async (s: Set<number>) => s.size
+  expose(value, { transport })
+  const remote = await expose<typeof value>({}, { transport })
+  for (let i = 0; i < iterations; i++) {
+    await remote(new Set([1, 2, 3, 4, 5]))
+  }
+}
+
+export const bigIntRoundTripNoLeak = async (transport: Transport, iterations = DEFAULT_ITERATIONS) => {
+  const value = async (n: bigint) => n + 1n
+  expose(value, { transport })
+  const remote = await expose<typeof value>({}, { transport })
+  for (let i = 0; i < iterations; i++) {
+    await remote(BigInt(i))
+  }
+}
+
 export const baseMemory = {
   DEFAULT_ITERATIONS,
   functionCallsNoLeak,
@@ -115,5 +142,8 @@ export const baseMemory = {
   rapidConnectionNoLeak,
   errorHandlingNoLeak,
   nestedCallbacksNoLeak,
-  concurrentCallsNoLeak
+  concurrentCallsNoLeak,
+  mapRoundTripNoLeak,
+  setRoundTripNoLeak,
+  bigIntRoundTripNoLeak,
 }

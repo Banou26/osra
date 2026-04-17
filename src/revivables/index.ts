@@ -19,6 +19,7 @@ import * as identity from './identity'
 import * as transfer from './transfer'
 import * as map from './map'
 import * as set from './set'
+import * as bigInt from './bigint'
 
 export { identity } from './identity'
 export { transfer } from './transfer'
@@ -61,6 +62,7 @@ export const defaultRevivableModules = [
   request,
   map,
   set,
+  bigInt,
 ] as const
 
 export type DefaultRevivableModules = typeof defaultRevivableModules
