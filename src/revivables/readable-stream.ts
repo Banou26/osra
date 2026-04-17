@@ -1,8 +1,11 @@
 import type { RevivableContext, BoxBase as BoxBaseType } from './utils'
 import type { UnderlyingType } from '.'
+import type { TypedMessagePort } from '../utils/typed-message-channel'
 
 import { BoxBase } from './utils'
 import { EventChannel } from '../utils/event-channel'
+import { getTransferableObjects, isJsonOnlyTransport } from '../utils'
+import { recursiveBox, recursiveRevive } from '.'
 import {
   box as boxMessagePort,
   revive as reviveMessagePort,
@@ -31,15 +34,28 @@ export const box = <T extends ReadableStream, T2 extends RevivableContext>(
   value: T,
   context: T2
 ): BoxedReadableStream<T> => {
-  // EventChannel (pass-by-reference) — live Promises etc. flow through
-  // unchanged; message-port boxes on the wire.
-  const { port1: localPort, port2: remotePort } = new EventChannel<Msg, Msg>()
+  // Clone-capable transports get a real MessageChannel so the remote port is
+  // transferred directly (message-port fast path). JSON-only transports fall
+  // back to EventChannel, which routes through the portId handler.
+  const isJson = isJsonOnlyTransport(context.transport)
+  const { port1: localPort, port2: remotePort } = isJson
+    ? new EventChannel<Msg, Msg>()
+    : new MessageChannel() as unknown as { port1: TypedMessagePort<Msg>, port2: TypedMessagePort<Msg> }
 
   const reader = value.getReader()
 
   localPort.addEventListener('message', ({ data }) => {
+    // pull/cancel are plain primitives — no reviving needed on clone path.
     if ('type' in data && data.type === 'pull') {
-      localPort.postMessage(reader.read())
+      // reader.read() returns a Promise; on clone path we must box it so it
+      // survives the structured-clone hop to the peer port.
+      const chunk = reader.read()
+      if (isJson) {
+        localPort.postMessage(chunk)
+      } else {
+        const boxed = recursiveBox(chunk, context)
+        ;(localPort as TypedMessagePort<Msg>).postMessage(boxed as unknown as Msg, getTransferableObjects(boxed))
+      }
     } else {
       reader.cancel()
       localPort.close()
@@ -59,13 +75,17 @@ export const revive = <T extends BoxedReadableStream, T2 extends RevivableContex
   context: T2
 ): T[UnderlyingType] => {
   const port = reviveMessagePort(value.port, context)
+  const isJson = isJsonOnlyTransport(context.transport)
   port.start()
 
   return new ReadableStream({
     pull: (controller) => new Promise<void>((resolve, reject) => {
       port.addEventListener('message', ({ data }) => {
-        if (!(data instanceof Promise)) return
-        data
+        // Chunks arrive as boxed Promises on clone transports, as live
+        // Promises on JSON (message-port's portId handler revived already).
+        const chunk = isJson ? data : recursiveRevive(data, context) as Msg
+        if (!(chunk instanceof Promise)) return
+        chunk
           .then(result => {
             if (result.done) controller.close()
             else controller.enqueue(result.value)

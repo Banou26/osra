@@ -1,6 +1,7 @@
 import type { Capable } from '../types'
 import type { RevivableContext, BoxBase as BoxBaseType } from './utils'
 import type { UnderlyingType } from '.'
+import type { TypedMessagePort } from '../utils/typed-message-channel'
 import type {
   BadFieldValue, BadFieldPath, BadFieldParent,
   ErrorMessage, BadValue, Path, ParentObject
@@ -8,6 +9,8 @@ import type {
 
 import { BoxBase } from './utils'
 import { EventChannel } from '../utils/event-channel'
+import { getTransferableObjects, isJsonOnlyTransport } from '../utils'
+import { recursiveBox, recursiveRevive } from '.'
 import {
   box as boxMessagePort,
   revive as reviveMessagePort,
@@ -60,12 +63,22 @@ export const box = <T, T2 extends RevivableContext>(
 ): BoxedPromise<ExtractCapable<T>> => {
   if (!isCapablePromise(value)) throw new TypeError('Expected Promise')
   const promise = value
-  // EventChannel (pass-by-reference) — we can post live values raw; the
-  // message-port revivable will box them when they cross the transport.
-  const { port1: localPort, port2: remotePort } = new EventChannel<Context, Context>()
+  // Structured-clone transports get a real MessageChannel: the remote port is
+  // transferred on the wire (message-port fast path), and we box/revive the
+  // data ourselves. JSON-only transports fall back to EventChannel, which
+  // routes through message-port's portId handler (it does the box/revive).
+  const isJson = isJsonOnlyTransport(context.transport)
+  const { port1: localPort, port2: remotePort } = isJson
+    ? new EventChannel<Context, Context>()
+    : new MessageChannel() as unknown as { port1: TypedMessagePort<Context>, port2: TypedMessagePort<Context> }
 
   const sendResult = (result: Context) => {
-    localPort.postMessage(result)
+    if (isJson) {
+      localPort.postMessage(result)
+    } else {
+      const boxed = recursiveBox(result, context) as Context
+      localPort.postMessage(boxed, getTransferableObjects(boxed))
+    }
     localPort.close()
   }
 
@@ -88,8 +101,12 @@ export const revive = <T extends BoxedPromise, T2 extends RevivableContext>(
   context: T2
 ) => {
   const port = reviveMessagePort(value.port, context)
+  // See `box`: on clone transports we boxed the result ourselves, so revive
+  // it back; on JSON transports message-port already revived for us.
+  const isJson = isJsonOnlyTransport(context.transport)
   return new Promise<T[UnderlyingType]>((resolve, reject) => {
-    port.addEventListener('message', ({ data: result }) => {
+    port.addEventListener('message', ({ data }) => {
+      const result = isJson ? data : recursiveRevive(data, context) as Context
       if (result.type === 'resolve') {
         resolve(result.data as T[UnderlyingType])
       } else {

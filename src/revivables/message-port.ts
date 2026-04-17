@@ -197,7 +197,7 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
       sendMessage: context.sendMessage,
       remoteUuid: context.remoteUuid,
       portId,
-      cleanup: performCleanup
+      cleanup: performCleanup,
     }, liveRef)
 
     liveRef.addEventListener('message', messagePortListener as EventListener)
@@ -211,7 +211,7 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
         context.sendMessage({
           type: 'message-port-close',
           remoteUuid: context.remoteUuid,
-          portId
+          portId,
         })
         performCleanup()
       }

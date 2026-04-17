@@ -1,9 +1,12 @@
 import type { Capable } from '../types'
 import type { UnderlyingType, RevivableContext, BoxBase as BoxBaseType } from './utils'
 import type { TypedMessagePort } from '../utils/typed-message-channel'
+import type { AnyPort } from './message-port'
 
 import { BoxBase } from './utils'
-import { EventChannel, EventPort } from '../utils/event-channel'
+import { EventChannel } from '../utils/event-channel'
+import { getTransferableObjects, isJsonOnlyTransport } from '../utils'
+import { recursiveBox, recursiveRevive } from '.'
 import {
   box as boxMessagePort,
   revive as reviveMessagePort,
@@ -39,11 +42,12 @@ const functionRegistry = new FinalizationRegistry<FunctionCleanupInfo>((info) =>
 // Promise executor returns, so under memory pressure GC can collect it before
 // the result arrives — the Promise hangs forever. We remove the entries in
 // the once-listener (and on reject).
-const inFlightReturnPorts = new Set<EventPort<any>>()
+const inFlightReturnPorts = new Set<AnyPort<any>>()
 
 export type CallContext = [
-  /** Return-value port that the callee will post the result on. */
-  EventPort<ResultMessage>,
+  /** Return-value port that the callee will post the result on. May be a
+   *  synthetic EventPort (JSON transport) or a real MessagePort (clone). */
+  AnyPort<ResultMessage>,
   /** Arguments that will be passed to the function call */
   Capable[]
 ]
@@ -66,19 +70,29 @@ export const box = <T extends (...args: any[]) => any, T2 extends RevivableConte
   value: T & CapableFunction<T>,
   context: T2
 ): BoxedFunction<T> => {
-  // EventChannel (pass-by-reference) — live values flow through unchanged;
-  // the message-port revivable boxes them if/when they cross the transport.
-  const { port1: localPort, port2: remotePort } = new EventChannel<CallMessage, CallMessage>()
+  // Clone-capable transports get a real MessageChannel so the remote port is
+  // transferred directly (message-port fast path). JSON-only transports fall
+  // back to EventChannel, which routes through the portId handler and boxes
+  // on the wire for us.
+  const isJson = isJsonOnlyTransport(context.transport)
+  const { port1: localPort, port2: remotePort } = isJson
+    ? new EventChannel<CallMessage, CallMessage>()
+    : new MessageChannel() as unknown as { port1: TypedMessagePort<CallMessage>, port2: TypedMessagePort<CallMessage> }
 
   const cleanup = () => {
     localPort.close()
-    // remotePort was wrapped by message-port.box; closing it fires the
-    // _onClose hook which frees allocator entries and context.eventTarget
-    // listeners on this side.
+    // remotePort may have been transferred (clone path) or boxed via
+    // message-port's portId path (JSON path). Closing it from this side is
+    // a no-op once transferred, and fires the _onClose hook otherwise.
     remotePort.close()
   }
 
-  localPort.addEventListener('message', ({ data }) => {
+  localPort.addEventListener('message', ({ data: rawData }) => {
+    // On clone transports the incoming data is structured-cloned as-is —
+    // any Capable args were boxed by the revive side and need reviving.
+    // Ports (returnPort) arrive pre-transferred, so they pass through the
+    // recursive walker untouched.
+    const data = isJson ? rawData : recursiveRevive(rawData, context) as CallMessage
     if (!Array.isArray(data)) {
       // __osra_close__ sentinel — only non-array message on this channel
       cleanup()
@@ -87,12 +101,20 @@ export const box = <T extends (...args: any[]) => any, T2 extends RevivableConte
     const [returnPort, args] = data
     ;(async () => value(...(args as Parameters<T>)))()
       .then(
-        (resolved) => returnPort.postMessage({ __osra_ok__: true, value: resolved }),
-        (error: unknown) => returnPort.postMessage({
+        (resolved): ResultMessage => ({ __osra_ok__: true, value: resolved }),
+        (error: unknown): ResultMessage => ({
           __osra_err__: true,
           error: error instanceof Error ? (error.stack ?? String(error)) : String(error),
         }),
       )
+      .then((result) => {
+        if (isJson) {
+          returnPort.postMessage(result)
+        } else {
+          const boxed = recursiveBox(result, context) as ResultMessage
+          ;(returnPort as TypedMessagePort<ResultMessage>).postMessage(boxed, getTransferableObjects(boxed))
+        }
+      })
       .finally(() => {
         // Close after the message has flushed through the microtask queue so
         // the result actually dispatches before we tear the channel down.
@@ -113,21 +135,36 @@ export const revive = <T extends BoxedFunction, T2 extends RevivableContext>(
   context: T2
 ): T[UnderlyingType] => {
   const port = reviveMessagePort(value.port, context)
+  const isJson = isJsonOnlyTransport(context.transport)
 
   const func = (...args: Capable[]) =>
     new Promise((resolve, reject) => {
-      const channel = new EventChannel<ResultMessage, ResultMessage>()
-      const returnValueLocalPort = channel.port1
-      const returnValueRemotePort = channel.port2
+      const { port1: returnValueLocalPort, port2: returnValueRemotePort } = isJson
+        ? new EventChannel<ResultMessage, ResultMessage>()
+        : new MessageChannel() as unknown as { port1: TypedMessagePort<ResultMessage>, port2: TypedMessagePort<ResultMessage> }
       // Pin ports to a module-level Set so GC can't collect the
       // port↔listener cycle while the call is in flight. Without this,
       // under memory pressure the listener (and thus `resolve`) can be
       // collected before the result arrives — the Promise hangs forever.
       inFlightReturnPorts.add(returnValueLocalPort)
       inFlightReturnPorts.add(returnValueRemotePort)
-      port.postMessage([returnValueRemotePort, args])
 
-      returnValueLocalPort.addEventListener('message', ({ data: result }) => {
+      const callMsg: CallContext = [returnValueRemotePort, args]
+      if (isJson) {
+        port.postMessage(callMsg)
+      } else {
+        const boxedArgs = recursiveBox(args, context) as Capable[]
+        const boxedCall: CallContext = [returnValueRemotePort, boxedArgs]
+        ;(port as TypedMessagePort<CallMessage>).postMessage(
+          boxedCall as CallMessage,
+          // Must transfer the return-value remote port so it lands as a live
+          // MessagePort on the box side, ready to receive the result.
+          [returnValueRemotePort as MessagePort, ...getTransferableObjects(boxedArgs)],
+        )
+      }
+
+      returnValueLocalPort.addEventListener('message', ({ data: rawData }) => {
+        const result = isJson ? rawData : recursiveRevive(rawData, context) as ResultMessage
         if ('__osra_ok__' in result) resolve(result.value)
         else reject(result.error)
         returnValueLocalPort.close()
