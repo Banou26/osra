@@ -75,6 +75,11 @@ export const userPromiseOfMap = () => base.userPromiseOfMap(window)
 export const userCallbackReturningSet = () => base.userCallbackReturningSet(window)
 export const userMapInsideArray = () => base.userMapInsideArray(window)
 export const userArrayBufferInMap = () => base.userArrayBufferInMap(window)
+export const userEventTarget = () => base.userEventTarget(window)
+export const userEventTargetMultipleListeners = () => base.userEventTargetMultipleListeners(window)
+export const userEventTargetCustomEvent = () => base.userEventTargetCustomEvent(window)
+export const userEventTargetUnsubscribe = () => base.userEventTargetUnsubscribe(window)
+export const userEventTargetMultipleEventTypes = () => base.userEventTargetMultipleEventTypes(window)
 
 export const MemoryLeaks = {
   config: {
@@ -95,6 +100,7 @@ export const MemoryLeaks = {
   mapRoundTripNoLeak: () => baseMemory.mapRoundTripNoLeak(window),
   setRoundTripNoLeak: () => baseMemory.setRoundTripNoLeak(window),
   bigIntRoundTripNoLeak: () => baseMemory.bigIntRoundTripNoLeak(window),
+  eventTargetDispatchNoLeak: () => baseMemory.eventTargetDispatchNoLeak(window),
 }
 
 export const userPoint = () => customRevivables.userPoint(window)

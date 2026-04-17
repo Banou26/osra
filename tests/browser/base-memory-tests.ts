@@ -131,6 +131,23 @@ export const bigIntRoundTripNoLeak = async (transport: Transport, iterations = D
   }
 }
 
+export const eventTargetDispatchNoLeak = async (transport: Transport, iterations = DEFAULT_ITERATIONS) => {
+  const et = new EventTarget()
+  const value = {
+    et,
+    fire: async () => { et.dispatchEvent(new CustomEvent('tick', { detail: 1 })) },
+  }
+  expose(value, { transport })
+  const remote = await expose<typeof value>({}, { transport })
+  // Subscribe once and fire repeatedly — exercises the per-dispatch wire
+  // overhead (subscribe is one-shot at the 0→1 listener edge).
+  remote.et.addEventListener('tick', () => {})
+  await new Promise(r => setTimeout(r, 50))
+  for (let i = 0; i < iterations; i++) {
+    await remote.fire()
+  }
+}
+
 export const baseMemory = {
   DEFAULT_ITERATIONS,
   functionCallsNoLeak,
@@ -146,4 +163,5 @@ export const baseMemory = {
   mapRoundTripNoLeak,
   setRoundTripNoLeak,
   bigIntRoundTripNoLeak,
+  eventTargetDispatchNoLeak,
 }

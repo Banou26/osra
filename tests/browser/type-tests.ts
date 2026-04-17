@@ -51,6 +51,7 @@ type _CapablePositives = [
   Expect<Assignable<MessagePort, Capable>>,
   Expect<Assignable<ReadableStream, Capable>>,
   Expect<Assignable<AbortSignal, Capable>>,
+  Expect<Assignable<EventTarget, Capable>>,
   Expect<Assignable<Map<string, Promise<bigint>>, Capable>>,
   Expect<Assignable<Set<Date>, Capable>>,
   Expect<Assignable<{ nested: { deeper: { fn: () => Promise<number> } } }, Capable>>,
@@ -98,6 +99,12 @@ type _ReplaceBigInt =
   ReplaceWithBox<bigint, DefaultRevivableModule>
 type _CheckBigIntReplaced = Expect<
   _ReplaceBigInt extends BoxBase<'bigint'> ? true : false
+>
+
+type _ReplaceEventTarget =
+  ReplaceWithBox<EventTarget, DefaultRevivableModule>
+type _CheckEventTargetReplaced = Expect<
+  _ReplaceEventTarget extends BoxBase ? true : false
 >
 
 // Plain values pass through unchanged.
@@ -175,7 +182,7 @@ export const __types = () => {
   // Force the file to be retained even if all assertions are erased.
   return null as unknown as
     | [_JsonablePositives, _StructurablePositives, _CapablePositives, _CapableNegatives]
-    | [_CheckFnReplaced, _CheckPromiseReplaced, _CheckMapReplaced, _CheckSetReplaced, _CheckBigIntReplaced]
+    | [_CheckFnReplaced, _CheckPromiseReplaced, _CheckMapReplaced, _CheckSetReplaced, _CheckBigIntReplaced, _CheckEventTargetReplaced]
     | [_CheckPlainPassthrough, _CheckDeepObj, _CheckDeepArr]
     | [_CheckReviveFn, _CheckRevivePromise, _CheckReviveMap, _CheckReviveSet]
     | [_PointType, _CtxModulesContains]

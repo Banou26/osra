@@ -795,6 +795,146 @@ export const userArrayBufferInMap = async (transport: Transport) => {
   expect(new Uint8Array(revived)).to.deep.equal(new Uint8Array([1, 2, 3, 4]))
 }
 
+export const userEventTarget = async (transport: Transport) => {
+  const _et = new EventTarget()
+  const value = {
+    et: _et,
+    fire: async (eventType: string) => { _et.dispatchEvent(new Event(eventType)) },
+  }
+  expose(value, { transport })
+
+  const { et, fire } = await expose<typeof value>({}, { transport })
+
+  expect(et).to.be.instanceOf(EventTarget)
+
+  let resolveSeen: (e: Event) => void
+  const seen = new Promise<Event>(r => { resolveSeen = r })
+  et.addEventListener('ping', resolveSeen!)
+
+  // Wait for the subscribe message to reach the source side before firing,
+  // otherwise the source has no listener attached yet.
+  await new Promise(r => setTimeout(r, 50))
+  await fire('ping')
+
+  const event = await seen
+  expect(event.type).to.equal('ping')
+}
+
+export const userEventTargetMultipleListeners = async (transport: Transport) => {
+  const _et = new EventTarget()
+  const value = {
+    et: _et,
+    fire: async () => { _et.dispatchEvent(new Event('go')) },
+  }
+  expose(value, { transport })
+
+  const { et, fire } = await expose<typeof value>({}, { transport })
+
+  let count = 0
+  const inc = () => { count++ }
+  et.addEventListener('go', inc)
+  et.addEventListener('go', () => { count += 10 })
+
+  await new Promise(r => setTimeout(r, 50))
+  await fire()
+
+  // Wait for forwarded event to dispatch on receiver.
+  await new Promise(r => setTimeout(r, 50))
+  expect(count).to.equal(11)
+}
+
+export const userEventTargetCustomEvent = async (transport: Transport) => {
+  const _et = new EventTarget()
+  const value = {
+    et: _et,
+    fire: async (detail: { hello: string, n: number }) => {
+      _et.dispatchEvent(new CustomEvent('payload', { detail }))
+    },
+  }
+  expose(value, { transport })
+
+  const { et, fire } = await expose<typeof value>({}, { transport })
+
+  let resolveSeen: (e: CustomEvent) => void
+  const seen = new Promise<CustomEvent>(r => { resolveSeen = r })
+  et.addEventListener('payload', e => { resolveSeen(e as CustomEvent) })
+
+  await new Promise(r => setTimeout(r, 50))
+  await fire({ hello: 'world', n: 42 })
+
+  const event = await seen
+  expect(event).to.be.instanceOf(CustomEvent)
+  expect(event.detail).to.deep.equal({ hello: 'world', n: 42 })
+}
+
+export const userEventTargetUnsubscribe = async (transport: Transport) => {
+  const _et = new EventTarget()
+  const value = {
+    et: _et,
+    fire: async () => { _et.dispatchEvent(new Event('tick')) },
+    listenerCount: async () => {
+      // Dispatch a probe; if there's a forwarder, we'll see it via instrumentation
+      // below. We can't directly inspect EventTarget listeners — use a sentinel
+      // counter instead.
+      return probeCount
+    },
+  }
+  // Sentinel: the forwarding listener installed by the box() side increments
+  // this on every dispatch. After unsubscribe the count must stop changing.
+  let probeCount = 0
+  _et.addEventListener('tick', () => { probeCount++ })
+  expose(value, { transport })
+
+  const { et, fire, listenerCount } = await expose<typeof value>({}, { transport })
+
+  let receiverCount = 0
+  const handler = () => { receiverCount++ }
+  et.addEventListener('tick', handler)
+
+  await new Promise(r => setTimeout(r, 50))
+  await fire()
+  await new Promise(r => setTimeout(r, 50))
+  expect(receiverCount).to.equal(1)
+  const probeAfterFirst = await listenerCount()
+
+  et.removeEventListener('tick', handler)
+  // Allow the unsubscribe message to reach the source.
+  await new Promise(r => setTimeout(r, 50))
+  await fire()
+  await new Promise(r => setTimeout(r, 50))
+  // Receiver must NOT have observed the second event.
+  expect(receiverCount).to.equal(1)
+  // Sentinel still ticks since we didn't unregister it; proves the source
+  // dispatched but our forwarder didn't deliver to us.
+  expect(await listenerCount()).to.equal(probeAfterFirst + 1)
+}
+
+export const userEventTargetMultipleEventTypes = async (transport: Transport) => {
+  const _et = new EventTarget()
+  const value = {
+    et: _et,
+    fireA: async () => { _et.dispatchEvent(new Event('a')) },
+    fireB: async () => { _et.dispatchEvent(new Event('b')) },
+  }
+  expose(value, { transport })
+
+  const { et, fireA, fireB } = await expose<typeof value>({}, { transport })
+
+  let aCount = 0
+  let bCount = 0
+  et.addEventListener('a', () => { aCount++ })
+  et.addEventListener('b', () => { bCount++ })
+
+  await new Promise(r => setTimeout(r, 50))
+  await fireA()
+  await fireA()
+  await fireB()
+  await new Promise(r => setTimeout(r, 50))
+
+  expect(aCount).to.equal(2)
+  expect(bCount).to.equal(1)
+}
+
 export const base = {
   argsAndResponse,
   callback,
@@ -844,4 +984,9 @@ export const base = {
   userCallbackReturningSet,
   userMapInsideArray,
   userArrayBufferInMap,
+  userEventTarget,
+  userEventTargetMultipleListeners,
+  userEventTargetCustomEvent,
+  userEventTargetUnsubscribe,
+  userEventTargetMultipleEventTypes,
 }

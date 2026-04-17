@@ -90,6 +90,11 @@ export const userPromiseOfMap = () => base.userPromiseOfMap(jsonTransport())
 export const userCallbackReturningSet = () => base.userCallbackReturningSet(jsonTransport())
 export const userMapInsideArray = () => base.userMapInsideArray(jsonTransport())
 export const userArrayBufferInMap = () => base.userArrayBufferInMap(jsonTransport())
+export const userEventTarget = () => base.userEventTarget(jsonTransport())
+export const userEventTargetMultipleListeners = () => base.userEventTargetMultipleListeners(jsonTransport())
+export const userEventTargetCustomEvent = () => base.userEventTargetCustomEvent(jsonTransport())
+export const userEventTargetUnsubscribe = () => base.userEventTargetUnsubscribe(jsonTransport())
+export const userEventTargetMultipleEventTypes = () => base.userEventTargetMultipleEventTypes(jsonTransport())
 
 const JSON_ITERATIONS = 2_500
 const JSON_MEMORY_THRESHOLD = 1_000_000
@@ -113,6 +118,7 @@ export const MemoryLeaks = {
   mapRoundTripNoLeak: () => baseMemory.mapRoundTripNoLeak(jsonTransport(), JSON_ITERATIONS),
   setRoundTripNoLeak: () => baseMemory.setRoundTripNoLeak(jsonTransport(), JSON_ITERATIONS),
   bigIntRoundTripNoLeak: () => baseMemory.bigIntRoundTripNoLeak(jsonTransport(), JSON_ITERATIONS),
+  eventTargetDispatchNoLeak: () => baseMemory.eventTargetDispatchNoLeak(jsonTransport(), JSON_ITERATIONS),
 }
 
 export const userPoint = () => customRevivables.userPoint(jsonTransport())
