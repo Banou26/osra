@@ -18,15 +18,18 @@ export type MessageContext = {
   source?: MessageEventSource | null // Window, Worker, WebSocket, ect...
 }
 
+export type ReceiveHandler = (listener: (event: Message, messageContext: MessageContext) => void) => void
+export type EmitHandler = (message: Message, transferables?: Transferable[]) => void
+
+type CustomReceive = ReceivePlatformTransport | ReceiveHandler
+type CustomEmit = EmitPlatformTransport | EmitHandler
+
 export type CustomTransport =
   { isJson?: boolean }
   & (
-    | {
-      receive: ReceivePlatformTransport | ((listener: (event: Message, messageContext: MessageContext) => void) => void)
-      emit: EmitPlatformTransport | ((message: Message, transferables?: Transferable[]) => void)
-    }
-    | { receive: ReceivePlatformTransport | ((listener: (event: Message, messageContext: MessageContext) => void) => void) }
-    | { emit: EmitPlatformTransport | ((message: Message, transferables?: Transferable[]) => void) }
+    | { receive: CustomReceive, emit: CustomEmit }
+    | { receive: CustomReceive }
+    | { emit: CustomEmit }
   )
 
 export type CustomEmitTransport = Extract<CustomTransport, { emit: any }>
@@ -49,21 +52,20 @@ export type JsonPlatformTransport =
   | EmitJsonPlatformTransport
   | ReceiveJsonPlatformTransport
 
-export type EmitPlatformTransport =
-  | EmitJsonPlatformTransport
+type StructuredClonePlatformTransport =
   | Window
   | ServiceWorker
   | Worker
   | SharedWorker
   | MessagePort
 
+export type EmitPlatformTransport =
+  | EmitJsonPlatformTransport
+  | StructuredClonePlatformTransport
+
 export type ReceivePlatformTransport =
   | ReceiveJsonPlatformTransport
-  | Window
-  | ServiceWorker
-  | Worker
-  | SharedWorker
-  | MessagePort
+  | StructuredClonePlatformTransport
 
 export type PlatformTransport =
   | EmitPlatformTransport
@@ -83,6 +85,9 @@ export const checkOsraMessageKey = (message: any, key: string): message is Messa
   isOsraMessage(message)
   && message[OSRA_KEY] === key
 
+const onAbort = (signal: AbortSignal | undefined, fn: () => void) =>
+  signal?.addEventListener('abort', fn, { once: true })
+
 export const registerOsraMessageListener = (
   { listener, transport, remoteName, key = OSRA_KEY, unregisterSignal }:
   {
@@ -93,72 +98,60 @@ export const registerOsraMessageListener = (
     unregisterSignal?: AbortSignal
   }
 ) => {
-  const registerListenerOnReceiveTransport = (receiveTransport: Extract<CustomTransport, { receive: any }>['receive']) => {
-    // Custom function handler
-    if (typeof receiveTransport === 'function') {
-      receiveTransport(listener)
-      // WebExtension handler
-    } else if (
-      isWebExtensionRuntime(receiveTransport)
-      || isWebExtensionPort(receiveTransport)
-      || isWebExtensionOnConnect(receiveTransport)
-      || isWebExtensionOnMessage(receiveTransport)
-    ) {
-      const listenOnWebExtOnMessage = (onMessage: WebExtOnMessage, port?: WebExtPort) => {
-        const _listener = (message: object, sender?: WebExtSender) => {
-          if (!checkOsraMessageKey(message, key)) return
-          if (remoteName && message.name !== remoteName) return
-          listener(message, { port, sender })
-        }
-        onMessage.addListener(_listener)
-        if (unregisterSignal) {
-          unregisterSignal.addEventListener('abort', () =>
-            onMessage.removeListener(_listener)
-          )
-        }
-      }
+  const receiveTransport: Extract<CustomTransport, { receive: any }>['receive'] =
+    isCustomTransport(transport) ? transport.receive : transport
 
-      if (isWebExtensionRuntime(receiveTransport)) {
-        listenOnWebExtOnMessage(receiveTransport.onMessage)
-      // WebExtOnConnect
-      } else if (isWebExtensionOnConnect(receiveTransport)) {
-        const _listener = (port: WebExtPort) => {
-          // Port.onMessage has a narrower (message, port) shape than the shared
-          // (message, sender) Runtime.onMessage — but our listener only reads
-          // `message` so the runtime shape covers both.
-          listenOnWebExtOnMessage(port.onMessage as WebExtOnMessage, port)
-        }
-        receiveTransport.addListener(_listener)
-        if (unregisterSignal) {
-          unregisterSignal.addEventListener('abort', () =>
-            receiveTransport.removeListener(_listener),
-          )
-        }
-      // WebExtOnMessage
-      } else if (isWebExtensionOnMessage(receiveTransport)) {
-        listenOnWebExtOnMessage(receiveTransport)
-      } else { // WebExtPort
-        listenOnWebExtOnMessage(receiveTransport.onMessage as WebExtOnMessage)
+  // Custom function handler
+  if (typeof receiveTransport === 'function') {
+    receiveTransport(listener)
+    return
+  }
+
+  // WebExtension family — subscribe to an `onMessage`-style listener API.
+  if (
+    isWebExtensionRuntime(receiveTransport)
+    || isWebExtensionPort(receiveTransport)
+    || isWebExtensionOnConnect(receiveTransport)
+    || isWebExtensionOnMessage(receiveTransport)
+  ) {
+    const listenOnWebExtOnMessage = (onMessage: WebExtOnMessage, port?: WebExtPort) => {
+      const _listener = (message: object, sender?: WebExtSender) => {
+        if (!checkOsraMessageKey(message, key)) return
+        if (remoteName && message.name !== remoteName) return
+        listener(message, { port, sender })
       }
-    } else { // Window, Worker, WebSocket, ect...
-      const messageListener = (event: MessageEvent<Message>) => {
-        if (!checkOsraMessageKey(event.data, key)) return
-        if (remoteName && event.data.name !== remoteName) return
-        listener(event.data, { receiveTransport, source: event.source })
-      }
-      receiveTransport.addEventListener('message', messageListener as EventListener)
-      if (unregisterSignal) {
-        unregisterSignal.addEventListener('abort', () =>
-          receiveTransport.removeEventListener('message', messageListener as EventListener)
-        )
-      }
+      onMessage.addListener(_listener)
+      onAbort(unregisterSignal, () => onMessage.removeListener(_listener))
     }
+
+    if (isWebExtensionRuntime(receiveTransport)) {
+      listenOnWebExtOnMessage(receiveTransport.onMessage)
+    } else if (isWebExtensionOnConnect(receiveTransport)) {
+      // Port.onMessage has a narrower (message, port) shape than the shared
+      // (message, sender) Runtime.onMessage — but our listener only reads
+      // `message` so the runtime shape covers both.
+      const _listener = (port: WebExtPort) =>
+        listenOnWebExtOnMessage(port.onMessage as WebExtOnMessage, port)
+      receiveTransport.addListener(_listener)
+      onAbort(unregisterSignal, () => receiveTransport.removeListener(_listener))
+    } else if (isWebExtensionOnMessage(receiveTransport)) {
+      listenOnWebExtOnMessage(receiveTransport)
+    } else { // WebExtPort
+      listenOnWebExtOnMessage(receiveTransport.onMessage as WebExtOnMessage)
+    }
+    return
   }
-  if (isCustomTransport(transport)) {
-    registerListenerOnReceiveTransport(transport.receive)
-  } else {
-    registerListenerOnReceiveTransport(transport)
+
+  // Window, Worker, WebSocket, ServiceWorker, MessagePort, …
+  const messageListener = (event: MessageEvent<Message>) => {
+    if (!checkOsraMessageKey(event.data, key)) return
+    if (remoteName && event.data.name !== remoteName) return
+    listener(event.data, { receiveTransport, source: event.source })
   }
+  receiveTransport.addEventListener('message', messageListener as EventListener)
+  onAbort(unregisterSignal, () =>
+    receiveTransport.removeEventListener('message', messageListener as EventListener),
+  )
 }
 
 export const sendOsraMessage = (
@@ -167,27 +160,23 @@ export const sendOsraMessage = (
   origin = '*',
   transferables: Transferable[] = []
 ) => {
-  const sendToEmitTransport = (emitTransport: Extract<EmitTransport, { emit: any }>['emit']) => {
-    if (typeof emitTransport === 'function') {
-      emitTransport(message, transferables)
-    } else if (isWindow(emitTransport)) { // Should be kept first, since if this is a CORS window, other checks will throw.
-      emitTransport.postMessage(message, origin, transferables)
-    } else if (isWebExtensionPort(emitTransport)) {
-      emitTransport.postMessage(message)
-    } else if (isWebExtensionRuntime(emitTransport)) {
-      emitTransport.sendMessage(message)
-    } else if (isWebSocket(emitTransport)) {
-      emitTransport.send(JSON.stringify(message))
-    } else if (isSharedWorker(emitTransport)) {
-      emitTransport.port.postMessage(message, transferables)
-    } else { // MessagePort | ServiceWorker | Worker
-      emitTransport.postMessage(message, transferables)
-    }
-  }
+  const emitTransport: Extract<EmitTransport, { emit: any }>['emit'] =
+    isCustomTransport(transport) ? transport.emit : transport
 
-  if (isCustomTransport(transport)) {
-    sendToEmitTransport(transport.emit)
-  } else {
-    sendToEmitTransport(transport)
+  if (typeof emitTransport === 'function') {
+    emitTransport(message, transferables)
+  } else if (isWindow(emitTransport)) {
+    // Must be checked first: cross-origin windows throw on other property access.
+    emitTransport.postMessage(message, origin, transferables)
+  } else if (isWebExtensionPort(emitTransport)) {
+    emitTransport.postMessage(message)
+  } else if (isWebExtensionRuntime(emitTransport)) {
+    emitTransport.sendMessage(message)
+  } else if (isWebSocket(emitTransport)) {
+    emitTransport.send(JSON.stringify(message))
+  } else if (isSharedWorker(emitTransport)) {
+    emitTransport.port.postMessage(message, transferables)
+  } else { // MessagePort | ServiceWorker | Worker
+    emitTransport.postMessage(message, transferables)
   }
 }

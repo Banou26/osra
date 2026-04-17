@@ -72,6 +72,18 @@ const findReviveModule = (
 const isPlainObject = (value: unknown): value is Record<string, Capable> =>
   !!value && typeof value === 'object' && Object.getPrototypeOf(value) === Object.prototype
 
+const descend = <TOut>(value: unknown, transform: (v: Capable) => unknown): TOut => {
+  if (Array.isArray(value)) {
+    return value.map(v => transform(v)) as TOut
+  }
+  if (isPlainObject(value)) {
+    return Object.fromEntries(
+      Object.entries<Capable>(value).map(([k, v]) => [k, transform(v)]),
+    ) as TOut
+  }
+  return value as TOut
+}
+
 export const box = <
   T extends Capable,
   TModules extends readonly RevivableModule[]
@@ -94,22 +106,11 @@ export const recursiveBox = <
   context: RevivableContext<TModules>
 ): DeepReplaceWithBox<T, TModules[number]> => {
   type ReturnCastType = DeepReplaceWithBox<T, TModules[number]>
-
   const handledByModule = findBoxModule(value, context.revivableModules)
   if (handledByModule) {
     return handledByModule.box(value, context) as ReturnCastType
   }
-
-  if (Array.isArray(value)) {
-    return value.map(v => recursiveBox(v, context)) as ReturnCastType
-  }
-  if (isPlainObject(value)) {
-    return Object.fromEntries(
-      Object.entries<Capable>(value)
-        .map(([key, v]) => [key, recursiveBox(v, context)])
-    ) as ReturnCastType
-  }
-  return value as ReturnCastType
+  return descend<ReturnCastType>(value, v => recursiveBox(v, context))
 }
 
 export const revive = <
@@ -135,22 +136,11 @@ export const recursiveRevive = <
   context: RevivableContext<TModules>
 ): DeepReplaceWithRevive<T, TModules[number]> => {
   type ReturnCastType = DeepReplaceWithRevive<T, TModules[number]>
-
   if (isRevivableBox(value)) {
     const handledByModule = findReviveModule(value, context.revivableModules)
     if (handledByModule) {
       return handledByModule.revive(value, context) as ReturnCastType
     }
   }
-
-  if (Array.isArray(value)) {
-    return value.map(v => recursiveRevive(v, context)) as ReturnCastType
-  }
-  if (isPlainObject(value)) {
-    return Object.fromEntries(
-      Object.entries<Capable>(value)
-        .map(([key, v]) => [key, recursiveRevive(v, context)])
-    ) as ReturnCastType
-  }
-  return value as ReturnCastType
+  return descend<ReturnCastType>(value, v => recursiveRevive(v, context))
 }

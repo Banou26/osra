@@ -1,4 +1,4 @@
-import type { RevivableContext } from './utils'
+import type { RevivableContext, BoxBase as BoxBaseType } from './utils'
 import type { UnderlyingType } from '.'
 
 import { BoxBase } from './utils'
@@ -19,12 +19,10 @@ type ChunkMessage<T = unknown> = Promise<ReadableStreamReadResult<T>>
 
 type Msg = PullContext | ChunkMessage
 
-export type BoxedReadableStream<T extends ReadableStream = ReadableStream> = {
-  __OSRA_BOX__: 'revivable'
-  type: typeof type
-  port: BoxedMessagePort<Msg>
-  [UnderlyingType]: T
-}
+export type BoxedReadableStream<T extends ReadableStream = ReadableStream> =
+  & BoxBaseType<typeof type>
+  & { port: BoxedMessagePort<Msg> }
+  & { [UnderlyingType]: T }
 
 export const isType = (value: unknown): value is ReadableStream =>
   value instanceof ReadableStream
@@ -64,26 +62,23 @@ export const revive = <T extends BoxedReadableStream, T2 extends RevivableContex
   port.start()
 
   return new ReadableStream({
-    start(_controller) {},
-    pull(controller) {
-      return new Promise<void>((resolve, reject) => {
-        port.addEventListener('message', ({ data }) => {
-          if (!(data instanceof Promise)) return
-          data
-            .then(result => {
-              if (result.done) controller.close()
-              else controller.enqueue(result.value)
-              resolve()
-            })
-            .catch(reject)
-        }, { once: true })
-        port.postMessage({ type: 'pull' })
-      })
-    },
-    cancel() {
+    pull: (controller) => new Promise<void>((resolve, reject) => {
+      port.addEventListener('message', ({ data }) => {
+        if (!(data instanceof Promise)) return
+        data
+          .then(result => {
+            if (result.done) controller.close()
+            else controller.enqueue(result.value)
+            resolve()
+          })
+          .catch(reject)
+      }, { once: true })
+      port.postMessage({ type: 'pull' })
+    }),
+    cancel: () => {
       port.postMessage({ type: 'cancel' })
       port.close()
-    }
+    },
   }) as T[UnderlyingType]
 }
 

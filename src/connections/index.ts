@@ -76,28 +76,12 @@ export const startConnections = <
     Promise.withResolvers<Capable<MergedModules>>()
 
   let uuid: Uuid = globalThis.crypto.randomUUID()
-  let aborted = false
-  if (unregisterSignal) {
-    unregisterSignal.addEventListener('abort', () => {
-      aborted = true
-    })
-  }
 
   const sendMessage = (message: MessageVariant) => {
-    if (aborted) return
+    if (unregisterSignal?.aborted) return
     if (!isEmitTransport(transport)) return
-    const transferables = getTransferableObjects(message)
-    sendOsraMessage(
-      transport,
-      {
-        [OSRA_KEY]: key,
-        name,
-        uuid,
-        ...message
-      },
-      origin,
-      transferables
-    )
+    const envelope = { [OSRA_KEY]: key, name, uuid, ...message }
+    sendOsraMessage(transport, envelope, origin, getTransferableObjects(envelope))
   }
 
   const protocolEventTarget = createTypedEventTarget<{ message: CustomEvent<Message<MergedModules>> }>()

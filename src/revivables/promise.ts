@@ -1,5 +1,5 @@
 import type { Capable } from '../types'
-import type { RevivableContext } from './utils'
+import type { RevivableContext, BoxBase as BoxBaseType } from './utils'
 import type { UnderlyingType } from '.'
 import type {
   BadFieldValue, BadFieldPath, BadFieldParent,
@@ -46,12 +46,10 @@ type ExtractCapable<T> = T extends Promise<infer U>
 const isCapablePromise = <T, U extends Capable = ExtractCapable<T>>(value: T): value is T & Promise<U> =>
   value instanceof Promise
 
-export type BoxedPromise<T extends Capable = Capable> = {
-  __OSRA_BOX__: 'revivable'
-  type: typeof type
-  port: BoxedMessagePort<Context>
-  [UnderlyingType]: T
-}
+export type BoxedPromise<T extends Capable = Capable> =
+  & BoxBaseType<typeof type>
+  & { port: BoxedMessagePort<Context> }
+  & { [UnderlyingType]: T }
 
 export const isType = (value: unknown): value is Promise<any> =>
   value instanceof Promise
