@@ -84,11 +84,7 @@ export const makeMessageChannelAllocator = () => {
     getOrAlloc: (
       uuid: Uuid | undefined = result.getUniqueUuid(),
       messagePorts?: { port1: StrictMessagePort, port2?: StrictMessagePort }
-    ) => {
-      const existingChannel = result.get(uuid)
-      if (existingChannel) return existingChannel!
-      return result.alloc(uuid, messagePorts)
-    }
+    ) => result.get(uuid) ?? result.alloc(uuid, messagePorts)
   }
   return result
 }

@@ -97,14 +97,10 @@ export const expose = async <
   ] as const
   const connectionContexts = new Map<string, ConnectionContext>()
 
-  let resolveRemoteValue: (connection: T) => void
-  const remoteValuePromise = new Promise<T>((resolve) => {
-    resolveRemoteValue = resolve
-  })
+  const { promise: remoteValuePromise, resolve: resolveRemoteValue } = Promise.withResolvers<T>()
 
   let uuid = globalThis.crypto.randomUUID()
-  
-  
+
   let aborted = false
   if (unregisterSignal) {
     unregisterSignal.addEventListener('abort', () => {

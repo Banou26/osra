@@ -10,7 +10,7 @@ import type {
 import { OSRA_KEY } from '../types'
 import { getWebExtensionRuntime } from './platform'
 
-const typedArrayConstructors = [
+const typedArrayConstructors = {
   Int8Array,
   Uint8Array,
   Uint8ClampedArray,
@@ -23,103 +23,72 @@ const typedArrayConstructors = [
   Float64Array,
   BigInt64Array,
   BigUint64Array
-]
-export type TypedArrayConstructor = typeof typedArrayConstructors[number]
+} as const
+export type TypeArrayType = keyof typeof typedArrayConstructors
+export type TypedArrayConstructor = typeof typedArrayConstructors[TypeArrayType]
+export type TypedArray = InstanceType<TypedArrayConstructor>
 
-const typedArrays = [
-  new Int8Array(),
-  new Uint8Array(),
-  new Uint8ClampedArray(),
-  new Int16Array(),
-  new Uint16Array(),
-  new Int32Array(),
-  new Uint32Array(),
-  new Float16Array(),
-  new Float32Array(),
-  new Float64Array(),
-  new BigInt64Array(),
-  new BigUint64Array()
-]
-export type TypedArray = typeof typedArrays[number]
-export const typedArrayToType = <T extends TypedArray>(value: T) => {
-  const type =
-    value instanceof Int8Array ? 'Int8Array' :
-    value instanceof Uint8Array ? 'Uint8Array' :
-    value instanceof Uint8ClampedArray ? 'Uint8ClampedArray' :
-    value instanceof Int16Array ? 'Int16Array' :
-    value instanceof Uint16Array ? 'Uint16Array' :
-    value instanceof Int32Array ? 'Int32Array' :
-    value instanceof Uint32Array ? 'Uint32Array' :
-    value instanceof Float16Array ? 'Float16Array' :
-    value instanceof Float32Array ? 'Float32Array' :
-    value instanceof Float64Array ? 'Float64Array' :
-    value instanceof BigInt64Array ? 'BigInt64Array' :
-    value instanceof BigUint64Array ? 'BigUint64Array' :
-    undefined
-  if (type === undefined) throw new Error('Unknown typed array type')
-  return type
-}
-export type TypeArrayType = ReturnType<typeof typedArrayToType>
-export const typedArrayTypeToTypedArrayConstructor = (value: TypeArrayType): TypedArrayConstructor => {
-  const typedArray =
-    value === 'Int8Array' ? Int8Array :
-    value === 'Uint8Array' ? Uint8Array :
-    value === 'Uint8ClampedArray' ? Uint8ClampedArray :
-    value === 'Int16Array' ? Int16Array :
-    value === 'Uint16Array' ? Uint16Array :
-    value === 'Int32Array' ? Int32Array :
-    value === 'Uint32Array' ? Uint32Array :
-    value === 'Float16Array' ? Float16Array :
-    value === 'Float32Array' ? Float32Array :
-    value === 'Float64Array' ? Float64Array :
-    value === 'BigInt64Array' ? BigInt64Array :
-    value === 'BigUint64Array' ? BigUint64Array :
-    undefined
-  if (typedArray === undefined) throw new Error('Unknown typed array type')
-  return typedArray
+const typedArrayEntries = Object.entries(typedArrayConstructors) as readonly [TypeArrayType, TypedArrayConstructor][]
+
+export const typedArrayToType = <T extends TypedArray>(value: T): TypeArrayType => {
+  const entry = typedArrayEntries.find(([, ctor]) => value instanceof ctor)
+  if (!entry) throw new Error('Unknown typed array type')
+  return entry[0]
 }
 
-export const isTypedArray = (value: any): value is TypedArray => typedArrayConstructors.some(typedArray => value instanceof typedArray)
-export const isWebSocket = (value: any) => value instanceof WebSocket
-export const isServiceWorkerContainer = (value: any): value is ServiceWorkerContainer => globalThis.ServiceWorkerContainer && value instanceof ServiceWorkerContainer
-export const isWorker = (value: any): value is Worker => globalThis.Worker && value instanceof Worker
-// @ts-expect-error
-export const isDedicatedWorker = (value: any): value is DedicatedWorkerGlobalScope => globalThis.DedicatedWorkerGlobalScope && value instanceof DedicatedWorkerGlobalScope
-export const isSharedWorker = (value: any): value is SharedWorker => globalThis.SharedWorker && value instanceof SharedWorker
-export const isMessagePort = (value: any) => value instanceof MessagePort
-export const isPromise = (value: any) => value instanceof Promise
-export const isFunction = (value: any): value is Function => typeof value === 'function'
-export const isArrayBuffer = (value: any) => value instanceof ArrayBuffer
-export const isReadableStream = (value: any) => value instanceof ReadableStream
-export const isDate = (value: any) => value instanceof Date
-export const isError = (value: any) => value instanceof Error
+export const typedArrayTypeToTypedArrayConstructor = (value: TypeArrayType): TypedArrayConstructor =>
+  typedArrayConstructors[value]
 
-export const isAlwaysBox = (value: any): value is Function | Promise<any> | Date | Error =>
+export const isTypedArray = (value: unknown): value is TypedArray =>
+  typedArrayEntries.some(([, ctor]) => value instanceof ctor)
+export const isWebSocket = (value: unknown): value is WebSocket =>
+  typeof WebSocket !== 'undefined' && value instanceof WebSocket
+export const isServiceWorkerContainer = (value: unknown): value is ServiceWorkerContainer =>
+  typeof ServiceWorkerContainer !== 'undefined' && value instanceof ServiceWorkerContainer
+export const isWorker = (value: unknown): value is Worker =>
+  typeof Worker !== 'undefined' && value instanceof Worker
+export const isDedicatedWorker = (value: unknown): value is DedicatedWorkerGlobalScope =>
+  // @ts-expect-error DedicatedWorkerGlobalScope is not defined in all TS lib configurations
+  typeof DedicatedWorkerGlobalScope !== 'undefined' && value instanceof DedicatedWorkerGlobalScope
+export const isSharedWorker = (value: unknown): value is SharedWorker =>
+  typeof SharedWorker !== 'undefined' && value instanceof SharedWorker
+export const isMessagePort = (value: unknown): value is MessagePort =>
+  typeof MessagePort !== 'undefined' && value instanceof MessagePort
+export const isPromise = (value: unknown): value is Promise<unknown> =>
+  value instanceof Promise
+export const isFunction = (value: unknown): value is Function =>
+  typeof value === 'function'
+export const isArrayBuffer = (value: unknown): value is ArrayBuffer =>
+  typeof ArrayBuffer !== 'undefined' && value instanceof ArrayBuffer
+export const isReadableStream = (value: unknown): value is ReadableStream =>
+  typeof ReadableStream !== 'undefined' && value instanceof ReadableStream
+export const isDate = (value: unknown): value is Date => value instanceof Date
+export const isError = (value: unknown): value is Error => value instanceof Error
+
+export const isAlwaysBox = (value: unknown): value is Function | Promise<unknown> | TypedArray | Date | Error =>
   isFunction(value)
   || isPromise(value)
   || isTypedArray(value)
   || isDate(value)
   || isError(value)
 
-export const isOsraMessage = (value: any): value is Message =>
+export const isOsraMessage = (value: unknown): value is Message =>
   Boolean(
     value
     && typeof value === 'object'
     && (value as Message)[OSRA_KEY]
   )
 
-export const isClonable = (value: any) =>
-    globalThis.SharedArrayBuffer && value instanceof globalThis.SharedArrayBuffer ? true
-  : false
+export const isClonable = (value: unknown): value is SharedArrayBuffer =>
+  typeof SharedArrayBuffer !== 'undefined' && value instanceof SharedArrayBuffer
 
-export const isTransferable = (value: any): value is Transferable =>
-    globalThis.ArrayBuffer && value instanceof globalThis.ArrayBuffer ? true
-  : globalThis.MessagePort && value instanceof globalThis.MessagePort ? true
-  : globalThis.ReadableStream && value instanceof globalThis.ReadableStream ? true
-  : globalThis.WritableStream && value instanceof globalThis.WritableStream ? true
-  : globalThis.TransformStream && value instanceof globalThis.TransformStream ? true
-  : globalThis.ImageBitmap && value instanceof globalThis.ImageBitmap ? true
-  : false
+export const isTransferable = (value: unknown): value is Transferable =>
+     isArrayBuffer(value)
+  || isMessagePort(value)
+  || isReadableStream(value)
+  || (typeof WritableStream !== 'undefined' && value instanceof WritableStream)
+  || (typeof TransformStream !== 'undefined' && value instanceof TransformStream)
+  || (typeof ImageBitmap !== 'undefined' && value instanceof ImageBitmap)
 
 export type WebExtRuntime = typeof browser.runtime
 export const isWebExtensionRuntime = (value: any): value is WebExtRuntime => {

@@ -73,14 +73,12 @@ export const startBidirectionalConnection = <
     eventTarget,
     revivableModules
   } satisfies ConnectionRevivableContext<TModules>
-  let initResolve: ((message: ConnectionMessage & { type: 'init' }) => void)
-  const initMessage = new Promise<ConnectionMessage & { type: 'init' }>((resolve, reject) => {
-    initResolve = resolve
-  })
+  const { promise: initMessage, resolve: resolveInit } =
+    Promise.withResolvers<ConnectionMessage & { type: 'init' }>()
 
   eventTarget.addEventListener('message', ({ detail }) => {
     if (detail.type === 'init') {
-      initResolve(detail)
+      resolveInit(detail)
       return
     } else if (detail.type === 'message') {
       const messageChannel = revivableContext.messageChannels.getOrAlloc(detail.portId)
