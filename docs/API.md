@@ -37,7 +37,6 @@ interface ExposeOptions {
   key?: string
   origin?: string
   unregisterSignal?: AbortSignal
-  logger?: Logger
 }
 ```
 
@@ -49,7 +48,6 @@ interface ExposeOptions {
 | `key` | `string` | No | Shared secret for additional security |
 | `origin` | `string` | No | Origin restriction for Window postMessage |
 | `unregisterSignal` | `AbortSignal` | No | Signal to clean up the connection |
-| `logger` | `Logger` | No | Custom logger for debugging |
 
 #### Returns
 
@@ -404,38 +402,12 @@ const api = await expose<API>({}, {
 controller.abort()
 ```
 
-### Custom Logger
-
-Provide a logger for debugging:
-
-```typescript
-const api = await expose<API>({}, {
-  transport: worker,
-  logger: {
-    log: (...args) => console.log('[Osra]', ...args),
-    error: (...args) => console.error('[Osra]', ...args)
-  }
-})
-```
-
 ## Type Guards
 
 Osra exports type guard functions for runtime type checking:
 
 ```typescript
-import {
-  isJsonable,
-  isStructurable,
-  isRevivable,
-  isCapable,
-  isTypedArray,
-  isTransferable
-} from 'osra'
-
-// Check if a value can be sent
-if (isCapable(myValue)) {
-  // Safe to send through Osra
-}
+import { isTypedArray, isTransferable } from 'osra'
 
 // Check for specific capabilities
 if (isTransferable(myBuffer)) {

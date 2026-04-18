@@ -60,8 +60,8 @@ export const typedArrayToType = <T extends TypedArray>(value: T) => {
   if (type === undefined) throw new Error('Unknown typed array type')
   return type
 }
-export type TypeArrayType = ReturnType<typeof typedArrayToType>
-export const typedArrayTypeToTypedArrayConstructor = (value: TypeArrayType): TypedArrayConstructor => {
+export type TypedArrayType = ReturnType<typeof typedArrayToType>
+export const typedArrayTypeToTypedArrayConstructor = (value: TypedArrayType): TypedArrayConstructor => {
   const typedArray =
     value === 'Int8Array' ? Int8Array :
     value === 'Uint8Array' ? Uint8Array :
@@ -95,13 +95,6 @@ export const isReadableStream = (value: any) => value instanceof ReadableStream
 export const isDate = (value: any) => value instanceof Date
 export const isError = (value: any) => value instanceof Error
 
-export const isAlwaysBox = (value: any): value is Function | Promise<any> | Date | Error =>
-  isFunction(value)
-  || isPromise(value)
-  || isTypedArray(value)
-  || isDate(value)
-  || isError(value)
-
 export const isOsraMessage = (value: any): value is Message =>
   Boolean(
     value
@@ -109,18 +102,25 @@ export const isOsraMessage = (value: any): value is Message =>
     && (value as Message)[OSRA_KEY]
   )
 
+/** True if `value` is an instance of any of the given (possibly undefined-on-this-platform)
+ *  constructors. Tolerates missing globals so callers don't have to guard each one. */
+export const instanceOfAny = (value: unknown, ctors: readonly (Function | undefined)[]): boolean => {
+  for (const ctor of ctors) if (ctor && value instanceof ctor) return true
+  return false
+}
+
 export const isClonable = (value: any) =>
-    globalThis.SharedArrayBuffer && value instanceof globalThis.SharedArrayBuffer ? true
-  : false
+  instanceOfAny(value, [globalThis.SharedArrayBuffer])
 
 export const isTransferable = (value: any): value is Transferable =>
-    globalThis.ArrayBuffer && value instanceof globalThis.ArrayBuffer ? true
-  : globalThis.MessagePort && value instanceof globalThis.MessagePort ? true
-  : globalThis.ReadableStream && value instanceof globalThis.ReadableStream ? true
-  : globalThis.WritableStream && value instanceof globalThis.WritableStream ? true
-  : globalThis.TransformStream && value instanceof globalThis.TransformStream ? true
-  : globalThis.ImageBitmap && value instanceof globalThis.ImageBitmap ? true
-  : false
+  instanceOfAny(value, [
+    globalThis.ArrayBuffer,
+    globalThis.MessagePort,
+    globalThis.ReadableStream,
+    globalThis.WritableStream,
+    globalThis.TransformStream,
+    globalThis.ImageBitmap,
+  ])
 
 export type WebExtRuntime = typeof browser.runtime
 export const isWebExtensionRuntime = (value: any): value is WebExtRuntime => {

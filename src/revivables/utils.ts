@@ -12,7 +12,6 @@ export type { UnderlyingType } from '../utils/type'
 
 export const BoxBase = {
   [OSRA_BOX]: 'revivable',
-  type: '' as string
 } as const
 
 export type BoxBase<T extends string = string> =
@@ -35,23 +34,8 @@ export type CustomMessageEvent<
 > =
   | CustomEvent<Message<TModules>>
 
-export type ExtractModule<T> =
-  T extends { isType: (value: unknown) => value is infer S }
-    ? S
-    : never
-
 export type ExtractType<T> =
   T extends { isType: (value: unknown) => value is infer S }
-    ? S
-    : never
-
-export type ExtractBoxInput<T> =
-  T extends { box: (value: infer S) => value is any }
-    ? S
-    : never
-
-export type ExtractReviveInput<T> =
-  T extends { revive: (value: infer S) => value is any }
     ? S
     : never
 

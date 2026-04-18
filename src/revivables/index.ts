@@ -1,8 +1,7 @@
 import type { BoxBase, RevivableContext } from './utils'
 import type { DeepReplaceWithBox, DeepReplaceWithRevive, ReplaceWithBox, ReplaceWithRevive } from '../utils/replace'
-import type { MessageFields } from '../types'
+import type { MessageFields, Capable } from '../types'
 
-import { Capable } from '../types'
 import { isRevivableBox } from './utils'
 import * as arrayBuffer from './array-buffer'
 import * as date from './date'
@@ -51,23 +50,26 @@ export const defaultRevivableModules = [
 ] as const
 
 export type DefaultRevivableModules = typeof defaultRevivableModules
-
 export type DefaultRevivableModule = DefaultRevivableModules[number]
 
-export const findModuleForValue = <
-  T extends Capable,
-  TModules extends readonly RevivableModule[]
->(
-  value: T,
-  context: RevivableContext<TModules>
-): ReplaceWithBox<T, TModules[number]> => {
-  type ReturnCastType = ReplaceWithBox<T, TModules[number]>
-  const handledByModule = context.revivableModules.find((module: RevivableModule) => module.isType(value))
-  if (handledByModule?.isType(value)) {
-    return (handledByModule.box as (v: unknown, c: RevivableContext<any>) => unknown)(value, context) as ReturnCastType
-  }
-  return value as ReturnCastType
+const findBoxModule = (
+  value: unknown,
+  modules: readonly RevivableModule[]
+): RevivableModule | undefined =>
+  modules.find(module => module.isType(value))
+
+const findReviveModule = (
+  value: unknown,
+  modules: readonly RevivableModule[]
+): RevivableModule | undefined => {
+  if (!value || typeof value !== 'object') return undefined
+  const boxType = (value as { type?: unknown }).type
+  if (typeof boxType !== 'string') return undefined
+  return modules.find(module => module.type === boxType)
 }
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  !!value && typeof value === 'object' && Object.getPrototypeOf(value) === Object.prototype
 
 export const box = <
   T extends Capable,
@@ -76,12 +78,11 @@ export const box = <
   value: T,
   context: RevivableContext<TModules>
 ): ReplaceWithBox<T, TModules[number]> => {
-  type ReturnCastType = ReplaceWithBox<T, TModules[number]>
-  const handledByModule = context.revivableModules.find((module: RevivableModule) => module.isType(value))
-  if (handledByModule?.isType(value)) {
-    return (handledByModule.box as (v: unknown, c: RevivableContext<any>) => unknown)(value, context) as ReturnCastType
+  const handledByModule = findBoxModule(value, context.revivableModules)
+  if (handledByModule) {
+    return handledByModule.box(value, context) as ReplaceWithBox<T, TModules[number]>
   }
-  return value as ReturnCastType
+  return value as ReplaceWithBox<T, TModules[number]>
 }
 
 export const recursiveBox = <
@@ -93,25 +94,21 @@ export const recursiveBox = <
 ): DeepReplaceWithBox<T, TModules[number]> => {
   type ReturnCastType = DeepReplaceWithBox<T, TModules[number]>
 
-  const handledByModule = context.revivableModules.find((module: RevivableModule) => module.isType(value))
-  if (handledByModule?.isType(value)) {
-    return (handledByModule.box as (v: unknown, c: RevivableContext<any>) => unknown)(value, context) as ReturnCastType
+  const handledByModule = findBoxModule(value, context.revivableModules)
+  if (handledByModule) {
+    return handledByModule.box(value, context) as ReturnCastType
   }
 
-  return (
-    Array.isArray(value) ? value.map(value => recursiveBox(value, context)) as ReturnCastType
-    : value && typeof value === 'object' && Object.getPrototypeOf(value) === Object.prototype ? (
-      Object.fromEntries(
-        Object
-          .entries(value)
-          .map(([key, value]: [string, Capable]) => [
-            key,
-            recursiveBox(value, context)
-          ])
-      )
+  if (Array.isArray(value)) {
+    return value.map(v => recursiveBox(v, context)) as ReturnCastType
+  }
+  if (isPlainObject(value)) {
+    return Object.fromEntries(
+      (Object.entries(value) as [string, Capable][])
+        .map(([key, v]) => [key, recursiveBox(v, context)])
     ) as ReturnCastType
-    : value as ReturnCastType
-  )
+  }
+  return value as ReturnCastType
 }
 
 export const revive = <
@@ -121,16 +118,12 @@ export const revive = <
   value: T,
   context: RevivableContext<TModules>
 ): ReplaceWithRevive<T, TModules[number]> => {
-  type ReturnCastType = ReplaceWithRevive<T, TModules[number]>
-  const boxType =
-    isRevivableBox(value, context)
-      ? (value as { type: string }).type
-      : undefined
-  const handledByModule = context.revivableModules.find((module: RevivableModule) => module.type === boxType)
+  if (!isRevivableBox(value, context)) return value as ReplaceWithRevive<T, TModules[number]>
+  const handledByModule = findReviveModule(value, context.revivableModules)
   if (handledByModule) {
-    return (handledByModule.revive as (v: unknown, c: RevivableContext<any>) => unknown)(value, context) as ReturnCastType
+    return handledByModule.revive(value, context) as ReplaceWithRevive<T, TModules[number]>
   }
-  return value as ReturnCastType
+  return value as ReplaceWithRevive<T, TModules[number]>
 }
 
 export const recursiveRevive = <
@@ -142,28 +135,21 @@ export const recursiveRevive = <
 ): DeepReplaceWithRevive<T, TModules[number]> => {
   type ReturnCastType = DeepReplaceWithRevive<T, TModules[number]>
 
-  // First check if the value is a revivable box and revive it
   if (isRevivableBox(value, context)) {
-    const boxed = value as { type: string }
-    const handledByModule = context.revivableModules.find((module: RevivableModule) => module.type === boxed.type)
+    const handledByModule = findReviveModule(value, context.revivableModules)
     if (handledByModule) {
-      return (handledByModule.revive as (v: unknown, c: RevivableContext<any>) => unknown)(value, context) as ReturnCastType
+      return handledByModule.revive(value, context) as ReturnCastType
     }
   }
 
-  // Then recurse into arrays and plain objects
-  return (
-    Array.isArray(value) ? value.map(value => recursiveRevive(value, context)) as ReturnCastType
-    : value && typeof value === 'object' && Object.getPrototypeOf(value) === Object.prototype ? (
-      Object.fromEntries(
-        Object
-          .entries(value)
-          .map(([key, value]: [string, Capable]) => [
-            key,
-            recursiveRevive(value, context)
-          ])
-      )
+  if (Array.isArray(value)) {
+    return value.map(v => recursiveRevive(v, context)) as ReturnCastType
+  }
+  if (isPlainObject(value)) {
+    return Object.fromEntries(
+      (Object.entries(value) as [string, Capable][])
+        .map(([key, v]) => [key, recursiveRevive(v, context)])
     ) as ReturnCastType
-    : value as ReturnCastType
-  )
+  }
+  return value as ReturnCastType
 }

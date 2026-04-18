@@ -1,12 +1,5 @@
 import type { DefaultRevivableModules, RevivableModule } from '../revivables'
-import type {
-  Messages as BidirectionalMessages,
-  BidirectionalConnectionContext
-} from './bidirectional'
-import type {
-  UnidirectionalEmittingConnectionContext,
-  UnidirectionalReceivingConnectionContext
-} from './unidirectional'
+import type { ConnectionContext as BidirectionalConnectionContext } from './bidirectional'
 import type {
   ProtocolContext,
   ProtocolEventTarget,
@@ -20,45 +13,46 @@ import type { MessageContext } from '../utils/transport'
 import type { TypedEventTarget } from '../utils/typed-event-target'
 
 import { OSRA_DEFAULT_KEY, OSRA_KEY } from '../types'
+import * as bidirectional from './bidirectional'
 import {
   isEmitTransport,
   isReceiveTransport
 } from '../utils/type-guards'
 import { getTransferableObjects } from '../utils/transferable'
 import { registerOsraMessageListener, sendOsraMessage } from '../utils/transport'
-
-import * as bidirectional from './bidirectional'
-import { mergeRevivableModules, normalizeTransport } from '../utils'
+import { mergeRevivableModules, normalizeTransport } from './utils'
 
 export * from './bidirectional'
-export * from './unidirectional'
 export * from './utils'
+
+export type ConnectionModule<T> = {
+  readonly type: string
+  readonly init: (ctx: ProtocolContext<any>) => void
+  readonly Messages?: T
+}
 
 export const connections = [
   bidirectional
 ] as const
 
+export type DefaultConnectionModules = typeof connections
+export type DefaultConnectionModule = DefaultConnectionModules[number]
+
 export type ConnectionMessage<
-  TModules extends readonly RevivableModule[] = DefaultRevivableModules
+  TModules extends readonly RevivableModule[] = DefaultRevivableModules,
+  T extends Capable<TModules> = Capable<TModules>
 > =
-  | BidirectionalMessages<TModules>
+  DefaultConnectionModule extends {
+    Messages: (modules: TModules, value: T) => infer R
+  }
+    ? R
+    : never
 
 export type ConnectionContext<
   TModules extends readonly RevivableModule[] = DefaultRevivableModules
 > =
   | BidirectionalConnectionContext<TModules>
-  | UnidirectionalEmittingConnectionContext
-  | UnidirectionalReceivingConnectionContext<TModules>
 
-/**
-  * Protocol mode:
-  * - Bidirectional mode
-  * - Unidirectional mode
-  *
-  * Transport modes:
-  * - Capable mode
-  * - JSON mode
-  */
 export const startConnections = <
   T = unknown,
   const TUserModules extends readonly RevivableModule[] = readonly []

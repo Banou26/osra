@@ -1,26 +1,16 @@
-import type {
-  Capable,
-  MessageEventTarget,
-  MessageVariant,
-  Uuid
-} from '../types'
 import type { Transport } from '../utils/transport'
 import type { DefaultRevivableModules, RevivableModule } from '../revivables'
 import type { DeepReplaceWithBox } from '../utils/replace'
 import type { ProtocolContext } from './utils'
+import type {
+  Capable, MessageEventTarget,
+  MessageVariant, Uuid
+} from '../types'
 
 import { recursiveBox, recursiveRevive } from '../revivables'
 import { isEmitTransport, isReceiveTransport } from '../utils/type-guards'
 
 export const type = 'bidirectional' as const
-
-export type BidirectionalConnectionContext<
-  TModules extends readonly RevivableModule[] = DefaultRevivableModules
-> = {
-  type: 'bidirectional'
-  eventTarget: MessageEventTarget<TModules>
-  connection: BidirectionalConnection
-}
 
 export type InitMessage<
   TModules extends readonly RevivableModule[] = DefaultRevivableModules,
@@ -31,23 +21,32 @@ export type InitMessage<
   data: DeepReplaceWithBox<T, TModules[number]>
 }
 
+export declare const Messages: <
+  TModules extends readonly RevivableModule[] = DefaultRevivableModules,
+  T extends Capable<TModules> = Capable<TModules>
+>(modules: TModules, value: T) =>
+  | InitMessage<TModules, T>
+
 export type Messages<
   TModules extends readonly RevivableModule[] = DefaultRevivableModules,
   T extends Capable<TModules> = Capable<TModules>
-> =
-  | InitMessage<TModules, T>
+> = ReturnType<typeof Messages<TModules, T>>
 
 export type ConnectionContext<
   TModules extends readonly RevivableModule[] = DefaultRevivableModules
-> =
-  | BidirectionalConnectionContext<TModules>
+> = {
+  type: 'bidirectional'
+  eventTarget: MessageEventTarget<TModules>
+  connection: BidirectionalConnection<TModules>
+}
 
 export type ConnectionRevivableContext<
-  TModules extends readonly RevivableModule[] = DefaultRevivableModules
+  TModules extends readonly RevivableModule[] = DefaultRevivableModules,
+  T extends Capable<TModules> = Capable<TModules>
 > = {
   transport: Transport
   remoteUuid: Uuid
-  sendMessage: (message: Messages<TModules>) => void
+  sendMessage: (message: Messages<TModules, T>) => void
   revivableModules: TModules
   eventTarget: MessageEventTarget<TModules>
 }
@@ -64,7 +63,6 @@ export const startBidirectionalConnection = <
     remoteUuid: Uuid
     eventTarget: MessageEventTarget<TModules>
     send: (message: Messages<TModules>) => void
-    close: () => void
     revivableModules: TModules
   }
 ) => {
@@ -97,8 +95,6 @@ export const startBidirectionalConnection = <
 
   return {
     revivableContext,
-    close: () => {
-    },
     remoteValue:
       promise
         .then(initData =>
@@ -107,7 +103,12 @@ export const startBidirectionalConnection = <
   }
 }
 
-export type BidirectionalConnection = ReturnType<typeof startBidirectionalConnection>
+export type BidirectionalConnection<
+  TModules extends readonly RevivableModule[] = DefaultRevivableModules
+> = {
+  revivableContext: ConnectionRevivableContext<TModules>
+  remoteValue: Promise<Capable>
+}
 
 /**
  * init() — mounts the bidirectional mode on the shared protocol context.
@@ -145,10 +146,9 @@ export const init = <TModules extends readonly RevivableModule[]>(
             remoteUuid: message.uuid,
             eventTarget,
             send: (m) => ctx.sendMessage(m as MessageVariant),
-            close: () => void ctx.connectionContexts.delete(message.uuid),
             revivableModules: ctx.revivableModules
           })
-      } satisfies BidirectionalConnectionContext<TModules>
+      } satisfies ConnectionContext<TModules>
       ctx.connectionContexts.set(message.uuid, connectionContext)
       connectionContext.connection.remoteValue.then((remoteValue) =>
         ctx.resolveRemoteValue(remoteValue)
@@ -163,28 +163,18 @@ export const init = <TModules extends readonly RevivableModule[]>(
     }
     if (message.type === 'close') {
       if (message.remoteUuid !== ctx.getUuid()) return
-      const connectionContext = ctx.connectionContexts.get(message.uuid)
-      // drop the message if the remote uuid hasn't announced itself
-      if (!connectionContext) {
-        console.warn(`Connection not found for remoteUuid: ${message.uuid}`)
-        return
-      }
-      connectionContext.connection.close()
       ctx.connectionContexts.delete(message.uuid)
       return
     }
     // "init" | "message" | "message-port-close"
     if (message.remoteUuid !== ctx.getUuid()) return
     const connection = ctx.connectionContexts.get(message.uuid)
-    if (!connection) {
-      console.warn(`Connection not found for remoteUuid: ${message.uuid}`)
-      return
-    }
-    if (connection.type !== 'unidirectional-emitting') {
-      connection.eventTarget.dispatchEvent(
-        new CustomEvent('message', { detail: message })
-      )
-    }
+    // drop messages that arrive before the remote has announced itself,
+    // or after its connection has been torn down
+    if (!connection) return
+    connection.eventTarget.dispatchEvent(
+      new CustomEvent('message', { detail: message })
+    )
   })
 
   ctx.sendMessage({ type: 'announce' })

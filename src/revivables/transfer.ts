@@ -2,7 +2,7 @@ import type { Capable } from '../types'
 import type { BoxBase as BoxBaseType, RevivableContext, UnderlyingType } from './utils'
 
 import { BoxBase } from './utils'
-import { isJsonOnlyTransport } from '../utils'
+import { instanceOfAny, isJsonOnlyTransport } from '../utils'
 import { recursiveBox, recursiveRevive } from '.'
 
 export const type = 'transfer' as const
@@ -32,15 +32,15 @@ const isTransferWrapper = (value: unknown): value is TransferWrapper =>
 const isWrappableTransferable = (value: unknown): boolean => {
   if (!isObject(value)) return false
   if (ArrayBuffer.isView(value)) return true
-  return (
-    (typeof ArrayBuffer !== 'undefined' && value instanceof ArrayBuffer)
-    || (typeof MessagePort !== 'undefined' && value instanceof MessagePort)
-    || (typeof ReadableStream !== 'undefined' && value instanceof ReadableStream)
-    || (typeof WritableStream !== 'undefined' && value instanceof WritableStream)
-    || (typeof TransformStream !== 'undefined' && value instanceof TransformStream)
-    || (typeof ImageBitmap !== 'undefined' && value instanceof ImageBitmap)
-    || (typeof OffscreenCanvas !== 'undefined' && value instanceof OffscreenCanvas)
-  )
+  return instanceOfAny(value, [
+    globalThis.ArrayBuffer,
+    globalThis.MessagePort,
+    globalThis.ReadableStream,
+    globalThis.WritableStream,
+    globalThis.TransformStream,
+    globalThis.ImageBitmap,
+    globalThis.OffscreenCanvas,
+  ])
 }
 
 /**
