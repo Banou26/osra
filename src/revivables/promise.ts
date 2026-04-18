@@ -2,6 +2,10 @@ import type { Capable } from '../types'
 import type { RevivableContext } from './utils'
 import type { TypedEventPort } from '../utils/typed-message-channel'
 import type { UnderlyingType } from '.'
+import type {
+  BadFieldValue, BadFieldPath, BadFieldParent,
+  ErrorMessage, BadValue, Path, ParentObject
+} from '../utils/capable-check'
 
 import { BoxBase } from './utils'
 import { recursiveBox, recursiveRevive } from '.'
@@ -14,13 +18,21 @@ export type Context =
   | { type: 'resolve', data: Capable }
   | { type: 'reject', error: string }
 
-declare const ErrorMessage: unique symbol
-declare const BadValueType: unique symbol
 type CapablePromise<T> = T extends Promise<infer U>
   ? U extends Capable
     ? T
-    : { [ErrorMessage]: 'Value type must extend a Promise that resolves to a Capable'; [BadValueType]: U }
-  : { [ErrorMessage]: 'Value type must extend a Promise that resolves to a Capable'; [BadValueType]: T }
+    : {
+        [ErrorMessage]: 'Value type must extend a Promise that resolves to a Capable'
+        [BadValue]: BadFieldValue<U, Capable>
+        [Path]: BadFieldPath<U, Capable>
+        [ParentObject]: BadFieldParent<U, Capable>
+      }
+  : {
+      [ErrorMessage]: 'Value type must extend a Promise that resolves to a Capable'
+      [BadValue]: T
+      [Path]: ''
+      [ParentObject]: T
+    }
 
 type ExtractCapable<T> = T extends Promise<infer U>
   ? U extends Capable ? U : never

@@ -50,10 +50,10 @@ export type StructurableTransferable =
 export type Capable<TModules extends readonly RevivableModule[] = DefaultRevivableModules> =
   | StructurableTransferable
   | InferRevivables<TModules>
-  | { [key: string]: Capable }
-  | Array<Capable>
-  | Map<Capable, Capable>
-  | Set<Capable>
+  | { [key: string]: Capable<TModules> }
+  | Array<Capable<TModules>>
+  | Map<Capable<TModules>, Capable<TModules>>
+  | Set<Capable<TModules>>
 
 export type MessageFields = {
   type: string

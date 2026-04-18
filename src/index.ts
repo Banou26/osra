@@ -2,6 +2,7 @@ import type {
   Message, MessageVariant,
   Capable, MessageEventMap
 } from './types'
+import type { DefaultRevivableModules } from './revivables'
 import type {
   EmitTransport,
   MessageContext,
@@ -30,6 +31,10 @@ import {
   DeepReplaceAsync,
   AsCapable
 } from './utils'
+import type {
+  BadFieldValue, BadFieldPath, BadFieldParent,
+  ErrorMessage, BadValue, Path, ParentObject
+} from './utils/capable-check'
 import { TypedEventTarget } from './utils/typed-event-target'
 
 export * from './types'
@@ -41,12 +46,18 @@ export type {
   AsCapable
 }
 
-declare const ErrorMessage: unique symbol
-declare const BadValueType: unique symbol
-type CapableCheck<T> =
-  T extends Capable
+type CapableCheck<
+  T,
+  TModules extends readonly RevivableModule[] = DefaultRevivableModules
+> =
+  T extends Capable<TModules>
     ? T
-    : { [ErrorMessage]: 'Value type must resolve to a Capable'; [BadValueType]: T }
+    : {
+        [ErrorMessage]: 'Value type must resolve to a Capable'
+        [BadValue]: BadFieldValue<T, Capable<TModules>>
+        [Path]: BadFieldPath<T, Capable<TModules>>
+        [ParentObject]: BadFieldParent<T, Capable<TModules>>
+      }
 
 /**
  * Protocol mode:
@@ -59,10 +70,10 @@ type CapableCheck<T> =
  */
 export const expose = async <
   T = unknown,
-  const TValue = Capable,
-  const TUserModules extends readonly RevivableModule[] = readonly RevivableModule[]
+  const TUserModules extends readonly RevivableModule[] = readonly RevivableModule[],
+  const TValue = Capable<[...DefaultRevivableModules, ...TUserModules]>
 >(
-  value: CapableCheck<TValue>,
+  value: CapableCheck<TValue, [...DefaultRevivableModules, ...TUserModules]>,
   {
     transport: _transport,
     name,
