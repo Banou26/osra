@@ -1,6 +1,5 @@
 import type { Capable } from '../types'
 import type { RevivableContext } from './utils'
-import type { TypedEventPort } from '../utils/typed-message-channel'
 import type { UnderlyingType } from '.'
 import type {
   BadFieldValue, BadFieldPath, BadFieldParent,
@@ -8,9 +7,12 @@ import type {
 } from '../utils/capable-check'
 
 import { BoxBase } from './utils'
-import { recursiveBox, recursiveRevive } from '.'
-import { getTransferableObjects } from '../utils'
-import { box as boxMessagePort, revive as reviveMessagePort, BoxedMessagePort } from './message-port'
+import { EventChannel } from '../utils/event-channel'
+import {
+  box as boxMessagePort,
+  revive as reviveMessagePort,
+  BoxedMessagePort
+} from './message-port'
 
 export const type = 'promise' as const
 
@@ -18,16 +20,19 @@ export type Context =
   | { type: 'resolve', data: Capable }
   | { type: 'reject', error: string }
 
+// Error branches intersect with T so the user's own keys are present on the
+// target — otherwise TS's excess-property check flags the first user key
+// (e.g. `foo`) instead of reporting the failure against the whole argument.
 type CapablePromise<T> = T extends Promise<infer U>
   ? U extends Capable
     ? T
-    : {
+    : T & {
         [ErrorMessage]: 'Value type must extend a Promise that resolves to a Capable'
         [BadValue]: BadFieldValue<U, Capable>
         [Path]: BadFieldPath<U, Capable>
         [ParentObject]: BadFieldParent<U, Capable>
       }
-  : {
+  : T & {
       [ErrorMessage]: 'Value type must extend a Promise that resolves to a Capable'
       [BadValue]: T
       [Path]: ''
@@ -57,15 +62,13 @@ export const box = <T, T2 extends RevivableContext>(
 ): BoxedPromise<ExtractCapable<T>> => {
   if (!isCapablePromise(value)) throw new TypeError('Expected Promise')
   const promise = value
-  const { port1: localPort, port2: remotePort } = new MessageChannel()
-  context.messagePorts.add(remotePort)
+  // EventChannel (pass-by-reference) — we can post live values raw; the
+  // message-port revivable will box them when they cross the transport.
+  const { port1: localPort, port2: remotePort } = new EventChannel<Context, Context>()
 
   const sendResult = (result: Context) => {
-    const boxedResult = recursiveBox(result, context)
-    localPort.postMessage(boxedResult, getTransferableObjects(boxedResult))
+    localPort.postMessage(result)
     localPort.close()
-    // Clean up the remote port from the set (it was transferred earlier)
-    context.messagePorts.delete(remotePort)
   }
 
   promise
@@ -75,7 +78,7 @@ export const box = <T, T2 extends RevivableContext>(
   return {
     ...BoxBase,
     type,
-    port: boxMessagePort(remotePort as unknown as TypedEventPort<string>, context)
+    port: boxMessagePort(remotePort, context)
   } as unknown as BoxedPromise<ExtractCapable<T>>
 }
 
@@ -83,18 +86,14 @@ export const revive = <T extends BoxedPromise, T2 extends RevivableContext>(
   value: T,
   context: T2
 ) => {
-  const port = reviveMessagePort(value.port as unknown as BoxedMessagePort<string>, context)
-  context.messagePorts.add(port as MessagePort)
+  const port = reviveMessagePort(value.port as unknown as BoxedMessagePort<Context>, context)
   return new Promise<T[UnderlyingType]>((resolve, reject) => {
-    port.addEventListener('message', (event) => {
-      const data = (event as unknown as MessageEvent<Context>).data
-      const result = recursiveRevive(data, context) as Context
+    port.addEventListener('message', ({ data: result }) => {
       if (result.type === 'resolve') {
         resolve(result.data as T[UnderlyingType])
       } else {
         reject(result.error)
       }
-      context.messagePorts.delete(port as MessagePort)
       port.close()
     }, { once: true })
     port.start()

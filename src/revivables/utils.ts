@@ -8,6 +8,8 @@ import type { Transport } from '../utils/transport'
 
 import { OSRA_BOX } from '../types'
 
+export type { UnderlyingType } from '../utils/type'
+
 export const BoxBase = {
   [OSRA_BOX]: 'revivable',
   type: '' as string

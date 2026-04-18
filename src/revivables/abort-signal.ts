@@ -1,15 +1,19 @@
-import type { StructurableTransferable } from '../types'
-import { EventChannel } from '../utils/typed-event-channel'
+import type { Capable } from '../types'
 import type { RevivableContext } from './utils'
+import type { UnderlyingType } from '../utils/type'
 
 import { BoxBase } from './utils'
-import { box as boxMessagePort, revive as reviveMessagePort, type BoxedMessagePort } from './message-port'
+import { EventChannel } from '../utils/event-channel'
+import {
+  box as boxMessagePort,
+  revive as reviveMessagePort
+} from './message-port'
 
 export const type = 'abortSignal' as const
 
 type AbortMessage = {
   type: 'abort'
-  reason?: unknown
+  reason?: Capable
 }
 
 export const isType = (value: unknown): value is AbortSignal =>
@@ -23,7 +27,7 @@ export const box = <T extends AbortSignal, T2 extends RevivableContext>(
 
   if (!value.aborted) {
     value.addEventListener('abort', () => {
-      localPort.postMessage({ type: 'abort', reason: value.reason })
+      localPort.postMessage({ type: 'abort', reason: value.reason as Capable })
       localPort.close()
     }, { once: true })
   } else {
@@ -34,7 +38,7 @@ export const box = <T extends AbortSignal, T2 extends RevivableContext>(
     ...BoxBase,
     type,
     aborted: value.aborted,
-    reason: value.reason,
+    reason: value.reason as Capable,
     port: boxMessagePort(remotePort, context)
   }
 }
@@ -50,12 +54,10 @@ export const revive = <T extends ReturnType<typeof box>, T2 extends RevivableCon
     return controller.signal
   }
 
-  const port = reviveMessagePort(value.port, context) as MessagePort
-  context.messagePorts.add(port)
+  const port = reviveMessagePort(value.port, context)
   port.start()
 
-  port.addEventListener('message', ({ data }) => {
-    const message = data as AbortMessage
+  port.addEventListener('message', ({ data: message }) => {
     if (message.type === 'abort') {
       controller.abort(message.reason)
       port.close()

@@ -11,19 +11,21 @@ import type {
 import type {
   ConnectionContext,
   BidirectionalConnectionContext
-} from './utils'
+} from './connections'
 import type { RevivableModule } from './revivables'
 
 import { OSRA_DEFAULT_KEY, OSRA_KEY } from './types'
 import { defaultRevivableModules } from './revivables'
 export { BoxBase } from './revivables/utils'
 import {
+  startBidirectionalConnection,
+  startUnidirectionalEmittingConnection
+} from './connections'
+import {
   registerOsraMessageListener,
   sendOsraMessage,
-  startBidirectionalConnection,
   isReceiveTransport,
   isEmitTransport,
-  startUnidirectionalEmittingConnection,
   getTransferableObjects,
   isJsonOnlyTransport,
   isCustomTransport,
@@ -52,7 +54,10 @@ type CapableCheck<
 > =
   T extends Capable<TModules>
     ? T
-    : {
+    // Intersect with T so the user's keys are already present on the target —
+    // without this, TS's excess-property check flags the first user key (e.g.
+    // `foo`) instead of reporting the failure against the whole argument.
+    : T & {
         [ErrorMessage]: 'Value type must resolve to a Capable'
         [BadValue]: BadFieldValue<T, Capable<TModules>>
         [Path]: BadFieldPath<T, Capable<TModules>>
@@ -70,7 +75,7 @@ type CapableCheck<
  */
 export const expose = async <
   T = unknown,
-  const TUserModules extends readonly RevivableModule[] = readonly RevivableModule[],
+  const TUserModules extends readonly RevivableModule[] = readonly [],
   const TValue = Capable<[...DefaultRevivableModules, ...TUserModules]>
 >(
   value: CapableCheck<TValue, [...DefaultRevivableModules, ...TUserModules]>,
@@ -178,11 +183,11 @@ export const expose = async <
         connection:
           startBidirectionalConnection<Capable, typeof mergedRevivableModules>({
             transport,
-            value,
+            value: value as Capable<typeof mergedRevivableModules>,
             uuid,
             remoteUuid: message.uuid,
             eventTarget,
-            send: (message: MessageVariant) => sendMessage(transport, message),
+            send: (message) => sendMessage(transport, message as MessageVariant),
             close: () => void connectionContexts.delete(message.uuid),
             revivableModules: mergedRevivableModules
           })
