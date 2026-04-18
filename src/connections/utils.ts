@@ -49,7 +49,6 @@ export type ProtocolContext<
   revivableModules: TModules
   connectionContexts: Map<string, ConnectionContext<TModules>>
   getUuid: () => Uuid
-  rerollUuid: () => Uuid
   sendMessage: (message: MessageVariant) => void
   protocolEventTarget: ProtocolEventTarget<TModules>
   resolveRemoteValue: (value: Capable<TModules>) => void

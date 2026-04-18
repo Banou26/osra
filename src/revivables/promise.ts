@@ -10,7 +10,8 @@ import { BoxBase, serializeError } from './utils'
 import {
   createRevivableChannel,
   revive as reviveMessagePort,
-  BoxedMessagePort
+  BoxedMessagePort,
+  AnyPort,
 } from './message-port'
 
 export const type = 'promise' as const
@@ -50,6 +51,14 @@ export type BoxedPromise<T extends Capable = Capable> =
   & { port: BoxedMessagePort<Context> }
   & { [UnderlyingType]: T }
 
+// Pins the revived port between executor return and result arrival. The
+// port↔listener cycle has no external anchor — the caller only holds the
+// returned Promise, which references its native resolvers, not the port.
+// Without this Set, GC under memory pressure can collect the cycle before
+// the result arrives and the Promise hangs forever. Mirrors the
+// inFlightReturnPorts pattern in function.ts.
+const inFlightPromisePorts = new Set<AnyPort<Context>>()
+
 export const isType = (value: unknown): value is Promise<any> =>
   value instanceof Promise
 
@@ -84,6 +93,7 @@ export const revive = <T extends BoxedPromise, T2 extends RevivableContext>(
   context: T2
 ) => {
   const port = reviveMessagePort(value.port, context)
+  inFlightPromisePorts.add(port)
   return new Promise<T[UnderlyingType]>((resolve, reject) => {
     port.addEventListener('message', ({ data: result }) => {
       if (result.type === 'resolve') {
@@ -92,6 +102,7 @@ export const revive = <T extends BoxedPromise, T2 extends RevivableContext>(
         reject(result.error)
       }
       port.close()
+      inFlightPromisePorts.delete(port)
     }, { once: true })
     port.start()
   })

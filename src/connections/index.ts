@@ -78,7 +78,7 @@ export const startConnections = <
   const { promise: remoteValuePromise, resolve: resolveRemoteValue } =
     Promise.withResolvers<Capable<MergedModules>>()
 
-  let uuid: Uuid = globalThis.crypto.randomUUID()
+  const uuid: Uuid = globalThis.crypto.randomUUID()
 
   const sendMessage = (message: MessageVariant) => {
     if (unregisterSignal?.aborted) return
@@ -95,7 +95,6 @@ export const startConnections = <
     revivableModules: mergedRevivableModules,
     connectionContexts,
     getUuid: () => uuid,
-    rerollUuid: () => uuid = globalThis.crypto.randomUUID(),
     sendMessage,
     protocolEventTarget,
     resolveRemoteValue,

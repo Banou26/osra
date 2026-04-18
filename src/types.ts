@@ -74,11 +74,6 @@ export type ProtocolMessage =
     remoteUuid?: Uuid
   }
   | {
-    /** uuid already taken, try announcing with another one */
-    type: 'reject-uuid-taken'
-    remoteUuid: Uuid
-  }
-  | {
     type: 'close'
     remoteUuid: Uuid
   }

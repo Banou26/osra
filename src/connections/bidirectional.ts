@@ -108,9 +108,8 @@ export type BidirectionalConnection<
 /**
  * init() — mounts the bidirectional mode on the shared protocol context.
  * Only activates when the transport can both emit and receive. Owns the
- * announce / reject-uuid-taken / close handshake and routes
- * per-connection messages (init / message / message-port-close) to the
- * right connection's eventTarget.
+ * announce / close handshake and routes per-connection messages (init /
+ * message / message-port-close) to the right connection's eventTarget.
  */
 export const init = <TModules extends readonly RevivableModule[]>(
   ctx: ProtocolContext<TModules>
@@ -124,6 +123,10 @@ export const init = <TModules extends readonly RevivableModule[]>(
         return
       }
       if (message.remoteUuid !== ctx.getUuid()) return
+      // Already-tracked uuid is the normal handshake-echo case (the peer
+      // re-announcing back at us after we replied to its initial announce),
+      // not a uuid collision — silently drop it so we don't double-set up
+      // the same connection.
       if (ctx.connectionContexts.has(message.uuid)) return
       // Send announce back so the other side can also create a connection
       // (in case they missed our initial announce due to timing)
@@ -146,12 +149,6 @@ export const init = <TModules extends readonly RevivableModule[]>(
       connectionContext.connection.remoteValue.then((remoteValue) =>
         ctx.resolveRemoteValue(remoteValue)
       )
-      return
-    }
-    if (message.type === 'reject-uuid-taken') {
-      if (message.remoteUuid !== ctx.getUuid()) return
-      ctx.rerollUuid()
-      ctx.sendMessage({ type: 'announce' })
       return
     }
     if (message.type === 'close') {

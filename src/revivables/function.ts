@@ -18,11 +18,24 @@ type ResultMessage =
 
 type CallMessage = CallContext | { __osra_close__: true }
 
+// Per-call record so the FinalizationRegistry callback (and the synchronous
+// postMessage-failed path) can reject the right Promise and tear down the
+// matching return port. Each record is owned by a single in-flight call.
+type CallRecord = {
+  returnLocal: AnyPort<ResultMessage>
+  reject: (error: unknown) => void
+}
+
 /**
- * FinalizationRegistry for automatically cleaning up function ports when the revived function is garbage collected.
+ * FinalizationRegistry for automatically cleaning up function ports when the
+ * revived function is garbage collected. Also rejects any in-flight calls that
+ * were initiated through this function — without this, a caller that drops
+ * `func` while awaiting its result would leak the return port and leave the
+ * Promise hung forever.
  */
 type FunctionCleanupInfo = {
   port: TypedMessagePort<CallMessage>
+  inFlight: Set<CallRecord>
 }
 
 const functionRegistry = new FinalizationRegistry<FunctionCleanupInfo>((info) => {
@@ -32,13 +45,19 @@ const functionRegistry = new FinalizationRegistry<FunctionCleanupInfo>((info) =>
   try {
     info.port.close()
   } catch { /* Port may already be closed */ }
+  for (const { returnLocal, reject } of info.inFlight) {
+    try { reject(new Error('osra function was garbage collected before result arrived')) } catch { /* listener gone */ }
+    inFlightReturnPorts.delete(returnLocal)
+    try { returnLocal.close() } catch { /* port may already be closed */ }
+  }
+  info.inFlight.clear()
 })
 
 // Pins caller-side return-value ports between send and result arriving. The
 // cycle (localPort↔listener↔remotePort) has no external anchor after the
 // Promise executor returns, so under memory pressure GC can collect it before
 // the result arrives — the Promise hangs forever. We remove the entries in
-// the once-listener (and on reject).
+// the once-listener and in every terminal-state cleanup path below.
 const inFlightReturnPorts = new Set<AnyPort<any>>()
 
 /** Call-site payload (sent over the wire): the return port is pre-boxed by
@@ -83,11 +102,29 @@ export const box = <T extends (...args: any[]) => any, T2 extends RevivableConte
     const [returnPort, args] = data
     ;(async () => value(...(args as Parameters<T>)))()
       .then(
-        (resolved) => returnPort.postMessage({ __osra_ok__: true, value: resolved }),
-        (error: unknown) => returnPort.postMessage({
-          __osra_err__: true,
-          error: serializeError(error),
-        }),
+        (resolved) => {
+          try {
+            returnPort.postMessage({ __osra_ok__: true, value: resolved })
+          } catch (postErr) {
+            // Result wasn't clonable / boxable — surface as a remote error
+            // instead of letting the caller hang waiting for a message that
+            // can never be sent.
+            try {
+              returnPort.postMessage({
+                __osra_err__: true,
+                error: serializeError(postErr),
+              })
+            } catch { /* error itself failed to serialise; caller cleanup will reject */ }
+          }
+        },
+        (error: unknown) => {
+          try {
+            returnPort.postMessage({
+              __osra_err__: true,
+              error: serializeError(error),
+            })
+          } catch { /* serialised error failed to post; caller cleanup will reject */ }
+        },
       )
       .finally(() => {
         // Close after the message has flushed through the microtask queue so
@@ -105,6 +142,9 @@ export const revive = <T extends BoxedFunction, T2 extends RevivableContext>(
   context: T2
 ): T[UnderlyingType] => {
   const port = reviveMessagePort(value.port, context)
+  // Per-function bag of in-flight calls — captured by both the FinalizationRegistry
+  // callback (rejects on func GC) and each call's once-listener (removes on settle).
+  const inFlight = new Set<CallRecord>()
 
   const func = (...args: Capable[]) =>
     new Promise((resolve, reject) => {
@@ -115,20 +155,35 @@ export const revive = <T extends BoxedFunction, T2 extends RevivableContext>(
       // under memory pressure the listener (and thus `resolve`) can be
       // collected before the result arrives — the Promise hangs forever.
       inFlightReturnPorts.add(returnLocal)
-
-      port.postMessage([returnBoxedRemote, args] as SentCallContext as unknown as CallMessage)
+      const record: CallRecord = { returnLocal, reject }
+      inFlight.add(record)
 
       returnLocal.addEventListener('message', ({ data: result }) => {
         if ('__osra_ok__' in result) resolve(result.value)
         else reject(result.error)
         returnLocal.close()
         inFlightReturnPorts.delete(returnLocal)
+        inFlight.delete(record)
       }, { once: true })
       returnLocal.start()
+
+      // Boxing the args may throw synchronously (DataCloneError on a clone
+      // transport, JSON cycle on a JSON transport). Without this catch, the
+      // pin and the in-flight record would leak forever even though the
+      // Promise itself rejects via the executor's implicit try/catch.
+      try {
+        port.postMessage([returnBoxedRemote, args] as SentCallContext as unknown as CallMessage)
+      } catch (sendErr) {
+        inFlightReturnPorts.delete(returnLocal)
+        inFlight.delete(record)
+        try { returnLocal.close() } catch { /* may already be closed */ }
+        reject(sendErr)
+      }
     })
 
-  // Register the function for automatic cleanup when garbage collected
-  functionRegistry.register(func, { port }, func)
+  // Register the function for automatic cleanup when garbage collected. The
+  // callback also rejects every in-flight call so abandoned awaits stop hanging.
+  functionRegistry.register(func, { port, inFlight }, func)
 
   return func
 }
