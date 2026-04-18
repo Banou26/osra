@@ -1,14 +1,8 @@
-export type TestConfig = {
-  iterations?: number
-  memoryTreshold?: number
-  timeout?: number
-}
-
-export type TestObject = {
-  config?: TestConfig
-  [key: string]: TestObject | TestConfig | ((...args: any[]) => any) | undefined
-}
+import type { OsraRunner } from './browser/transports'
 
 declare global {
-  var tests: TestObject
+  // eslint-disable-next-line no-var
+  var __osraRun: OsraRunner
 }
+
+export {}
