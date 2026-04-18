@@ -10,7 +10,7 @@ import chaiAsPromised from 'chai-as-promised'
 // keeps the type-level assertions part of the test bundle's typecheck.
 import './type-tests'
 
-import { transportTests, memoryTests, standaloneTests } from './registry'
+import { transportTests, memoryTests, standaloneTests, gcTests } from './registry'
 import { transports } from './transports'
 
 use(chaiAsPromised)
@@ -39,6 +39,12 @@ const lookupStandaloneTest = (group: string, name: string): () => Promise<void> 
   return fn
 }
 
+const lookupGcTest = (name: string): (transport: Transport) => Promise<void> => {
+  const fn = gcTests[name]
+  if (!fn) throw new Error(`Unknown gc test: ${name}`)
+  return fn
+}
+
 const runner = {
   transport: async (group, name, transportName) => {
     await lookupTransportTest(group, name)(findTransport(transportName).factory())
@@ -49,6 +55,9 @@ const runner = {
   },
   standalone: async (group, name) => {
     await lookupStandaloneTest(group, name)()
+  },
+  gc: async (name, transportName) => {
+    await lookupGcTest(name)(findTransport(transportName).factory())
   },
 } satisfies OsraRunner
 

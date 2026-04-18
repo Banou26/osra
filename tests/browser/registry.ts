@@ -2,6 +2,7 @@ import type { Transport } from '../../src'
 
 import { base } from './base-tests'
 import { baseMemory } from './base-memory-tests'
+import { gc } from './gc-tests'
 import * as customRevivables from './custom-revivables'
 import * as identityTests from './identity'
 import * as transferTests from './transfer'
@@ -34,6 +35,11 @@ export const transportTests: Readonly<Record<string, Readonly<Record<string, (tr
 // from the per-transport config so JSON gets fewer rounds than Web.
 export const memoryTests: Readonly<Record<string, (transport: Transport, iterations: number) => Promise<void>>> =
   fns(baseMemory)
+
+// GC tests take (transport) but rely on the spec runner exposing
+// globalThis.__osraForceGc which drives CDP HeapProfiler.collectGarbage.
+export const gcTests: Readonly<Record<string, (transport: Transport) => Promise<void>>> =
+  fns(gc)
 
 // Standalone: no transport parameterization. One execution per test.
 export const standaloneTests: Readonly<Record<string, Readonly<Record<string, () => Promise<void>>>>> = {

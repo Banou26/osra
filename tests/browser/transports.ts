@@ -35,6 +35,7 @@ export type OsraRunner = {
   transport: (group: string, name: string, transportName: TransportName) => Promise<void>
   memory: (name: string, transportName: TransportName) => Promise<void>
   standalone: (group: string, name: string) => Promise<void>
+  gc: (name: string, transportName: TransportName) => Promise<void>
 }
 
 export const transports: readonly TransportEntry[] = [

@@ -11,7 +11,10 @@ export default defineConfig({
   },
   use: {
     launchOptions: {
-      devtools: true
+      devtools: true,
+      // --js-flags=--expose-gc exposes globalThis.gc() for tests that need
+      // deterministic collection to exercise FinalizationRegistry callbacks.
+      args: ['--js-flags=--expose-gc'],
     },
   },
   projects: [

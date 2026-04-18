@@ -308,6 +308,25 @@ export const userAbortSignalAlreadyAborted = async (transport: Transport) => {
   expect(signal.aborted).to.be.true
 }
 
+// The eagerly-aborted reason rides the wrapper object instead of the
+// revivable channel, so it has to be recursively boxed at send time. If
+// it isn't, a reason carrying live values (functions, nested AbortSignals,
+// etc.) fails — DataCloneError on clone transports, silent loss on JSON.
+export const userAbortSignalAlreadyAbortedWithLiveReason = async (transport: Transport) => {
+  const inner = new AbortController()
+  const controller = new AbortController()
+  controller.abort({ fn: () => 42, nested: inner.signal })
+  const value = { signal: controller.signal }
+  expose(value, { transport })
+
+  const { signal } = await expose<typeof value>({}, { transport })
+
+  expect(signal.aborted).to.be.true
+  const reason = signal.reason as { fn: () => Promise<number>, nested: AbortSignal }
+  expect(reason.nested).to.be.instanceOf(AbortSignal)
+  expect(await reason.fn()).to.equal(42)
+}
+
 export const userResponse = async (transport: Transport) => {
   const _response = new Response('test body', {
     status: 201,
@@ -935,6 +954,94 @@ export const userEventTargetMultipleEventTypes = async (transport: Transport) =>
   expect(bCount).to.equal(1)
 }
 
+// Box-side postMessage of a non-clonable result pre-fix threw DataCloneError
+// and the caller hung forever because the once-listener on returnLocal was
+// never fired. Fix surfaces the error as __osra_err__ so the Promise rejects
+// (clone transport). JSON silently coerces but still settles — the load-
+// bearing assertion is "does not hang".
+export const functionNonClonableResultRejects = async (transport: Transport) => {
+  const value = async (): Promise<any> => new WeakMap()
+  expose(value, { transport })
+  const remote = await expose<typeof value>({}, { transport })
+
+  const call = (remote() as Promise<unknown>).then(
+    () => 'resolved' as const,
+    () => 'rejected' as const,
+  )
+  const settled = await Promise.race([
+    call,
+    new Promise<'hung'>(r => setTimeout(() => r('hung'), 2_000)),
+  ])
+  expect(settled).to.not.equal('hung')
+}
+
+// Same listener registered with capture=true and capture=false is two
+// distinct DOM registrations per spec; proves the revive-side tracking
+// keys on (listener, capture) rather than listener identity alone.
+export const userEventTargetCaptureBothFlags = async (transport: Transport) => {
+  const _et = new EventTarget()
+  const value = {
+    et: _et,
+    fire: async () => { _et.dispatchEvent(new Event('ping')) },
+  }
+  expose(value, { transport })
+
+  const { et, fire } = await expose<typeof value>({}, { transport })
+
+  let count = 0
+  const handler = () => { count++ }
+  et.addEventListener('ping', handler, { capture: false })
+  et.addEventListener('ping', handler, { capture: true })
+
+  await new Promise(r => setTimeout(r, 50))
+  await fire()
+  await new Promise(r => setTimeout(r, 50))
+  // Both registrations fired.
+  expect(count).to.equal(2)
+
+  // Remove only the bubble registration — the capture one must survive.
+  et.removeEventListener('ping', handler, { capture: false })
+  await new Promise(r => setTimeout(r, 50))
+  await fire()
+  await new Promise(r => setTimeout(r, 50))
+  expect(count).to.equal(3)
+}
+
+// `{ once: true }` auto-removes the native registration after first fire;
+// the revive-side must mirror that in its subscription map so it actually
+// sends the unsubscribe message when the listener self-removes. Uses the
+// same probe-counter trick as userEventTargetUnsubscribe.
+export const userEventTargetOnceUnsubscribes = async (transport: Transport) => {
+  const _et = new EventTarget()
+  let probeCount = 0
+  _et.addEventListener('tick', () => { probeCount++ })
+  const value = {
+    et: _et,
+    fire: async () => { _et.dispatchEvent(new Event('tick')) },
+    probe: async () => probeCount,
+  }
+  expose(value, { transport })
+
+  const { et, fire, probe } = await expose<typeof value>({}, { transport })
+
+  let receiverCount = 0
+  et.addEventListener('tick', () => { receiverCount++ }, { once: true })
+
+  await new Promise(r => setTimeout(r, 50))
+  await fire()
+  await new Promise(r => setTimeout(r, 50))
+  expect(receiverCount).to.equal(1)
+  const probeAfterFirst = await probe()
+
+  // Second fire: source still ticks (probe increments), but the revive-side
+  // forwarder should have torn down because once:true consumed the only
+  // subscription — so the receiver's listener must NOT fire again.
+  await fire()
+  await new Promise(r => setTimeout(r, 50))
+  expect(receiverCount).to.equal(1)
+  expect(await probe()).to.equal(probeAfterFirst + 1)
+}
+
 export const base = {
   argsAndResponse,
   callback,
@@ -989,4 +1096,8 @@ export const base = {
   userEventTargetCustomEvent,
   userEventTargetUnsubscribe,
   userEventTargetMultipleEventTypes,
+  userEventTargetCaptureBothFlags,
+  userEventTargetOnceUnsubscribes,
+  userAbortSignalAlreadyAbortedWithLiveReason,
+  functionNonClonableResultRejects,
 }
