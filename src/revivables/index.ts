@@ -20,6 +20,7 @@ import * as transfer from './transfer'
 import * as map from './map'
 import * as set from './set'
 import * as bigInt from './bigint'
+import * as eventTarget from './event-target'
 
 export { identity } from './identity'
 export { transfer } from './transfer'
@@ -63,6 +64,11 @@ export const defaultRevivableModules = [
   map,
   set,
   bigInt,
+  // eventTarget MUST be last among instanceof-EventTarget revivables —
+  // MessagePort, AbortSignal, EventPort, Window, Worker, etc. all extend
+  // EventTarget; the more specific revivables (messagePort/abortSignal) need
+  // first dibs via findBoxModule's iteration order.
+  eventTarget,
 ] as const
 
 export type DefaultRevivableModules = typeof defaultRevivableModules
