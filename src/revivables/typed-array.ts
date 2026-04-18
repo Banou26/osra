@@ -12,36 +12,38 @@ import {
 
 export const type = 'typedArray' as const
 
+type BoxedTypedArray<T extends TypedArray, T2 extends RevivableContext> =
+  & typeof BoxBase
+  & { type: typeof type }
+  & { typedArrayType: TypedArrayType }
+  & (
+      IsJsonOnlyTransport<T2['transport']> extends true ? { base64Buffer: string }
+    : IsJsonOnlyTransport<T2['transport']> extends false ? { arrayBuffer: ArrayBuffer }
+    : { base64Buffer: string } | { arrayBuffer: ArrayBuffer }
+  )
+  & { [UnderlyingType]: T }
+
 export const isType = isTypedArray
 
 export const box = <T extends TypedArray, T2 extends RevivableContext>(
   value: T,
-  context: T2
-) => ({
-  ...BoxBase,
-  type,
-  typedArrayType: typedArrayToType(value),
-  ...(
-    isJsonOnlyTransport(context.transport)
-      ? { base64Buffer: new Uint8Array(value.buffer).toBase64() }
-      : { arrayBuffer: value.buffer }
-  ) as (
-      IsJsonOnlyTransport<T2['transport']> extends true ? { base64Buffer: string }
-    : IsJsonOnlyTransport<T2['transport']> extends false ? { arrayBuffer: ArrayBuffer }
-    : { base64Buffer: string } | { arrayBuffer: ArrayBuffer }
-  ) & { [UnderlyingType]: T }
-})
+  context: T2,
+): BoxedTypedArray<T, T2> =>
+  (isJsonOnlyTransport(context.transport)
+    ? { ...BoxBase, type, typedArrayType: typedArrayToType(value), base64Buffer: new Uint8Array(value.buffer).toBase64() }
+    : { ...BoxBase, type, typedArrayType: typedArrayToType(value), arrayBuffer: value.buffer }
+  ) as unknown as BoxedTypedArray<T, T2>
 
-export const revive = <T extends ReturnType<typeof box>, T2 extends RevivableContext>(
+export const revive = <T extends BoxedTypedArray<TypedArray, RevivableContext>>(
   value: T,
-  context: T2
+  _context: RevivableContext,
 ): T[UnderlyingType] => {
-  const Ctor = typedArrayTypeToTypedArrayConstructor(value.typedArrayType as TypedArrayType)
+  const Ctor = typedArrayTypeToTypedArrayConstructor(value.typedArrayType)
   const arrayBuffer =
     'arrayBuffer' in value
       ? value.arrayBuffer
       : Uint8Array.fromBase64(value.base64Buffer).buffer
-  return new Ctor(arrayBuffer)
+  return new Ctor(arrayBuffer) as T[UnderlyingType]
 }
 
 const typeCheck = () => {

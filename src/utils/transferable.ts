@@ -43,9 +43,7 @@ export const getMustTransferOnly = (value: unknown): Transferable[] => {
       return
     }
 
-    for (const key of Object.keys(value as Record<string, unknown>)) {
-      recurse((value as Record<string, unknown>)[key])
-    }
+    for (const item of Object.values(value)) recurse(item)
   }
 
   recurse(value)
@@ -58,12 +56,12 @@ export const getMustTransferOnly = (value: unknown): Transferable[] => {
 // The `degraded` flag is set by transfer.box() when the platform can't
 // actually transfer — a degraded box is a no-op for the walker.
 const isTransferBox = (value: unknown): value is { inner: unknown, degraded: boolean } =>
-  Boolean(
-    value
-    && typeof value === 'object'
-    && (value as Record<string, unknown>)[OSRA_BOX] === 'revivable'
-    && (value as Record<string, unknown>).type === 'transfer',
-  )
+  !!value
+  && typeof value === 'object'
+  && OSRA_BOX in value
+  && value[OSRA_BOX] === 'revivable'
+  && 'type' in value
+  && value.type === 'transfer'
 
 /**
  * Walk a boxed message and collect the list of Transferable references that
@@ -126,9 +124,7 @@ export const getTransferableObjects = (value: unknown): Transferable[] => {
       return
     }
 
-    for (const key of Object.keys(value as Record<string, unknown>)) {
-      recurse((value as Record<string, unknown>)[key], inTransferBox)
-    }
+    for (const item of Object.values(value)) recurse(item, inTransferBox)
   }
 
   recurse(value, false)

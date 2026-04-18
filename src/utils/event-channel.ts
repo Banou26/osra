@@ -13,10 +13,10 @@ export class EventPort<T> extends EventTarget {
   ): void
   addEventListener(
     type: string,
-    listener: ((event: any) => void) | EventListenerOrEventListenerObject | null,
+    listener: EventListenerOrEventListenerObject | null,
     options?: boolean | AddEventListenerOptions
   ): void {
-    super.addEventListener(type, listener as EventListener, options)
+    super.addEventListener(type, listener, options)
   }
 
   removeEventListener<K extends keyof TypedMessagePortEventMap<T> & string>(
@@ -31,10 +31,10 @@ export class EventPort<T> extends EventTarget {
   ): void
   removeEventListener(
     type: string,
-    listener: ((event: any) => void) | EventListenerOrEventListenerObject | null,
+    listener: EventListenerOrEventListenerObject | null,
     options?: boolean | EventListenerOptions
   ): void {
-    super.removeEventListener(type, listener as EventListener, options)
+    super.removeEventListener(type, listener, options)
   }
 
   _peer: EventPort<any> | undefined

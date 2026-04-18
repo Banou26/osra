@@ -24,7 +24,7 @@ const isObject = (value: unknown): value is object =>
   value !== null && typeof value === 'object'
 
 const isTransferWrapper = (value: unknown): value is TransferWrapper =>
-  isObject(value) && (value as Record<PropertyKey, unknown>)[TRANSFER_MARKER] === true
+  isObject(value) && TRANSFER_MARKER in value && value[TRANSFER_MARKER] === true
 
 // The set of types `transfer()` accepts. Anything else — primitives, nullish,
 // plain objects, Dates, Errors, Promises, etc. — is returned unchanged so
@@ -57,11 +57,16 @@ const isWrappableTransferable = (value: unknown): boolean => {
  * - `transfer(transfer(x))` returns the same wrapper as `transfer(x)`.
  * - If the current platform cannot transfer the given type, the wrapper
  *   silently degrades to a copy — nothing throws.
+ *
+ * NOTE: This lies at the type level — the runtime value for transferable
+ * inputs is a TransferWrapper<T>, typed as T so the user's surrounding
+ * code stays unchanged. The box-site unwraps it.
  */
-export const transfer = <T>(value: T): T => {
-  if (!isWrappableTransferable(value)) return value
-  return { [TRANSFER_MARKER]: true, value } as unknown as T
-}
+export const transfer = <T>(value: T): T =>
+  (isWrappableTransferable(value)
+    ? { [TRANSFER_MARKER]: true, value }
+    : value
+  ) as T
 
 // -------------------------------------------------------------------------
 // Revivable module interface
@@ -87,7 +92,7 @@ export const box = <T extends Capable, TContext extends RevivableContext>(
     type,
     inner: innerBoxed,
     degraded: isJsonOnlyTransport(context.transport),
-  } as unknown as BoxedTransfer<T>
+  } as BoxedTransfer<T>
 }
 
 export const revive = <T extends BoxedTransfer, TContext extends RevivableContext>(

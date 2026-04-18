@@ -52,7 +52,7 @@ export type ProtocolContext<
   rerollUuid: () => Uuid
   sendMessage: (message: MessageVariant) => void
   protocolEventTarget: ProtocolEventTarget<TModules>
-  resolveRemoteValue: (value: unknown) => void
+  resolveRemoteValue: (value: Capable<TModules>) => void
   createConnectionEventTarget: () => TypedEventTarget<MessageEventMap<TModules>>
 }
 

@@ -1,5 +1,5 @@
 import type { Capable, Message, Uuid } from '../types'
-import type { RevivableContext, BoxBase as BoxBaseType, CustomMessageEvent } from './utils'
+import type { RevivableContext, BoxBase as BoxBaseType } from './utils'
 import type { UnderlyingType } from '../utils/type'
 
 import { BoxBase } from './utils'
@@ -33,10 +33,18 @@ const isObjectOrFunction = (value: unknown): value is object =>
   value !== null && (typeof value === 'object' || typeof value === 'function')
 
 const isIdentityWrapper = (value: unknown): value is IdentityWrapper =>
-  isObjectOrFunction(value) &&
-  (value as Record<PropertyKey, unknown>)[IDENTITY_MARKER] === true
+  isObjectOrFunction(value) && IDENTITY_MARKER in value && value[IDENTITY_MARKER] === true
 
 const wrapperMemo = new WeakMap<object, IdentityWrapper>()
+
+const wrap = (value: object): IdentityWrapper => {
+  if (isIdentityWrapper(value)) return value
+  const cached = wrapperMemo.get(value)
+  if (cached) return cached
+  const wrapper: IdentityWrapper = { [IDENTITY_MARKER]: true, value }
+  wrapperMemo.set(value, wrapper)
+  return wrapper
+}
 
 /**
  * Wrap a value so that osra preserves its reference identity across the
@@ -46,19 +54,13 @@ const wrapperMemo = new WeakMap<object, IdentityWrapper>()
  *
  * - Primitives pass through unchanged (there is no identity to preserve).
  * - Already-wrapped values pass through unchanged (idempotent).
+ *
+ * NOTE: This lies at the type level — the runtime value for object/function
+ * inputs is an IdentityWrapper<T>, typed as T so the user's surrounding
+ * code stays unchanged. The box-site unwraps it.
  */
-export const identity = <T>(value: T): T => {
-  if (!isObjectOrFunction(value)) return value
-  if (isIdentityWrapper(value)) return value as unknown as T
-  const cached = wrapperMemo.get(value)
-  if (cached) return cached as unknown as T
-  const wrapper: IdentityWrapper<T> = {
-    [IDENTITY_MARKER]: true,
-    value,
-  }
-  wrapperMemo.set(value, wrapper)
-  return wrapper as unknown as T
-}
+export const identity = <T>(value: T): T =>
+  (isObjectOrFunction(value) ? wrap(value) : value) as T
 
 /**
  * Per-connection state for the identity revivable. Stored in a module-level
@@ -106,8 +108,7 @@ const getOrCreateState = (context: RevivableContext): IdentityState => {
 const installReceiveListener = (context: RevivableContext, state: IdentityState) => {
   if (state.listenerInstalled) return
   state.listenerInstalled = true
-  context.eventTarget.addEventListener('message', (event) => {
-    const detail = (event as CustomMessageEvent).detail
+  context.eventTarget.addEventListener('message', ({ detail }) => {
     if (detail?.type === 'identity-dispose') {
       state.receiveCache.delete(detail.id)
     }
@@ -133,7 +134,7 @@ export const box = <T extends Capable, TContext extends RevivableContext>(
         ...BoxBase,
         type,
         id: existingId,
-      } as unknown as BoxedIdentity<T>
+      } as BoxedIdentity<T>
     }
   }
   const id = globalThis.crypto.randomUUID()
@@ -147,7 +148,7 @@ export const box = <T extends Capable, TContext extends RevivableContext>(
     type,
     id,
     inner: innerBox,
-  } as unknown as BoxedIdentity<T>
+  } as BoxedIdentity<T>
 }
 
 export const revive = <T extends BoxedIdentity, TContext extends RevivableContext>(

@@ -49,7 +49,7 @@ const isCapablePromise = <T, U extends Capable = ExtractCapable<T>>(value: T): v
 export type BoxedPromise<T extends Capable = Capable> = {
   __OSRA_BOX__: 'revivable'
   type: typeof type
-  port: ReturnType<typeof boxMessagePort>
+  port: BoxedMessagePort<Context>
   [UnderlyingType]: T
 }
 
@@ -73,20 +73,23 @@ export const box = <T, T2 extends RevivableContext>(
 
   promise
     .then((data: ExtractCapable<T>) => sendResult({ type: 'resolve', data }))
-    .catch((error: unknown) => sendResult({ type: 'reject', error: (error as Error)?.stack ?? String(error) }))
+    .catch((error: unknown) => sendResult({
+      type: 'reject',
+      error: error instanceof Error ? (error.stack ?? String(error)) : String(error),
+    }))
 
   return {
     ...BoxBase,
     type,
     port: boxMessagePort(remotePort, context)
-  } as unknown as BoxedPromise<ExtractCapable<T>>
+  } as BoxedPromise<ExtractCapable<T>>
 }
 
 export const revive = <T extends BoxedPromise, T2 extends RevivableContext>(
   value: T,
   context: T2
 ) => {
-  const port = reviveMessagePort(value.port as unknown as BoxedMessagePort<Context>, context)
+  const port = reviveMessagePort(value.port, context)
   return new Promise<T[UnderlyingType]>((resolve, reject) => {
     port.addEventListener('message', ({ data: result }) => {
       if (result.type === 'resolve') {

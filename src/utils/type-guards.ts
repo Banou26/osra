@@ -80,27 +80,26 @@ export const typedArrayTypeToTypedArrayConstructor = (value: TypedArrayType): Ty
   return typedArray
 }
 
-export const isTypedArray = (value: any): value is TypedArray => typedArrayConstructors.some(typedArray => value instanceof typedArray)
-export const isWebSocket = (value: any) => value instanceof WebSocket
-export const isServiceWorkerContainer = (value: any): value is ServiceWorkerContainer => globalThis.ServiceWorkerContainer && value instanceof ServiceWorkerContainer
-export const isWorker = (value: any): value is Worker => globalThis.Worker && value instanceof Worker
+export const isTypedArray = (value: unknown): value is TypedArray => typedArrayConstructors.some(typedArray => value instanceof typedArray)
+export const isWebSocket = (value: unknown): value is WebSocket => value instanceof WebSocket
+export const isServiceWorkerContainer = (value: unknown): value is ServiceWorkerContainer => !!globalThis.ServiceWorkerContainer && value instanceof ServiceWorkerContainer
+export const isWorker = (value: unknown): value is Worker => !!globalThis.Worker && value instanceof Worker
 // @ts-expect-error
-export const isDedicatedWorker = (value: any): value is DedicatedWorkerGlobalScope => globalThis.DedicatedWorkerGlobalScope && value instanceof DedicatedWorkerGlobalScope
-export const isSharedWorker = (value: any): value is SharedWorker => globalThis.SharedWorker && value instanceof SharedWorker
-export const isMessagePort = (value: any) => value instanceof MessagePort
-export const isPromise = (value: any) => value instanceof Promise
-export const isFunction = (value: any): value is Function => typeof value === 'function'
-export const isArrayBuffer = (value: any) => value instanceof ArrayBuffer
-export const isReadableStream = (value: any) => value instanceof ReadableStream
-export const isDate = (value: any) => value instanceof Date
-export const isError = (value: any) => value instanceof Error
+export const isDedicatedWorker = (value: unknown): value is DedicatedWorkerGlobalScope => !!globalThis.DedicatedWorkerGlobalScope && value instanceof DedicatedWorkerGlobalScope
+export const isSharedWorker = (value: unknown): value is SharedWorker => !!globalThis.SharedWorker && value instanceof SharedWorker
+export const isMessagePort = (value: unknown): value is MessagePort => value instanceof MessagePort
+export const isPromise = (value: unknown): value is Promise<unknown> => value instanceof Promise
+export const isFunction = (value: unknown): value is Function => typeof value === 'function'
+export const isArrayBuffer = (value: unknown): value is ArrayBuffer => value instanceof ArrayBuffer
+export const isReadableStream = (value: unknown): value is ReadableStream => value instanceof ReadableStream
+export const isDate = (value: unknown): value is Date => value instanceof Date
+export const isError = (value: unknown): value is Error => value instanceof Error
 
-export const isOsraMessage = (value: any): value is Message =>
-  Boolean(
-    value
-    && typeof value === 'object'
-    && (value as Message)[OSRA_KEY]
-  )
+export const isOsraMessage = (value: unknown): value is Message =>
+  !!value
+  && typeof value === 'object'
+  && OSRA_KEY in value
+  && !!value[OSRA_KEY]
 
 /** True if `value` is an instance of any of the given (possibly undefined-on-this-platform)
  *  constructors. Tolerates missing globals so callers don't have to guard each one. */
@@ -109,10 +108,10 @@ export const instanceOfAny = (value: unknown, ctors: readonly (Function | undefi
   return false
 }
 
-export const isClonable = (value: any) =>
+export const isClonable = (value: unknown): boolean =>
   instanceOfAny(value, [globalThis.SharedArrayBuffer])
 
-export const isTransferable = (value: any): value is Transferable =>
+export const isTransferable = (value: unknown): value is Transferable =>
   instanceOfAny(value, [
     globalThis.ArrayBuffer,
     globalThis.MessagePort,
@@ -123,93 +122,68 @@ export const isTransferable = (value: any): value is Transferable =>
   ])
 
 export type WebExtRuntime = typeof browser.runtime
-export const isWebExtensionRuntime = (value: any): value is WebExtRuntime => {
+export const isWebExtensionRuntime = (value: unknown): value is WebExtRuntime => {
   const runtime = getWebExtensionRuntime()
   if (!runtime) return false
   return value === runtime
 }
 
 export type WebExtPort = ReturnType<WebExtRuntime['connect']> | Runtime.Port
-export const isWebExtensionPort = (value: any, connectPort: boolean = false): value is WebExtPort => {
-  return Boolean(
-    value
-    && typeof value === 'object'
-    /**
-     * This is needed to prevent throwing an error when the value is a cross origin iframe window object.
-     * e.g SecurityError: Blocked a frame with origin "http://localhost:8080" from accessing a cross-origin frame.
-     */
-    && !isWindow(value)
-    && ('name' in (value as WebExtPort))
-    && ('disconnect' in (value as WebExtPort))
-    && ('postMessage' in (value as WebExtPort))
-    && (
-      connectPort
-        // these properties are only present on WebExtPort that were created through runtime.connect()
-        ? (
-             ('sender' in (value as WebExtPort))
-             && ('onMessage' in (value as WebExtPort))
-             && ('onDisconnect' in (value as WebExtPort))
-        )
-        : true
-    )
-  )
+export const isWebExtensionPort = (value: unknown, connectPort: boolean = false): value is WebExtPort => {
+  if (!value || typeof value !== 'object') return false
+  // Prevent SecurityError when `value` is a cross-origin window.
+  if (isWindow(value)) return false
+  if (!('name' in value) || !('disconnect' in value) || !('postMessage' in value)) return false
+  // these properties are only present on WebExtPorts created through runtime.connect()
+  if (!connectPort) return true
+  return 'sender' in value && 'onMessage' in value && 'onDisconnect' in value
 }
 
 export type WebExtSender = NonNullable<WebExtPort['sender']>
 
+// Structural guard shared by WebExtOnConnect and WebExtOnMessage — both expose
+// the `addListener` / `hasListener` / `removeListener` trio and nothing else.
+const hasListenerApi = (value: unknown): boolean =>
+  !!value
+  && typeof value === 'object'
+  // Prevent SecurityError when `value` is a cross-origin window.
+  && !isWindow(value)
+  && 'addListener' in value
+  && 'hasListener' in value
+  && 'removeListener' in value
+
 export type WebExtOnConnect = WebExtRuntime['onConnect']
-export const isWebExtensionOnConnect = (value: any): value is WebExtOnConnect =>
-  Boolean(
-    value
-    && typeof value === 'object'
-    /**
-     * This is needed to prevent throwing an error when the value is a cross origin iframe window object.
-     * e.g SecurityError: Blocked a frame with origin "http://localhost:8080" from accessing a cross-origin frame.
-     */
-    && !isWindow(value)
-    && (value as WebExtOnConnect).addListener
-    && (value as WebExtOnConnect).hasListener
-    && (value as WebExtOnConnect).removeListener
-  )
+export const isWebExtensionOnConnect = (value: unknown): value is WebExtOnConnect =>
+  hasListenerApi(value)
 
 export type WebExtOnMessage = WebExtRuntime['onMessage']
-export const isWebExtensionOnMessage = (value: any): value is WebExtOnMessage =>
-  Boolean(
-    value
-    && typeof value === 'object'
-    /**
-     * This is needed to prevent throwing an error when the value is a cross origin iframe window object.
-     * e.g SecurityError: Blocked a frame with origin "http://localhost:8080" from accessing a cross-origin frame.
-     */
-    && !isWindow(value)
-    && (value as WebExtOnMessage).addListener
-    && (value as WebExtOnMessage).hasListener
-    && (value as WebExtOnMessage).removeListener
-  )
+export const isWebExtensionOnMessage = (value: unknown): value is WebExtOnMessage =>
+  hasListenerApi(value)
 
 export const isWindow = (value: unknown): value is Window => {
-    if (!value || typeof value !== 'object') return false
-
+  if (!value || typeof value !== 'object') return false
+  try {
+    return 'window' in value && value.window === value
+  } catch {
+    // Cross-origin Window access can throw SecurityError; fall back to a
+    // no-read shape probe that tolerates protected properties.
     try {
-      return (value as Window).window === value
+      return 'closed' in value
+        && typeof value.closed === 'boolean'
+        && 'close' in value
+        && typeof value.close === 'function'
     } catch {
-      try {
-        const w = value as Window
-        return typeof w.closed === 'boolean' && typeof w.close === 'function'
-      } catch {
-        return false
-      }
+      return false
     }
   }
+}
 
-export type IsEmitJsonOnlyTransport<T extends Transport> = T extends EmitJsonPlatformTransport ? true : false
-export const isEmitJsonOnlyTransport = (value: any): value is EmitJsonPlatformTransport =>
+export const isEmitJsonOnlyTransport = (value: unknown): value is EmitJsonPlatformTransport =>
      isWebSocket(value)
   || isWebExtensionPort(value)
   || isWebExtensionRuntime(value)
 
-export type IsReceiveJsonOnlyTransport<T extends Transport> = T extends ReceiveJsonPlatformTransport ? true : false
-export const isReceiveJsonOnlyTransport = (value: any): value is ReceiveJsonPlatformTransport =>
+export const isReceiveJsonOnlyTransport = (value: unknown): value is ReceiveJsonPlatformTransport =>
      isWebSocket(value)
   || isWebExtensionPort(value)
   || isWebExtensionOnConnect(value)
@@ -217,13 +191,12 @@ export const isReceiveJsonOnlyTransport = (value: any): value is ReceiveJsonPlat
   || isWebExtensionRuntime(value)
 
 export type IsJsonOnlyTransport<T extends Transport> = T extends JsonPlatformTransport ? true : false
-export const isJsonOnlyTransport = (value: Transport): value is Extract<Transport, JsonPlatformTransport> =>
-    ('isJson' in value && value.isJson === true)
+export const isJsonOnlyTransport = (value: unknown): value is Extract<Transport, JsonPlatformTransport> =>
+     (!!value && typeof value === 'object' && 'isJson' in value && value.isJson === true)
   || isEmitJsonOnlyTransport(value)
   || isReceiveJsonOnlyTransport(value)
 
-export type IsEmitTransport<T extends Transport> = T extends EmitTransport ? true : false
-export const isEmitTransport = (value: any): value is EmitTransport =>
+export const isEmitTransport = (value: unknown): value is EmitTransport =>
      isWindow(value)
   || isEmitJsonOnlyTransport(value)
   || isServiceWorkerContainer(value)
@@ -233,13 +206,11 @@ export const isEmitTransport = (value: any): value is EmitTransport =>
   || isMessagePort(value)
   || isCustomEmitTransport(value)
 
-export function assertEmitTransport (transport: Transport): asserts transport is EmitTransport {
+export function assertEmitTransport(transport: Transport): asserts transport is EmitTransport {
   if (!isEmitTransport(transport)) throw new Error('Transport is not emitable')
 }
 
-
-export type IsReceiveTransport<T extends Transport> = T extends ReceiveTransport ? true : false
-export const isReceiveTransport = (value: any): value is ReceiveTransport =>
+export const isReceiveTransport = (value: unknown): value is ReceiveTransport =>
      isWindow(value)
   || isReceiveJsonOnlyTransport(value)
   || isServiceWorkerContainer(value)
@@ -249,52 +220,31 @@ export const isReceiveTransport = (value: any): value is ReceiveTransport =>
   || isMessagePort(value)
   || isCustomReceiveTransport(value)
 
-export function assertReceiveTransport (transport: Transport): asserts transport is ReceiveTransport {
+export function assertReceiveTransport(transport: Transport): asserts transport is ReceiveTransport {
   if (!isReceiveTransport(transport)) throw new Error('Transport is not receiveable')
 }
 
-export const isCustomEmitTransport = (value: any): value is CustomEmitTransport =>
-  Boolean(
-    value
-    && typeof value === 'object'
-    /**
-     * This is needed to prevent throwing an error when the value is a cross origin iframe window object.
-     * e.g SecurityError: Blocked a frame with origin "http://localhost:8080" from accessing a cross-origin frame.
-     */
-    && !isWindow(value)
-    && (
-      'emit' in value
-      && (
-        isEmitTransport(value.emit)
-        || typeof value.emit === 'function'
-      )
-    )
-  )
+export const isCustomEmitTransport = (value: unknown): value is CustomEmitTransport => {
+  if (!value || typeof value !== 'object') return false
+  // Prevent SecurityError when `value` is a cross-origin window.
+  if (isWindow(value)) return false
+  if (!('emit' in value)) return false
+  return isEmitTransport(value.emit) || typeof value.emit === 'function'
+}
 
-export const isCustomReceiveTransport = (value: any): value is CustomReceiveTransport =>
-  Boolean(
-    value
-    && typeof value === 'object'
-    /**
-     * This is needed to prevent throwing an error when the value is a cross origin iframe window object.
-     * e.g SecurityError: Blocked a frame with origin "http://localhost:8080" from accessing a cross-origin frame.
-     */
-    && !isWindow(value)
-    && (
-      'receive' in value
-      && (
-        isReceiveTransport(value.receive)
-        || typeof value.receive === 'function'
-      )
-    )
-  )
+export const isCustomReceiveTransport = (value: unknown): value is CustomReceiveTransport => {
+  if (!value || typeof value !== 'object') return false
+  // Prevent SecurityError when `value` is a cross-origin window.
+  if (isWindow(value)) return false
+  if (!('receive' in value)) return false
+  return isReceiveTransport(value.receive) || typeof value.receive === 'function'
+}
 
-export type IsCustomTransport<T extends Transport> = T extends CustomTransport ? true : false
-export const isCustomTransport = (value: any): value is CustomTransport =>
+export const isCustomTransport = (value: unknown): value is CustomTransport =>
      isCustomEmitTransport(value)
   || isCustomReceiveTransport(value)
 
-export const isTransport = (value: any): value is Transport =>
+export const isTransport = (value: unknown): value is Transport =>
      isEmitTransport(value)
   || isReceiveTransport(value)
   || isCustomTransport(value)

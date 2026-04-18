@@ -23,7 +23,12 @@ export { transfer } from './transfer'
 
 export * from './utils'
 
-export type RevivableModule<T extends string = string, T2 = any, T3 extends BoxBase<T> = any, T4 extends MessageFields = MessageFields> = {
+export type RevivableModule<
+  T extends string = string,
+  T2 = any,
+  T3 extends BoxBase<T> = any,
+  T4 extends MessageFields = MessageFields,
+> = {
   readonly type: T
   readonly isType: (value: unknown) => value is T2
   readonly box: ((value: T2, context: RevivableContext<any>) => T3) | ((...args: any[]) => any)
@@ -59,16 +64,12 @@ const findBoxModule = (
   modules.find(module => module.isType(value))
 
 const findReviveModule = (
-  value: unknown,
-  modules: readonly RevivableModule[]
-): RevivableModule | undefined => {
-  if (!value || typeof value !== 'object') return undefined
-  const boxType = (value as { type?: unknown }).type
-  if (typeof boxType !== 'string') return undefined
-  return modules.find(module => module.type === boxType)
-}
+  value: BoxBase,
+  modules: readonly RevivableModule[],
+): RevivableModule | undefined =>
+  modules.find(module => module.type === value.type)
 
-const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+const isPlainObject = (value: unknown): value is Record<string, Capable> =>
   !!value && typeof value === 'object' && Object.getPrototypeOf(value) === Object.prototype
 
 export const box = <
@@ -104,7 +105,7 @@ export const recursiveBox = <
   }
   if (isPlainObject(value)) {
     return Object.fromEntries(
-      (Object.entries(value) as [string, Capable][])
+      Object.entries<Capable>(value)
         .map(([key, v]) => [key, recursiveBox(v, context)])
     ) as ReturnCastType
   }
@@ -118,7 +119,7 @@ export const revive = <
   value: T,
   context: RevivableContext<TModules>
 ): ReplaceWithRevive<T, TModules[number]> => {
-  if (!isRevivableBox(value, context)) return value as ReplaceWithRevive<T, TModules[number]>
+  if (!isRevivableBox(value)) return value as ReplaceWithRevive<T, TModules[number]>
   const handledByModule = findReviveModule(value, context.revivableModules)
   if (handledByModule) {
     return handledByModule.revive(value, context) as ReplaceWithRevive<T, TModules[number]>
@@ -135,7 +136,7 @@ export const recursiveRevive = <
 ): DeepReplaceWithRevive<T, TModules[number]> => {
   type ReturnCastType = DeepReplaceWithRevive<T, TModules[number]>
 
-  if (isRevivableBox(value, context)) {
+  if (isRevivableBox(value)) {
     const handledByModule = findReviveModule(value, context.revivableModules)
     if (handledByModule) {
       return handledByModule.revive(value, context) as ReturnCastType
@@ -147,7 +148,7 @@ export const recursiveRevive = <
   }
   if (isPlainObject(value)) {
     return Object.fromEntries(
-      (Object.entries(value) as [string, Capable][])
+      Object.entries<Capable>(value)
         .map(([key, v]) => [key, recursiveRevive(v, context)])
     ) as ReturnCastType
   }

@@ -27,7 +27,7 @@ export const box = <T extends AbortSignal, T2 extends RevivableContext>(
 
   if (!value.aborted) {
     value.addEventListener('abort', () => {
-      localPort.postMessage({ type: 'abort', reason: value.reason as Capable })
+      localPort.postMessage({ type: 'abort', reason: value.reason })
       localPort.close()
     }, { once: true })
   } else {
@@ -38,8 +38,8 @@ export const box = <T extends AbortSignal, T2 extends RevivableContext>(
     ...BoxBase,
     type,
     aborted: value.aborted,
-    reason: value.reason as Capable,
-    port: boxMessagePort(remotePort, context)
+    reason: value.reason,
+    port: boxMessagePort(remotePort, context),
   }
 }
 
