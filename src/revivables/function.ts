@@ -11,6 +11,10 @@ import {
 
 export const type = 'function' as const
 
+type ResultMessage =
+  | { __osra_ok__: true, value: Capable }
+  | { __osra_err__: true, error: string }
+
 type CallMessage = CallContext | { __osra_close__: true }
 
 /**
@@ -28,6 +32,13 @@ const functionRegistry = new FinalizationRegistry<FunctionCleanupInfo>((info) =>
     info.port.close()
   } catch { /* Port may already be closed */ }
 })
+
+// Pins caller-side return-value ports between send and result arriving. The
+// cycle (localPort↔listener↔remotePort) has no external anchor after the
+// Promise executor returns, so under memory pressure GC can collect it before
+// the result arrives — the Promise hangs forever. We remove the entries in
+// the once-listener (and on reject).
+const inFlightReturnPorts = new Set<EventPort<any>>()
 
 export type CallContext = [
   /** Return-value port that the callee will post the result on. */
@@ -60,6 +71,10 @@ export const box = <T extends (...args: any[]) => any, T2 extends RevivableConte
 
   const cleanup = () => {
     localPort.close()
+    // remotePort was wrapped by message-port.box; closing it fires the
+    // _onClose hook which frees allocator entries and context.eventTarget
+    // listeners on this side.
+    remotePort.close()
   }
 
   localPort.addEventListener('message', ({ data }) => {
@@ -68,8 +83,20 @@ export const box = <T extends (...args: any[]) => any, T2 extends RevivableConte
       return
     }
     const [returnValuePort, args] = data as CallContext
-    const result = (async () => value(...(args as Parameters<T>)))()
-    returnValuePort.postMessage(result)
+    const returnPort = returnValuePort as unknown as EventPort<ResultMessage>
+    ;(async () => value(...(args as Parameters<T>)))()
+      .then(
+        (resolved) => returnPort.postMessage({ __osra_ok__: true, value: resolved as Capable }),
+        (error: unknown) => returnPort.postMessage({
+          __osra_err__: true,
+          error: (error as Error)?.stack ?? String(error)
+        })
+      )
+      .finally(() => {
+        // Close after the message has flushed through the microtask queue so
+        // the result actually dispatches before we tear the channel down.
+        queueMicrotask(() => returnPort.close())
+      })
   })
   localPort.start()
 
@@ -88,17 +115,27 @@ export const revive = <T extends BoxedFunction, T2 extends RevivableContext>(
 
   const func = (...args: Capable[]) =>
     new Promise((resolve, reject) => {
-      const { port1: returnValueLocalPort, port2: returnValueRemotePort } = new EventChannel<Capable, Capable>()
-      port.postMessage([returnValueRemotePort, args])
+      const channel = new EventChannel<ResultMessage, ResultMessage>()
+      const returnValueLocalPort = channel.port1
+      const returnValueRemotePort = channel.port2
+      // Pin ports to a module-level Set so GC can't collect the
+      // port↔listener cycle while the call is in flight. Without this,
+      // under memory pressure the listener (and thus `resolve`) can be
+      // collected before the result arrives — the Promise hangs forever.
+      inFlightReturnPorts.add(returnValueLocalPort)
+      inFlightReturnPorts.add(returnValueRemotePort)
+      port.postMessage([returnValueRemotePort as unknown as EventPort<Capable>, args])
 
       returnValueLocalPort.addEventListener('message', ({ data: result }) => {
-        // data is already revived (message-port handed us live values)
-        ;(result as Promise<Capable>)
-          .then(resolve)
-          .catch(reject)
-          .finally(() => {
-            returnValueLocalPort.close()
-          })
+        if ('__osra_ok__' in result) resolve(result.value)
+        else reject(result.error)
+        returnValueLocalPort.close()
+        // Close remote side too — its _onClose (set by message-port.box)
+        // tears down handler state on this connection so per-call state
+        // doesn't accumulate across iterations.
+        returnValueRemotePort.close()
+        inFlightReturnPorts.delete(returnValueLocalPort)
+        inFlightReturnPorts.delete(returnValueRemotePort)
       }, { once: true })
       returnValueLocalPort.start()
     })

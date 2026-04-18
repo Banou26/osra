@@ -41,6 +41,7 @@ export class EventPort<T> extends EventTarget {
   _queue: MessageEvent<T>[] = []
   _started = false
   _closed = false
+  _onClose: (() => void) | undefined
 
   private _onmessage: ((this: MessagePort, ev: MessageEvent<T>) => unknown) | null = null
 
@@ -86,8 +87,10 @@ export class EventPort<T> extends EventTarget {
   }
 
   close(): void {
+    if (this._closed) return
     this._closed = true
     this._queue.length = 0
+    this._onClose?.()
   }
 }
 

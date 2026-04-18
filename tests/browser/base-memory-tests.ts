@@ -1,6 +1,6 @@
 import type { Transport } from '../../src'
 
-import { expose } from '../../src/index'
+import { expose, transfer } from '../../src/index'
 
 export const DEFAULT_ITERATIONS = 100000
 
@@ -60,7 +60,7 @@ export const largeDataTransferNoLeak = async (transport: Transport, iterations =
   const remote = await expose<typeof value>({}, { transport })
   for (let i = 0; i < iterations; i++) {
     const largeBuffer = new Uint8Array(100 * 1024) // 100KB
-    await remote(largeBuffer)
+    await remote(transfer(largeBuffer))
   }
 }
 

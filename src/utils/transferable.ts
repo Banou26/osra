@@ -115,6 +115,12 @@ export const getTransferableObjects = (value: unknown): Transferable[] => {
       return
     }
 
+    // TypedArray / DataView expose every numeric index as an own key — iterating
+    // `Object.keys` of a 100 KB buffer touches 100 K entries for no useful
+    // result. The underlying buffer is the only thing we could transfer, and
+    // that happens via the transfer box / typed-array revivable path anyway.
+    if (ArrayBuffer.isView(value)) return
+
     if (Array.isArray(value)) {
       for (const item of value) recurse(item, inTransferBox)
       return
