@@ -7,7 +7,6 @@
     "declaration": false,
     "declarationDir": null,
     "types": [
-      "./tests/global-types.d.ts",
       "@types/chai",
       "@types/chai-as-promised",
       "@types/node",

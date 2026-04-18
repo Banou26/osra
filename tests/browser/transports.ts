@@ -28,6 +28,15 @@ const jsonLoopback = (): Transport => ({
   },
 })
 
+// Surface the bundle exposes on globalThis for the Playwright runner to call
+// via page.evaluate. Defined here (not in a .d.ts) so the implementation in
+// _run.ts can `satisfies` against it and pinpoint mismatches at the lambda.
+export type OsraRunner = {
+  transport: (group: string, name: string, transportName: TransportName) => Promise<void>
+  memory: (name: string, transportName: TransportName) => Promise<void>
+  standalone: (group: string, name: string) => Promise<void>
+}
+
 export const transports: readonly TransportEntry[] = [
   {
     name: 'Web',

@@ -1,3 +1,8 @@
+/// <reference path="../global-types.d.ts" />
+
+import type { Transport } from '../../src'
+import type { OsraRunner, TransportName } from './transports'
+
 import { use } from 'chai'
 import chaiAsPromised from 'chai-as-promised'
 
@@ -6,7 +11,7 @@ import chaiAsPromised from 'chai-as-promised'
 import './type-tests'
 
 import { transportTests, memoryTests, standaloneTests } from './registry'
-import { transports, type TransportName } from './transports'
+import { transports } from './transports'
 
 use(chaiAsPromised)
 
@@ -16,31 +21,35 @@ const findTransport = (name: TransportName) => {
   return t
 }
 
-const lookupTransportTest = (group: string, name: string) => {
+const lookupTransportTest = (group: string, name: string): (transport: Transport) => Promise<void> => {
   const fn = transportTests[group]?.[name]
   if (!fn) throw new Error(`Unknown transport test: ${group}/${name}`)
   return fn
 }
 
-const lookupMemoryTest = (name: string) => {
+const lookupMemoryTest = (name: string): (transport: Transport, iterations: number) => Promise<void> => {
   const fn = memoryTests[name]
   if (!fn) throw new Error(`Unknown memory test: ${name}`)
   return fn
 }
 
-const lookupStandaloneTest = (group: string, name: string) => {
+const lookupStandaloneTest = (group: string, name: string): () => Promise<void> => {
   const fn = standaloneTests[group]?.[name]
   if (!fn) throw new Error(`Unknown standalone test: ${group}/${name}`)
   return fn
 }
 
-globalThis.__osraRun = {
-  transport: (group, name, transportName) =>
-    lookupTransportTest(group, name)(findTransport(transportName).factory()),
-  memory: (name, transportName) => {
-    const t = findTransport(transportName)
-    return lookupMemoryTest(name)(t.factory(), t.memoryIterations)
+const runner = {
+  transport: async (group, name, transportName) => {
+    await lookupTransportTest(group, name)(findTransport(transportName).factory())
   },
-  standalone: (group, name) =>
-    lookupStandaloneTest(group, name)(),
-}
+  memory: async (name, transportName) => {
+    const t = findTransport(transportName)
+    await lookupMemoryTest(name)(t.factory(), t.memoryIterations)
+  },
+  standalone: async (group, name) => {
+    await lookupStandaloneTest(group, name)()
+  },
+} satisfies OsraRunner
+
+globalThis.__osraRun = runner

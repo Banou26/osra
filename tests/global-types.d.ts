@@ -1,11 +1,8 @@
-import type { TransportName } from './browser/transports'
+import type { OsraRunner } from './browser/transports'
 
 declare global {
-  var __osraRun: {
-    transport: (group: string, name: string, transportName: TransportName) => Promise<void>
-    memory: (name: string, transportName: TransportName) => Promise<void>
-    standalone: (group: string, name: string) => Promise<void>
-  }
+  // eslint-disable-next-line no-var
+  var __osraRun: OsraRunner
 }
 
 export {}
