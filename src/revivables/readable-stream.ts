@@ -71,7 +71,9 @@ export const revive = <T extends BoxedReadableStream, T2 extends RevivableContex
     }),
     cancel: () => {
       port.postMessage({ type: 'cancel' })
-      port.close()
+      // Defer close so the cancel message dispatches before tear-down — same
+      // pattern function.ts uses for return-port cleanup.
+      queueMicrotask(() => port.close())
     },
   }) as T[UnderlyingType]
 }

@@ -442,6 +442,359 @@ export const userRequestNoBody = async (transport: Transport) => {
   expect(request.body).to.be.null
 }
 
+export const userMap = async (transport: Transport) => {
+  const _map = new Map<string, number>([['a', 1], ['b', 2], ['c', 3]])
+  const value = { map: _map }
+  expose(value, { transport })
+
+  const { map } = await expose<typeof value>({}, { transport })
+
+  expect(map).to.be.instanceOf(Map)
+  expect(map.size).to.equal(3)
+  expect(map.get('a')).to.equal(1)
+  expect(map.get('b')).to.equal(2)
+  expect(map.get('c')).to.equal(3)
+}
+
+export const userMapEmpty = async (transport: Transport) => {
+  const value = { map: new Map<string, number>() }
+  expose(value, { transport })
+
+  const { map } = await expose<typeof value>({}, { transport })
+
+  expect(map).to.be.instanceOf(Map)
+  expect(map.size).to.equal(0)
+}
+
+export const userMapWithLiveValues = async (transport: Transport) => {
+  const value = {
+    map: new Map<string, Promise<number>>([
+      ['first', Promise.resolve(10)],
+      ['second', Promise.resolve(20)],
+    ]),
+  }
+  expose(value, { transport })
+
+  const { map } = await expose<typeof value>({}, { transport })
+
+  expect(map).to.be.instanceOf(Map)
+  expect(map.size).to.equal(2)
+  await expect(map.get('first')!).to.eventually.equal(10)
+  await expect(map.get('second')!).to.eventually.equal(20)
+}
+
+export const userMapWithFunctions = async (transport: Transport) => {
+  const value = {
+    map: new Map<string, () => Promise<number>>([
+      ['double', async () => 4],
+      ['triple', async () => 9],
+    ]),
+  }
+  expose(value, { transport })
+
+  const { map } = await expose<typeof value>({}, { transport })
+
+  expect(map).to.be.instanceOf(Map)
+  await expect(map.get('double')!()).to.eventually.equal(4)
+  await expect(map.get('triple')!()).to.eventually.equal(9)
+}
+
+export const userMapWithComplexKeys = async (transport: Transport) => {
+  const d1 = new Date('2026-01-01T00:00:00.000Z')
+  const d2 = new Date('2026-06-01T00:00:00.000Z')
+  const value = {
+    map: new Map<Date, string>([[d1, 'jan'], [d2, 'jun']]),
+  }
+  expose(value, { transport })
+
+  const { map } = await expose<typeof value>({}, { transport })
+
+  expect(map).to.be.instanceOf(Map)
+  expect(map.size).to.equal(2)
+  // Keys are revived as fresh Date instances; look them up by ISOString match.
+  const entries = [...map.entries()]
+  const jan = entries.find(([k]) => k.toISOString() === d1.toISOString())
+  const jun = entries.find(([k]) => k.toISOString() === d2.toISOString())
+  expect(jan?.[1]).to.equal('jan')
+  expect(jun?.[1]).to.equal('jun')
+}
+
+export const userSet = async (transport: Transport) => {
+  const value = { set: new Set<number>([1, 2, 3]) }
+  expose(value, { transport })
+
+  const { set } = await expose<typeof value>({}, { transport })
+
+  expect(set).to.be.instanceOf(Set)
+  expect(set.size).to.equal(3)
+  expect(set.has(1)).to.be.true
+  expect(set.has(2)).to.be.true
+  expect(set.has(3)).to.be.true
+}
+
+export const userSetEmpty = async (transport: Transport) => {
+  const value = { set: new Set<number>() }
+  expose(value, { transport })
+
+  const { set } = await expose<typeof value>({}, { transport })
+
+  expect(set).to.be.instanceOf(Set)
+  expect(set.size).to.equal(0)
+}
+
+export const userSetWithLiveValues = async (transport: Transport) => {
+  const value = {
+    set: new Set<Promise<number>>([Promise.resolve(1), Promise.resolve(2)]),
+  }
+  expose(value, { transport })
+
+  const { set } = await expose<typeof value>({}, { transport })
+
+  expect(set).to.be.instanceOf(Set)
+  expect(set.size).to.equal(2)
+  const values = await Promise.all([...set])
+  expect(values.sort()).to.deep.equal([1, 2])
+}
+
+export const userBigInt = async (transport: Transport) => {
+  const value = { big: 9_007_199_254_740_993n }
+  expose(value, { transport })
+
+  const { big } = await expose<typeof value>({}, { transport })
+
+  expect(typeof big).to.equal('bigint')
+  expect(big).to.equal(9_007_199_254_740_993n)
+}
+
+export const userBigIntInMap = async (transport: Transport) => {
+  const value = { map: new Map<string, bigint>([['big', 1_000_000_000_000_000_000n]]) }
+  expose(value, { transport })
+
+  const { map } = await expose<typeof value>({}, { transport })
+
+  expect(map.get('big')).to.equal(1_000_000_000_000_000_000n)
+}
+
+export const userBigInt64Array = async (transport: Transport) => {
+  const arr = new BigInt64Array([1n, 2n, 3n, -9_223_372_036_854_775_808n])
+  const value = { arr }
+  expose(value, { transport })
+
+  const { arr: revived } = await expose<typeof value>({}, { transport })
+
+  expect(revived).to.be.instanceOf(BigInt64Array)
+  expect(revived.length).to.equal(4)
+  expect(revived[0]).to.equal(1n)
+  expect(revived[3]).to.equal(-9_223_372_036_854_775_808n)
+}
+
+export const userBigUint64Array = async (transport: Transport) => {
+  const arr = new BigUint64Array([0n, 1n, 18_446_744_073_709_551_615n])
+  const value = { arr }
+  expose(value, { transport })
+
+  const { arr: revived } = await expose<typeof value>({}, { transport })
+
+  expect(revived).to.be.instanceOf(BigUint64Array)
+  expect(revived.length).to.equal(3)
+  expect(revived[2]).to.equal(18_446_744_073_709_551_615n)
+}
+
+export const userPromiseRejected = async (transport: Transport) => {
+  const value = { failing: Promise.reject(new Error('boom')) }
+  // Swallow the unhandledrejection on the local side — we re-reject on the wire.
+  ;(value.failing as Promise<unknown>).catch(() => {})
+  expose(value, { transport })
+
+  const { failing } = await expose<typeof value>({}, { transport })
+
+  await expect(failing).to.be.rejected
+}
+
+export const userPromiseRejectedWithString = async (transport: Transport) => {
+  const value = { failing: Promise.reject('plain string reason') }
+  ;(value.failing as Promise<unknown>).catch(() => {})
+  expose(value, { transport })
+
+  const { failing } = await expose<typeof value>({}, { transport })
+
+  let caught: unknown
+  try { await failing } catch (e) { caught = e }
+  expect(typeof caught).to.equal('string')
+  expect(caught).to.contain('plain string reason')
+}
+
+export const userAbortSignalErrorReason = async (transport: Transport) => {
+  const controller = new AbortController()
+  const value = { signal: controller.signal }
+  expose(value, { transport })
+
+  const { signal } = await expose<typeof value>({}, { transport })
+
+  let abortedReason: unknown
+  signal.addEventListener('abort', () => { abortedReason = signal.reason })
+
+  controller.abort(new Error('abort cause'))
+  await new Promise(resolve => setTimeout(resolve, 50))
+
+  expect(signal.aborted).to.be.true
+  expect(abortedReason).to.be.instanceOf(Error)
+  expect((abortedReason as Error).message).to.equal('abort cause')
+}
+
+export const userHeadersDirect = async (transport: Transport) => {
+  const _headers = new Headers({ 'X-A': '1', 'X-B': '2' })
+  const value = { headers: _headers }
+  expose(value, { transport })
+
+  const { headers } = await expose<typeof value>({}, { transport })
+
+  expect(headers).to.be.instanceOf(Headers)
+  expect(headers.get('X-A')).to.equal('1')
+  expect(headers.get('X-B')).to.equal('2')
+}
+
+export const userArrayBufferEmpty = async (transport: Transport) => {
+  const value = { ab: new ArrayBuffer(0) }
+  expose(value, { transport })
+
+  const { ab } = await expose<typeof value>({}, { transport })
+
+  expect(ab).to.be.instanceOf(ArrayBuffer)
+  expect(ab.byteLength).to.equal(0)
+}
+
+export const userTypedArrayEmpty = async (transport: Transport) => {
+  const value = { arr: new Uint8Array(0) }
+  expose(value, { transport })
+
+  const { arr } = await expose<typeof value>({}, { transport })
+
+  expect(arr).to.be.instanceOf(Uint8Array)
+  expect(arr.length).to.equal(0)
+}
+
+export const userReadableStreamMultiChunk = async (transport: Transport) => {
+  const chunks = [new Uint8Array([1, 2]), new Uint8Array([3, 4]), new Uint8Array([5, 6])]
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const chunk of chunks) controller.enqueue(chunk)
+      controller.close()
+    },
+  })
+  const value = { stream }
+  expose(value, { transport })
+
+  const { stream: revived } = await expose<typeof value>({}, { transport })
+  const reader = revived.getReader()
+  const received: number[] = []
+  while (true) {
+    const { value: v, done } = await reader.read()
+    if (done) break
+    received.push(...v)
+  }
+  expect(received).to.deep.equal([1, 2, 3, 4, 5, 6])
+}
+
+export const userReadableStreamCancel = async (transport: Transport) => {
+  let pulled = 0
+  let cancelled = false
+  const stream = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      pulled++
+      controller.enqueue(new Uint8Array([pulled]))
+    },
+    cancel() {
+      cancelled = true
+    },
+  })
+  const value = { stream }
+  expose(value, { transport })
+
+  const { stream: revived } = await expose<typeof value>({}, { transport })
+  const reader = revived.getReader()
+  const first = await reader.read()
+  expect(first.value?.[0]).to.equal(1)
+  await reader.cancel()
+  // Cancel must propagate back to the source so it can release resources.
+  // Allow extra time for the JSON-transport portId roundtrip.
+  for (let i = 0; i < 20 && !cancelled; i++) {
+    await new Promise(resolve => setTimeout(resolve, 50))
+  }
+  expect(cancelled).to.be.true
+}
+
+export const userErrorWithCause = async (transport: Transport) => {
+  const inner = new Error('inner reason')
+  const value = { error: new Error('outer message', { cause: inner }) }
+  expose(value, { transport })
+
+  const { error } = await expose<typeof value>({}, { transport })
+
+  expect(error).to.be.instanceOf(Error)
+  expect(error.message).to.equal('outer message')
+}
+
+export const userPromiseOfMap = async (transport: Transport) => {
+  const value = {
+    deferredMap: Promise.resolve(new Map<string, number>([['a', 1], ['b', 2]])),
+  }
+  expose(value, { transport })
+
+  const { deferredMap } = await expose<typeof value>({}, { transport })
+
+  const m = await deferredMap
+  expect(m).to.be.instanceOf(Map)
+  expect(m.get('a')).to.equal(1)
+  expect(m.get('b')).to.equal(2)
+}
+
+export const userCallbackReturningSet = async (transport: Transport) => {
+  const value = async () => new Set<Date>([
+    new Date('2026-01-01T00:00:00.000Z'),
+    new Date('2026-12-31T00:00:00.000Z'),
+  ])
+  expose(value, { transport })
+
+  const remote = await expose<typeof value>({}, { transport })
+
+  const s = await remote()
+  expect(s).to.be.instanceOf(Set)
+  expect(s.size).to.equal(2)
+  for (const d of s) expect(d).to.be.instanceOf(Date)
+}
+
+export const userMapInsideArray = async (transport: Transport) => {
+  const value = {
+    list: [
+      new Map<string, number>([['x', 1]]),
+      new Map<string, number>([['y', 2]]),
+    ],
+  }
+  expose(value, { transport })
+
+  const { list } = await expose<typeof value>({}, { transport })
+
+  expect(list).to.have.length(2)
+  expect(list[0]).to.be.instanceOf(Map)
+  expect(list[0]!.get('x')).to.equal(1)
+  expect(list[1]!.get('y')).to.equal(2)
+}
+
+export const userArrayBufferInMap = async (transport: Transport) => {
+  const buf = new Uint8Array([1, 2, 3, 4]).buffer as ArrayBuffer
+  const value = {
+    map: new Map<string, ArrayBuffer>([['data', buf]]),
+  }
+  expose(value, { transport })
+
+  const { map } = await expose<typeof value>({}, { transport })
+
+  const revived = map.get('data')!
+  expect(revived).to.be.instanceOf(ArrayBuffer)
+  expect(new Uint8Array(revived)).to.deep.equal(new Uint8Array([1, 2, 3, 4]))
+}
+
 export const base = {
   argsAndResponse,
   callback,
@@ -465,5 +818,30 @@ export const base = {
   userResponseNoBody,
   userRequest,
   userRequestWithBody,
-  userRequestNoBody
+  userRequestNoBody,
+  userMap,
+  userMapEmpty,
+  userMapWithLiveValues,
+  userMapWithFunctions,
+  userMapWithComplexKeys,
+  userSet,
+  userSetEmpty,
+  userSetWithLiveValues,
+  userBigInt,
+  userBigIntInMap,
+  userBigInt64Array,
+  userBigUint64Array,
+  userPromiseRejected,
+  userPromiseRejectedWithString,
+  userAbortSignalErrorReason,
+  userHeadersDirect,
+  userArrayBufferEmpty,
+  userTypedArrayEmpty,
+  userReadableStreamMultiChunk,
+  userReadableStreamCancel,
+  userErrorWithCause,
+  userPromiseOfMap,
+  userCallbackReturningSet,
+  userMapInsideArray,
+  userArrayBufferInMap,
 }

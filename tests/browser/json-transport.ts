@@ -65,6 +65,32 @@ export const userRequestWithBody = () => base.userRequestWithBody(jsonTransport(
 
 export const userRequestNoBody = () => base.userRequestNoBody(jsonTransport())
 
+export const userMap = () => base.userMap(jsonTransport())
+export const userMapEmpty = () => base.userMapEmpty(jsonTransport())
+export const userMapWithLiveValues = () => base.userMapWithLiveValues(jsonTransport())
+export const userMapWithFunctions = () => base.userMapWithFunctions(jsonTransport())
+export const userMapWithComplexKeys = () => base.userMapWithComplexKeys(jsonTransport())
+export const userSet = () => base.userSet(jsonTransport())
+export const userSetEmpty = () => base.userSetEmpty(jsonTransport())
+export const userSetWithLiveValues = () => base.userSetWithLiveValues(jsonTransport())
+export const userBigInt = () => base.userBigInt(jsonTransport())
+export const userBigIntInMap = () => base.userBigIntInMap(jsonTransport())
+export const userBigInt64Array = () => base.userBigInt64Array(jsonTransport())
+export const userBigUint64Array = () => base.userBigUint64Array(jsonTransport())
+export const userPromiseRejected = () => base.userPromiseRejected(jsonTransport())
+export const userPromiseRejectedWithString = () => base.userPromiseRejectedWithString(jsonTransport())
+export const userAbortSignalErrorReason = () => base.userAbortSignalErrorReason(jsonTransport())
+export const userHeadersDirect = () => base.userHeadersDirect(jsonTransport())
+export const userArrayBufferEmpty = () => base.userArrayBufferEmpty(jsonTransport())
+export const userTypedArrayEmpty = () => base.userTypedArrayEmpty(jsonTransport())
+export const userReadableStreamMultiChunk = () => base.userReadableStreamMultiChunk(jsonTransport())
+export const userReadableStreamCancel = () => base.userReadableStreamCancel(jsonTransport())
+export const userErrorWithCause = () => base.userErrorWithCause(jsonTransport())
+export const userPromiseOfMap = () => base.userPromiseOfMap(jsonTransport())
+export const userCallbackReturningSet = () => base.userCallbackReturningSet(jsonTransport())
+export const userMapInsideArray = () => base.userMapInsideArray(jsonTransport())
+export const userArrayBufferInMap = () => base.userArrayBufferInMap(jsonTransport())
+
 const JSON_ITERATIONS = 2_500
 const JSON_MEMORY_THRESHOLD = 1_000_000
 
@@ -83,7 +109,10 @@ export const MemoryLeaks = {
   rapidConnectionNoLeak: () => baseMemory.rapidConnectionNoLeak(jsonTransport(), JSON_ITERATIONS),
   errorHandlingNoLeak: () => baseMemory.errorHandlingNoLeak(jsonTransport(), JSON_ITERATIONS),
   nestedCallbacksNoLeak: () => baseMemory.nestedCallbacksNoLeak(jsonTransport(), JSON_ITERATIONS),
-  concurrentCallsNoLeak: () => baseMemory.concurrentCallsNoLeak(jsonTransport(), JSON_ITERATIONS)
+  concurrentCallsNoLeak: () => baseMemory.concurrentCallsNoLeak(jsonTransport(), JSON_ITERATIONS),
+  mapRoundTripNoLeak: () => baseMemory.mapRoundTripNoLeak(jsonTransport(), JSON_ITERATIONS),
+  setRoundTripNoLeak: () => baseMemory.setRoundTripNoLeak(jsonTransport(), JSON_ITERATIONS),
+  bigIntRoundTripNoLeak: () => baseMemory.bigIntRoundTripNoLeak(jsonTransport(), JSON_ITERATIONS),
 }
 
 export const userPoint = () => customRevivables.userPoint(jsonTransport())
