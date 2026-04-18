@@ -1,4 +1,4 @@
-import type { Transport } from '../../src/types'
+import type { Transport } from '../../src'
 import type { RevivableContext, RevivableModule } from '../../src/index'
 
 import { expect } from 'chai'

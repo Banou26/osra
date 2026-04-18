@@ -1,10 +1,11 @@
 import type {
-  Capable, ConnectionMessage,
+  Capable,
   Message,
   MessageEventTarget,
-  Transport,
   Uuid
 } from '../types'
+import type { Transport } from './transport'
+import type { ConnectionMessage } from '../connections'
 import type { MessageChannelAllocator } from './allocator'
 import type { TypedEventPort } from './typed-message-channel'
 
@@ -12,34 +13,40 @@ import { makeMessageChannelAllocator } from './allocator'
 import { DefaultRevivableModules, recursiveBox, recursiveRevive, RevivableModule } from '../revivables'
 import { getTransferableObjects } from './transferable'
 
-export type BidirectionalConnectionContext = {
+export type BidirectionalConnectionContext<
+  TModules extends readonly RevivableModule[] = DefaultRevivableModules
+> = {
   type: 'bidirectional'
-  eventTarget: MessageEventTarget
+  eventTarget: MessageEventTarget<TModules>
   connection: BidirectionalConnection
 }
 export type UnidirectionalEmittingConnectionContext = {
   type: 'unidirectional-emitting'
   connection: UnidirectionalEmittingConnection
 }
-export type UnidirectionalReceivingConnectionContext = {
+export type UnidirectionalReceivingConnectionContext<
+  TModules extends readonly RevivableModule[] = DefaultRevivableModules
+> = {
   type: 'unidirectional-receiving'
-  eventTarget: MessageEventTarget
+  eventTarget: MessageEventTarget<TModules>
   connection: UnidirectionalReceivingConnection
 }
 
-export type ConnectionContext =
-  | BidirectionalConnectionContext
+export type ConnectionContext<
+  TModules extends readonly RevivableModule[] = DefaultRevivableModules
+> =
+  | BidirectionalConnectionContext<TModules>
   | UnidirectionalEmittingConnectionContext
-  | UnidirectionalReceivingConnectionContext
+  | UnidirectionalReceivingConnectionContext<TModules>
 
 export type ConnectionRevivableContext<TModules extends readonly RevivableModule[] = DefaultRevivableModules> = {
   transport: Transport
   remoteUuid: Uuid
   messagePorts: Set<MessagePort>
   messageChannels: MessageChannelAllocator
-  sendMessage: (message: ConnectionMessage) => void
+  sendMessage: (message: ConnectionMessage<TModules>) => void
   revivableModules: TModules
-  eventTarget: MessageEventTarget
+  eventTarget: MessageEventTarget<TModules>
 }
 
 export type BidirectionalConnection<T extends Capable = Capable> = {
@@ -58,8 +65,8 @@ export const startBidirectionalConnection = <
     value: Capable
     uuid: Uuid
     remoteUuid: Uuid
-    eventTarget: MessageEventTarget
-    send: (message: ConnectionMessage) => void
+    eventTarget: MessageEventTarget<TModules>
+    send: (message: ConnectionMessage<TModules>) => void
     close: () => void
     revivableModules: TModules
   }
@@ -73,8 +80,8 @@ export const startBidirectionalConnection = <
     eventTarget,
     revivableModules
   } satisfies ConnectionRevivableContext<TModules>
-  let initResolve: ((message: ConnectionMessage & { type: 'init' }) => void)
-  const initMessage = new Promise<ConnectionMessage & { type: 'init' }>((resolve, reject) => {
+  let initResolve: ((message: ConnectionMessage<TModules> & { type: 'init' }) => void)
+  const initMessage = new Promise<ConnectionMessage<TModules> & { type: 'init' }>((resolve, reject) => {
     initResolve = resolve
   })
 

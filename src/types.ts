@@ -1,14 +1,9 @@
+import type { ConnectionMessage } from './connections'
+import type { TypedEventTarget } from './utils'
 import type {
-  WebExtOnConnect,
-  WebExtOnMessage,
-  WebExtPort,
-  WebExtRuntime,
-  WebExtSender
-} from './utils/type-guards'
-
-import { DefaultRevivableModules, RevivableModule } from './revivables'
-import { InferRevivables } from './revivables/utils'
-import { TypedEventTarget } from './utils'
+  DefaultRevivableModules, RevivableModule,
+  InferMessages, InferRevivables
+} from './revivables'
 
 export const OSRA_KEY = '__OSRA_KEY__' as const
 export const OSRA_DEFAULT_KEY = '__OSRA_DEFAULT_KEY__' as const
@@ -43,7 +38,7 @@ export type Structurable =
   | Array<Structurable>
   | Map<Structurable, Structurable>
   | Set<Structurable>
-  
+
 export type StructurableTransferable =
   | Structurable
   | Transferable
@@ -88,94 +83,25 @@ export type ProtocolMessage =
     remoteUuid: Uuid
   }
 
-export type BidirectionalConnectionMessage =
-  | {
-    type: 'init'
-    remoteUuid: Uuid
-    data: Capable
-  }
-
-export type UnidirectionalConnectionMessage = unknown
-
-export type ConnectionMessage =
-  | BidirectionalConnectionMessage
-  // | UnidirectionalConnectionMessage
-
-export type MessageVariant =
+export type MessageVariant<
+  TModules extends readonly RevivableModule[] = DefaultRevivableModules
+> =
   | ProtocolMessage
-  | ConnectionMessage
+  | ConnectionMessage<TModules>
+  | InferMessages<TModules>
 
-export type Message =
-  | MessageBase
-  & MessageVariant
+export type Message<
+  TModules extends readonly RevivableModule[] = DefaultRevivableModules
+> =
+  & MessageBase
+  & MessageVariant<TModules>
 
-export type MessageContext = {
-  port?: MessagePort | WebExtPort // WebExtension
-  sender?: WebExtSender // WebExtension
-  receiveTransport?: ReceivePlatformTransport
-  source?: MessageEventSource | null // Window, Worker, WebSocket, ect...
+export type MessageEventMap<
+  TModules extends readonly RevivableModule[] = DefaultRevivableModules
+> = {
+  message: CustomEvent<Message<TModules>>
 }
 
-export type MessageEventMap = {
-  message: CustomEvent<Message>
-}
-
-export type MessageEventTarget = TypedEventTarget<MessageEventMap>
-
-export type CustomTransport =
-  { isJson?: boolean }
-  & (
-    | {
-      receive: ReceivePlatformTransport | ((listener: (event: Message, messageContext: MessageContext) => void) => void)
-      emit: EmitPlatformTransport | ((message: Message, transferables?: Transferable[]) => void)
-    }
-    | { receive: ReceivePlatformTransport | ((listener: (event: Message, messageContext: MessageContext) => void) => void) }
-    | { emit: EmitPlatformTransport | ((message: Message, transferables?: Transferable[]) => void) }
-  )
-
-export type CustomEmitTransport = Extract<CustomTransport, { emit: any }>
-export type CustomReceiveTransport = Extract<CustomTransport, { receive: any }>
-
-export type EmitJsonPlatformTransport =
-  | WebSocket
-  | WebExtPort
-  | WebExtRuntime
-
-export type ReceiveJsonPlatformTransport =
-  | WebSocket
-  | WebExtPort
-  | WebExtOnConnect
-  | WebExtOnMessage
-  | WebExtRuntime
-
-export type JsonPlatformTransport =
-  | { isJson: true }
-  | EmitJsonPlatformTransport
-  | ReceiveJsonPlatformTransport
-
-export type EmitPlatformTransport =
-  | EmitJsonPlatformTransport
-  | Window
-  | ServiceWorker
-  | Worker
-  | SharedWorker
-  | MessagePort
-
-export type ReceivePlatformTransport =
-  | ReceiveJsonPlatformTransport
-  | Window
-  | ServiceWorker
-  | Worker
-  | SharedWorker
-  | MessagePort
-
-export type PlatformTransport =
-  | EmitPlatformTransport
-  | ReceivePlatformTransport
-
-export type EmitTransport = EmitPlatformTransport & Extract<CustomTransport, { emit: any }>
-export type ReceiveTransport = ReceivePlatformTransport & Extract<CustomTransport, { receive: any }>
-
-export type Transport =
-  | PlatformTransport
-  | CustomTransport
+export type MessageEventTarget<
+  TModules extends readonly RevivableModule[] = DefaultRevivableModules
+  > = TypedEventTarget<MessageEventMap<TModules>>

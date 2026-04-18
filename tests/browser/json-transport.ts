@@ -1,4 +1,4 @@
-import type { Transport } from '../../src/types'
+import type { Transport } from '../../src'
 
 import { base } from './base-tests'
 import { baseMemory } from './base-memory-tests'
@@ -8,13 +8,13 @@ import * as transferTests from './transfer'
 
 const jsonTransport = (): Transport => ({
   isJson: true,
-  receive: (listener) => {
+  receive: (listener: (event: any, messageContext: any) => void) => {
     window.addEventListener('message', event => {
       const data = JSON.parse(event.data)
       listener(data, {})
     })
   },
-  emit: async (message) => {
+  emit: async (message: any) => {
     window.postMessage(JSON.stringify(message))
   }
 })

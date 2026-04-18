@@ -1,5 +1,5 @@
 export * from './allocator'
-export * from './platform'
+export * from './transport'
 export * from '../revivables'
 export * from './replace'
 export * from './connection'
