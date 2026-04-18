@@ -1,13 +1,18 @@
 import type {
   Capable,
   MessageEventTarget,
+  MessageVariant,
   Uuid
 } from '../types'
 import type { Transport } from '../utils/transport'
 import type { DefaultRevivableModules, RevivableModule } from '../revivables'
 import type { DeepReplaceWithBox } from '../utils/replace'
+import type { ProtocolContext } from './utils'
 
 import { recursiveBox, recursiveRevive } from '../revivables'
+import { isEmitTransport, isReceiveTransport } from '../utils/type-guards'
+
+export const type = 'bidirectional' as const
 
 export type BidirectionalConnectionContext<
   TModules extends readonly RevivableModule[] = DefaultRevivableModules
@@ -70,7 +75,7 @@ export const startBidirectionalConnection = <
     eventTarget,
     revivableModules
   } satisfies ConnectionRevivableContext<TModules>
-  
+
   for (const module of revivableModules) {
     module.init?.(revivableContext)
   }
@@ -103,3 +108,84 @@ export const startBidirectionalConnection = <
 }
 
 export type BidirectionalConnection = ReturnType<typeof startBidirectionalConnection>
+
+/**
+ * init() — mounts the bidirectional mode on the shared protocol context.
+ * Only activates when the transport can both emit and receive. Owns the
+ * announce / reject-uuid-taken / close handshake and routes
+ * per-connection messages (init / message / message-port-close) to the
+ * right connection's eventTarget.
+ */
+export const init = <TModules extends readonly RevivableModule[]>(
+  ctx: ProtocolContext<TModules>
+): void => {
+  if (!(isEmitTransport(ctx.transport) && isReceiveTransport(ctx.transport))) return
+
+  ctx.protocolEventTarget.addEventListener('message', ({ detail: message }) => {
+    if (message.type === 'announce') {
+      if (!message.remoteUuid) {
+        ctx.sendMessage({ type: 'announce', remoteUuid: message.uuid })
+        return
+      }
+      if (message.remoteUuid !== ctx.getUuid()) return
+      // todo: re-add uuid collision handling
+      if (ctx.connectionContexts.has(message.uuid)) return
+      // Send announce back so the other side can also create a connection
+      // (in case they missed our initial announce due to timing)
+      ctx.sendMessage({ type: 'announce', remoteUuid: message.uuid })
+      const eventTarget = ctx.createConnectionEventTarget()
+      const connectionContext = {
+        type: 'bidirectional',
+        eventTarget,
+        connection:
+          startBidirectionalConnection<Capable, TModules>({
+            transport: ctx.transport,
+            value: ctx.value,
+            uuid: ctx.getUuid(),
+            remoteUuid: message.uuid,
+            eventTarget,
+            send: (m) => ctx.sendMessage(m as MessageVariant),
+            close: () => void ctx.connectionContexts.delete(message.uuid),
+            revivableModules: ctx.revivableModules
+          })
+      } satisfies BidirectionalConnectionContext<TModules>
+      ctx.connectionContexts.set(message.uuid, connectionContext)
+      connectionContext.connection.remoteValue.then((remoteValue) =>
+        ctx.resolveRemoteValue(remoteValue)
+      )
+      return
+    }
+    if (message.type === 'reject-uuid-taken') {
+      if (message.remoteUuid !== ctx.getUuid()) return
+      ctx.rerollUuid()
+      ctx.sendMessage({ type: 'announce' })
+      return
+    }
+    if (message.type === 'close') {
+      if (message.remoteUuid !== ctx.getUuid()) return
+      const connectionContext = ctx.connectionContexts.get(message.uuid)
+      // drop the message if the remote uuid hasn't announced itself
+      if (!connectionContext) {
+        console.warn(`Connection not found for remoteUuid: ${message.uuid}`)
+        return
+      }
+      connectionContext.connection.close()
+      ctx.connectionContexts.delete(message.uuid)
+      return
+    }
+    // "init" | "message" | "message-port-close"
+    if (message.remoteUuid !== ctx.getUuid()) return
+    const connection = ctx.connectionContexts.get(message.uuid)
+    if (!connection) {
+      console.warn(`Connection not found for remoteUuid: ${message.uuid}`)
+      return
+    }
+    if (connection.type !== 'unidirectional-emitting') {
+      connection.eventTarget.dispatchEvent(
+        new CustomEvent('message', { detail: message })
+      )
+    }
+  })
+
+  ctx.sendMessage({ type: 'announce' })
+}
