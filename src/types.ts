@@ -24,7 +24,7 @@ export type Structurable =
   /** not really structureable but here for convenience */
   | void
   | undefined
-  | BigInt
+  | bigint
   | Date
   | RegExp
   | Blob

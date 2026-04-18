@@ -1,19 +1,13 @@
-import type { IsJsonOnlyTransport } from '../utils'
-import type { RevivableContext, UnderlyingType } from './utils'
+import type { RevivableContext, UnderlyingType, BoxedBuffer } from './utils'
 
-import { BoxBase } from './utils'
-import { isJsonOnlyTransport } from '../utils'
+import { BoxBase, boxBuffer, reviveBuffer } from './utils'
 
 export const type = 'arrayBuffer' as const
 
 type BoxedArrayBuffer<T extends ArrayBuffer, T2 extends RevivableContext> =
   & typeof BoxBase
   & { type: typeof type }
-  & (
-      IsJsonOnlyTransport<T2['transport']> extends true ? { base64Buffer: string }
-    : IsJsonOnlyTransport<T2['transport']> extends false ? { arrayBuffer: ArrayBuffer }
-    : { base64Buffer: string } | { arrayBuffer: ArrayBuffer }
-  )
+  & BoxedBuffer<T2>
   & { [UnderlyingType]: T }
 
 export const isType = (value: unknown): value is ArrayBuffer =>
@@ -23,19 +17,13 @@ export const box = <T extends ArrayBuffer, T2 extends RevivableContext>(
   value: T,
   context: T2,
 ): BoxedArrayBuffer<T, T2> =>
-  (isJsonOnlyTransport(context.transport)
-    ? { ...BoxBase, type, base64Buffer: new Uint8Array(value).toBase64() }
-    : { ...BoxBase, type, arrayBuffer: value }
-  ) as unknown as BoxedArrayBuffer<T, T2>
+  ({ ...BoxBase, type, ...boxBuffer(value, context) }) as unknown as BoxedArrayBuffer<T, T2>
 
 export const revive = <T extends BoxedArrayBuffer<ArrayBuffer, RevivableContext>>(
   value: T,
   _context: RevivableContext,
 ): T[UnderlyingType] =>
-  ('arrayBuffer' in value
-    ? value.arrayBuffer
-    : Uint8Array.fromBase64(value.base64Buffer).buffer
-  ) as T[UnderlyingType]
+  reviveBuffer(value) as T[UnderlyingType]
 
 const typeCheck = () => {
   const boxed = box(new ArrayBuffer(10), {} as RevivableContext)

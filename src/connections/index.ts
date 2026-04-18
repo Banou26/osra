@@ -26,6 +26,9 @@ export * from './utils'
 
 export type ConnectionModule<T> = {
   readonly type: string
+  // ProtocolContext<any> rather than ProtocolContext<readonly RevivableModule[]>
+  // for the same bivariance reason as RevivableModule.box — concrete modules
+  // declare narrower context generics than the shared interface can express.
   readonly init: (ctx: ProtocolContext<any>) => void
   readonly Messages?: T
 }
@@ -76,28 +79,12 @@ export const startConnections = <
     Promise.withResolvers<Capable<MergedModules>>()
 
   let uuid: Uuid = globalThis.crypto.randomUUID()
-  let aborted = false
-  if (unregisterSignal) {
-    unregisterSignal.addEventListener('abort', () => {
-      aborted = true
-    })
-  }
 
   const sendMessage = (message: MessageVariant) => {
-    if (aborted) return
+    if (unregisterSignal?.aborted) return
     if (!isEmitTransport(transport)) return
-    const transferables = getTransferableObjects(message)
-    sendOsraMessage(
-      transport,
-      {
-        [OSRA_KEY]: key,
-        name,
-        uuid,
-        ...message
-      },
-      origin,
-      transferables
-    )
+    const envelope = { [OSRA_KEY]: key, name, uuid, ...message }
+    sendOsraMessage(transport, envelope, origin, getTransferableObjects(envelope))
   }
 
   const protocolEventTarget = createTypedEventTarget<{ message: CustomEvent<Message<MergedModules>> }>()
@@ -115,7 +102,7 @@ export const startConnections = <
     createConnectionEventTarget: createTypedEventTarget,
   }
 
-  const listener = async (message: Message<MergedModules>, _: MessageContext) => {
+  const listener = (message: Message<MergedModules>, _: MessageContext) => {
     // own message looped back on the channel
     if (message.uuid === uuid) return
     protocolEventTarget.dispatchEvent(

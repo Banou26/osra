@@ -1,10 +1,9 @@
-import type { RevivableContext } from './utils'
+import type { RevivableContext, BoxBase as BoxBaseType } from './utils'
 import type { UnderlyingType } from '.'
 
 import { BoxBase } from './utils'
-import { EventChannel } from '../utils/event-channel'
 import {
-  box as boxMessagePort,
+  createRevivableChannel,
   revive as reviveMessagePort,
   BoxedMessagePort
 } from './message-port'
@@ -19,12 +18,10 @@ type ChunkMessage<T = unknown> = Promise<ReadableStreamReadResult<T>>
 
 type Msg = PullContext | ChunkMessage
 
-export type BoxedReadableStream<T extends ReadableStream = ReadableStream> = {
-  __OSRA_BOX__: 'revivable'
-  type: typeof type
-  port: BoxedMessagePort<Msg>
-  [UnderlyingType]: T
-}
+export type BoxedReadableStream<T extends ReadableStream = ReadableStream> =
+  & BoxBaseType<typeof type>
+  & { port: BoxedMessagePort<Msg> }
+  & { [UnderlyingType]: T }
 
 export const isType = (value: unknown): value is ReadableStream =>
   value instanceof ReadableStream
@@ -33,14 +30,13 @@ export const box = <T extends ReadableStream, T2 extends RevivableContext>(
   value: T,
   context: T2
 ): BoxedReadableStream<T> => {
-  // EventChannel (pass-by-reference) — live Promises etc. flow through
-  // unchanged; message-port boxes on the wire.
-  const { port1: localPort, port2: remotePort } = new EventChannel<Msg, Msg>()
-
+  const { localPort, boxedRemote } = createRevivableChannel<Msg>(context)
   const reader = value.getReader()
 
   localPort.addEventListener('message', ({ data }) => {
     if ('type' in data && data.type === 'pull') {
+      // reader.read() is a Promise — posting it live works because localPort
+      // (ProtocolPort or EventPort) boxes it internally for the transport.
       localPort.postMessage(reader.read())
     } else {
       reader.cancel()
@@ -49,11 +45,7 @@ export const box = <T extends ReadableStream, T2 extends RevivableContext>(
   })
   localPort.start()
 
-  return {
-    ...BoxBase,
-    type,
-    port: boxMessagePort(remotePort, context)
-  } as BoxedReadableStream<T>
+  return { ...BoxBase, type, port: boxedRemote } as BoxedReadableStream<T>
 }
 
 export const revive = <T extends BoxedReadableStream, T2 extends RevivableContext>(
@@ -64,26 +56,23 @@ export const revive = <T extends BoxedReadableStream, T2 extends RevivableContex
   port.start()
 
   return new ReadableStream({
-    start(_controller) {},
-    pull(controller) {
-      return new Promise<void>((resolve, reject) => {
-        port.addEventListener('message', ({ data }) => {
-          if (!(data instanceof Promise)) return
-          data
-            .then(result => {
-              if (result.done) controller.close()
-              else controller.enqueue(result.value)
-              resolve()
-            })
-            .catch(reject)
-        }, { once: true })
-        port.postMessage({ type: 'pull' })
-      })
-    },
-    cancel() {
+    pull: (controller) => new Promise<void>((resolve, reject) => {
+      port.addEventListener('message', ({ data }) => {
+        if (!(data instanceof Promise)) return
+        data
+          .then(result => {
+            if (result.done) controller.close()
+            else controller.enqueue(result.value)
+            resolve()
+          })
+          .catch(reject)
+      }, { once: true })
+      port.postMessage({ type: 'pull' })
+    }),
+    cancel: () => {
       port.postMessage({ type: 'cancel' })
       port.close()
-    }
+    },
   }) as T[UnderlyingType]
 }
 

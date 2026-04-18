@@ -1,11 +1,11 @@
 import type { Capable } from '../types'
 import type { UnderlyingType, RevivableContext, BoxBase as BoxBaseType } from './utils'
 import type { TypedMessagePort } from '../utils/typed-message-channel'
+import type { AnyPort } from './message-port'
 
-import { BoxBase } from './utils'
-import { EventChannel, EventPort } from '../utils/event-channel'
+import { BoxBase, serializeError } from './utils'
 import {
-  box as boxMessagePort,
+  createRevivableChannel,
   revive as reviveMessagePort,
   BoxedMessagePort,
 } from './message-port'
@@ -39,14 +39,16 @@ const functionRegistry = new FinalizationRegistry<FunctionCleanupInfo>((info) =>
 // Promise executor returns, so under memory pressure GC can collect it before
 // the result arrives — the Promise hangs forever. We remove the entries in
 // the once-listener (and on reject).
-const inFlightReturnPorts = new Set<EventPort<any>>()
+const inFlightReturnPorts = new Set<AnyPort<any>>()
 
-export type CallContext = [
-  /** Return-value port that the callee will post the result on. */
-  EventPort<ResultMessage>,
-  /** Arguments that will be passed to the function call */
-  Capable[]
-]
+/** Call-site payload (sent over the wire): the return port is pre-boxed by
+ *  createRevivableChannel; args are passed live and boxed by the channel. */
+type SentCallContext = [BoxedMessagePort<ResultMessage>, Capable[]]
+
+/** Call-site payload as received by the callee, after box-side revival: the
+ *  return port is now a live AnyPort<ResultMessage> (ProtocolPort on clone,
+ *  EventPort on JSON); args are revived. */
+export type CallContext = [AnyPort<ResultMessage>, Capable[]]
 
 export type BoxedFunction<T extends (...args: any[]) => any = (...args: any[]) => any> =
   & BoxBaseType<typeof type>
@@ -66,16 +68,10 @@ export const box = <T extends (...args: any[]) => any, T2 extends RevivableConte
   value: T & CapableFunction<T>,
   context: T2
 ): BoxedFunction<T> => {
-  // EventChannel (pass-by-reference) — live values flow through unchanged;
-  // the message-port revivable boxes them if/when they cross the transport.
-  const { port1: localPort, port2: remotePort } = new EventChannel<CallMessage, CallMessage>()
+  const { localPort, boxedRemote } = createRevivableChannel<CallMessage>(context)
 
   const cleanup = () => {
     localPort.close()
-    // remotePort was wrapped by message-port.box; closing it fires the
-    // _onClose hook which frees allocator entries and context.eventTarget
-    // listeners on this side.
-    remotePort.close()
   }
 
   localPort.addEventListener('message', ({ data }) => {
@@ -90,7 +86,7 @@ export const box = <T extends (...args: any[]) => any, T2 extends RevivableConte
         (resolved) => returnPort.postMessage({ __osra_ok__: true, value: resolved }),
         (error: unknown) => returnPort.postMessage({
           __osra_err__: true,
-          error: error instanceof Error ? (error.stack ?? String(error)) : String(error),
+          error: serializeError(error),
         }),
       )
       .finally(() => {
@@ -101,11 +97,7 @@ export const box = <T extends (...args: any[]) => any, T2 extends RevivableConte
   })
   localPort.start()
 
-  return {
-    ...BoxBase,
-    type,
-    port: boxMessagePort(remotePort, context)
-  } as BoxedFunction<T>
+  return { ...BoxBase, type, port: boxedRemote } as BoxedFunction<T>
 }
 
 export const revive = <T extends BoxedFunction, T2 extends RevivableContext>(
@@ -116,29 +108,23 @@ export const revive = <T extends BoxedFunction, T2 extends RevivableContext>(
 
   const func = (...args: Capable[]) =>
     new Promise((resolve, reject) => {
-      const channel = new EventChannel<ResultMessage, ResultMessage>()
-      const returnValueLocalPort = channel.port1
-      const returnValueRemotePort = channel.port2
+      const { localPort: returnLocal, boxedRemote: returnBoxedRemote } =
+        createRevivableChannel<ResultMessage>(context)
       // Pin ports to a module-level Set so GC can't collect the
       // port↔listener cycle while the call is in flight. Without this,
       // under memory pressure the listener (and thus `resolve`) can be
       // collected before the result arrives — the Promise hangs forever.
-      inFlightReturnPorts.add(returnValueLocalPort)
-      inFlightReturnPorts.add(returnValueRemotePort)
-      port.postMessage([returnValueRemotePort, args])
+      inFlightReturnPorts.add(returnLocal)
 
-      returnValueLocalPort.addEventListener('message', ({ data: result }) => {
+      port.postMessage([returnBoxedRemote, args] as SentCallContext as unknown as CallMessage)
+
+      returnLocal.addEventListener('message', ({ data: result }) => {
         if ('__osra_ok__' in result) resolve(result.value)
         else reject(result.error)
-        returnValueLocalPort.close()
-        // Close remote side too — its _onClose (set by message-port.box)
-        // tears down handler state on this connection so per-call state
-        // doesn't accumulate across iterations.
-        returnValueRemotePort.close()
-        inFlightReturnPorts.delete(returnValueLocalPort)
-        inFlightReturnPorts.delete(returnValueRemotePort)
+        returnLocal.close()
+        inFlightReturnPorts.delete(returnLocal)
       }, { once: true })
-      returnValueLocalPort.start()
+      returnLocal.start()
     })
 
   // Register the function for automatic cleanup when garbage collected

@@ -1,15 +1,14 @@
 import type { Capable } from '../types'
-import type { RevivableContext } from './utils'
+import type { RevivableContext, BoxBase as BoxBaseType } from './utils'
 import type { UnderlyingType } from '.'
 import type {
   BadFieldValue, BadFieldPath, BadFieldParent,
   ErrorMessage, BadValue, Path, ParentObject
 } from '../utils/capable-check'
 
-import { BoxBase } from './utils'
-import { EventChannel } from '../utils/event-channel'
+import { BoxBase, serializeError } from './utils'
 import {
-  box as boxMessagePort,
+  createRevivableChannel,
   revive as reviveMessagePort,
   BoxedMessagePort
 } from './message-port'
@@ -46,12 +45,10 @@ type ExtractCapable<T> = T extends Promise<infer U>
 const isCapablePromise = <T, U extends Capable = ExtractCapable<T>>(value: T): value is T & Promise<U> =>
   value instanceof Promise
 
-export type BoxedPromise<T extends Capable = Capable> = {
-  __OSRA_BOX__: 'revivable'
-  type: typeof type
-  port: BoxedMessagePort<Context>
-  [UnderlyingType]: T
-}
+export type BoxedPromise<T extends Capable = Capable> =
+  & BoxBaseType<typeof type>
+  & { port: BoxedMessagePort<Context> }
+  & { [UnderlyingType]: T }
 
 export const isType = (value: unknown): value is Promise<any> =>
   value instanceof Promise
@@ -62,9 +59,10 @@ export const box = <T, T2 extends RevivableContext>(
 ): BoxedPromise<ExtractCapable<T>> => {
   if (!isCapablePromise(value)) throw new TypeError('Expected Promise')
   const promise = value
-  // EventChannel (pass-by-reference) — we can post live values raw; the
-  // message-port revivable will box them when they cross the transport.
-  const { port1: localPort, port2: remotePort } = new EventChannel<Context, Context>()
+  // Revivable-internal channel: localPort auto-boxes on send regardless of
+  // transport (ProtocolPort over MessageChannel on clone, EventChannel +
+  // portId on JSON). We just post the result and let it take care of boxing.
+  const { localPort, boxedRemote } = createRevivableChannel<Context>(context)
 
   const sendResult = (result: Context) => {
     localPort.postMessage(result)
@@ -75,14 +73,10 @@ export const box = <T, T2 extends RevivableContext>(
     .then((data: ExtractCapable<T>) => sendResult({ type: 'resolve', data }))
     .catch((error: unknown) => sendResult({
       type: 'reject',
-      error: error instanceof Error ? (error.stack ?? String(error)) : String(error),
+      error: serializeError(error),
     }))
 
-  return {
-    ...BoxBase,
-    type,
-    port: boxMessagePort(remotePort, context)
-  } as BoxedPromise<ExtractCapable<T>>
+  return { ...BoxBase, type, port: boxedRemote } as BoxedPromise<ExtractCapable<T>>
 }
 
 export const revive = <T extends BoxedPromise, T2 extends RevivableContext>(

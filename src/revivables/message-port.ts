@@ -77,9 +77,13 @@ export type BoxedMessagePort<T = Capable> =
      *  user-level MessagePort aren't supported in this mode. */
     | { portId: Uuid, synthetic: false }
     /** The origin was a real MessagePort and the transport supports
-     *  structured clone — the port is transferred on the wire and the
-     *  receiver gets the same live MessagePort. */
-    | { port: AnyPort<T> }
+     *  structured clone — the port is transferred on the wire. When
+     *  `autoBox` is true, the revive side wraps it in a `ProtocolPort`
+     *  that auto-boxes outgoing / auto-revives incoming payloads so
+     *  live values (Promises/Functions) flow through unchanged. When
+     *  `autoBox` is absent/false, the receiver gets the raw MessagePort
+     *  with structured-clone semantics (used for user-owned ports). */
+    | { port: AnyPort<T>, autoBox?: boolean }
   )
   & { [UnderlyingType]: TypedMessagePort<T> }
 
@@ -148,6 +152,7 @@ export const isType = (value: unknown): value is MessagePort | EventPort<Structu
 export const box = <T, T2 extends RevivableContext = RevivableContext>(
   value: StructurableTransferablePort<T>,
   context: T2,
+  options?: { autoBox?: boolean },
 ): BoxedMessagePort<T> => {
   // Synthetic EventPorts are not structured-clonable, so even when the
   // transport supports cloning we have to route them via portId — otherwise
@@ -197,7 +202,7 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
       sendMessage: context.sendMessage,
       remoteUuid: context.remoteUuid,
       portId,
-      cleanup: performCleanup
+      cleanup: performCleanup,
     }, liveRef)
 
     liveRef.addEventListener('message', messagePortListener as EventListener)
@@ -211,7 +216,7 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
         context.sendMessage({
           type: 'message-port-close',
           remoteUuid: context.remoteUuid,
-          portId
+          portId,
         })
         performCleanup()
       }
@@ -221,33 +226,114 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
 
     return { ...BoxBase, type, portId, synthetic } as BoxedMessagePort<T>
   }
-  return { ...BoxBase, type, port: value } as BoxedMessagePort<T>
+  return {
+    ...BoxBase,
+    type,
+    port: value,
+    ...(options?.autoBox ? { autoBox: true } : {}),
+  } as BoxedMessagePort<T>
 }
 
 export const revive = <T extends Capable, T2 extends RevivableContext>(
   value: BoxedMessagePort<T>,
   context: T2,
 ): TypedMessagePort<T> => {
-  if ('port' in value) return value.port
+  if ('port' in value) {
+    // autoBox: box side was an internal protocol channel — wrap the
+    // transferred MessagePort so outgoing/incoming payloads auto-box/revive
+    // and live values (Promises/Functions) flow through unchanged.
+    if (value.autoBox) {
+      return createProtocolPort<T>(value.port as TypedMessagePort<Capable>, context)
+    }
+    return value.port
+  }
   // portId path: origin was either a synthetic EventPort (pass-by-ref for
   // live values) or a real MessagePort we couldn't clone (JSON-only
   // transport). EventPorts must revive as EventPorts so that live values
   // pass through unchanged; MessagePorts must revive as MessagePorts so
   // the receiver sees the same shape they'd get from a real `transfer`.
-  return value.synthetic
-    ? reviveSynthetic(value.portId, context)
-    : reviveProxyMessagePort(value.portId, context)
+  return reviveViaPortId<T>(value.portId, context, value.synthetic)
 }
 
-const reviveSynthetic = <T extends Capable>(
+/**
+ * Thin wrapper around a real MessagePort: auto-boxes outgoing messages and
+ * auto-revives incoming ones. Lets revivables treat it like an EventTarget
+ * (addEventListener / postMessage / start / close) that transparently
+ * carries live values (Promises, Functions, …) over a clone-only transport.
+ */
+const createProtocolPort = <T>(
+  port: TypedMessagePort<Capable>,
+  ctx: RevivableContext,
+): TypedMessagePort<T> => {
+  const target = new EventTarget() as TypedMessagePort<T>
+  const onMessage = ({ data }: MessageEvent<Capable>): void => {
+    target.dispatchEvent(new MessageEvent('message', {
+      data: recursiveRevive(data, ctx),
+    }))
+  }
+  port.addEventListener('message', onMessage)
+  target.postMessage = (data: T, opt?: Transferable[] | StructuredSerializeOptions) => {
+    const boxed = recursiveBox(data as Capable, ctx)
+    const transferables = getTransferableObjects(boxed)
+    const extra = Array.isArray(opt) ? opt : []
+    port.postMessage(boxed, extra.length ? [...transferables, ...extra] : transferables)
+  }
+  target.start = () => port.start()
+  target.close = () => {
+    port.removeEventListener('message', onMessage)
+    port.close()
+  }
+  return target
+}
+
+/**
+ * Factory for revivable-internal channels. Returns a local port used by the
+ * revivable and a pre-boxed remote port ready to embed in the revivable's
+ * Boxed* structure. The local port auto-boxes/revives on clone transports
+ * (via ProtocolPort over a MessageChannel) and passes by reference on JSON
+ * transports (via EventChannel → portId routing).
+ *
+ * Revivables can post live values (Promises/Functions/…) on `localPort`
+ * without caring about the transport mode.
+ */
+export const createRevivableChannel = <T extends Capable>(
+  context: RevivableContext,
+): { localPort: AnyPort<T>, boxedRemote: BoxedMessagePort<T> } => {
+  if (isJsonOnlyTransport(context.transport)) {
+    const { port1, port2 } = new EventChannel<T, T>()
+    return {
+      localPort: port1,
+      boxedRemote: box(port2 as StructurableTransferablePort<T>, context),
+    }
+  }
+  const { port1, port2 } = new MessageChannel() as unknown as {
+    port1: TypedMessagePort<Capable>
+    port2: TypedMessagePort<Capable>
+  }
+  return {
+    localPort: createProtocolPort<T>(port1, context) as unknown as AnyPort<T>,
+    boxedRemote: box(port2 as unknown as StructurableTransferablePort<T>, context, { autoBox: true }),
+  }
+}
+
+/**
+ * Revive a port that was routed via portId. Covers both the synthetic
+ * (EventChannel, pass-by-reference) and proxy (real MessageChannel,
+ * structured-clone) paths — they share all cleanup/routing logic, only
+ * differing in which channel type is instantiated, whether transferables
+ * are listed on internal postMessage, and whether userPort exposes an
+ * explicit close hook.
+ */
+const reviveViaPortId = <T extends Capable>(
   portId: Uuid,
   context: RevivableContext,
+  synthetic: boolean,
 ): TypedMessagePort<T> => {
   const { portHandlers } = getState(context)
-  // Pass-by-reference EventChannel — live Promises/Functions/streams that
-  // appear in the revived payload flow through unchanged, which structured
-  // clone (a real MessageChannel) would refuse.
-  const { port1: userPort, port2: internalPort } = new EventChannel<T, T>()
+  const { port1: userPort, port2: internalPort } =
+    synthetic
+      ? new EventChannel<T, T>()
+      : new MessageChannel() as { port1: TypedMessagePort<T>, port2: TypedMessagePort<T> }
   const userPortRef = new WeakRef(userPort)
 
   let cleanedUp = false
@@ -255,7 +341,7 @@ const reviveSynthetic = <T extends Capable>(
     if (cleanedUp) return
     cleanedUp = true
     portHandlers.delete(portId)
-    internalPort.removeEventListener('message', internalPortListener)
+    internalPort.removeEventListener('message', internalPortListener as EventListener)
     internalPort.close()
     const port = userPortRef.deref()
     if (port) messagePortRegistry.unregister(port)
@@ -273,10 +359,13 @@ const reviveSynthetic = <T extends Capable>(
       return
     }
     const revivedData = recursiveRevive(message.data, context) as T
-    internalPort.postMessage(revivedData)
+    // Real MessagePorts need must-transfer items on the transfer list;
+    // EventPorts pass by reference so no transferable list applies.
+    if (synthetic) internalPort.postMessage(revivedData)
+    else internalPort.postMessage(revivedData, getTransferableObjects(revivedData))
   }
 
-  function internalPortListener({ data }: MessageEvent<T>) {
+  const internalPortListener = ({ data }: MessageEvent<T>) => {
     context.sendMessage({
       type: 'message',
       remoteUuid: context.remoteUuid,
@@ -293,87 +382,21 @@ const reviveSynthetic = <T extends Capable>(
   }, userPort)
 
   // EventPort exposes an explicit close hook — wire it so user.close() tears
-  // down listeners locally and notifies the remote side.
-  userPort._onClose = () => {
-    if (cleanedUp) return
-    context.sendMessage({
-      type: 'message-port-close',
-      remoteUuid: context.remoteUuid,
-      portId,
-    })
-    performCleanup()
-  }
-
-  internalPort.addEventListener('message', internalPortListener)
-  internalPort.start()
-
-  portHandlers.set(portId, handler)
-
-  return userPort
-}
-
-const reviveProxyMessagePort = <T extends Capable>(
-  portId: Uuid,
-  context: RevivableContext,
-): TypedMessagePort<T> => {
-  const { portHandlers } = getState(context)
-  // Real MessageChannel — the origin was a user-owned MessagePort so the
-  // receiver must see a real MessagePort too (instanceof MessagePort,
-  // transferable further, …). Payloads cross structured clone between
-  // internalPort and userPort; live Promises/Functions nested inside a
-  // user-level MessagePort payload are not supported in JSON mode.
-  const { port1: userPort, port2: internalPort } = new MessageChannel() as {
-    port1: TypedMessagePort<T>
-    port2: TypedMessagePort<T>
-  }
-  const userPortRef = new WeakRef(userPort)
-
-  let cleanedUp = false
-  const performCleanup = () => {
-    if (cleanedUp) return
-    cleanedUp = true
-    portHandlers.delete(portId)
-    internalPort.removeEventListener('message', internalPortListener)
-    internalPort.close()
-    const port = userPortRef.deref()
-    if (port) messagePortRegistry.unregister(port)
-  }
-
-  const handler = (message: Messages) => {
-    if (message.type === 'message-port-close') {
+  // down listeners locally and notifies the remote side. Real MessagePorts
+  // have no equivalent; they rely on the FinalizationRegistry to notify.
+  if (userPort instanceof EventPort) {
+    userPort._onClose = () => {
+      if (cleanedUp) return
+      context.sendMessage({
+        type: 'message-port-close',
+        remoteUuid: context.remoteUuid,
+        portId,
+      })
       performCleanup()
-      userPortRef.deref()?.close()
-      return
     }
-    const port = userPortRef.deref()
-    if (!port) {
-      performCleanup()
-      return
-    }
-    const revivedData = recursiveRevive(message.data, context) as T
-    internalPort.postMessage(revivedData, getTransferableObjects(revivedData))
   }
 
-  const internalPortListener = ({ data }: MessageEvent<T>) => {
-    context.sendMessage({
-      type: 'message',
-      remoteUuid: context.remoteUuid,
-      data: recursiveBox(data, context),
-      portId,
-    })
-  }
-
-  // Real MessagePorts have no explicit-close callback — we rely on the
-  // FinalizationRegistry to notify the remote side once the user drops
-  // their reference.
-  messagePortRegistry.register(userPort, {
-    sendMessage: context.sendMessage,
-    remoteUuid: context.remoteUuid,
-    portId,
-    cleanup: performCleanup,
-  }, userPort)
-
-  internalPort.addEventListener('message', internalPortListener)
+  internalPort.addEventListener('message', internalPortListener as EventListener)
   internalPort.start()
 
   portHandlers.set(portId, handler)

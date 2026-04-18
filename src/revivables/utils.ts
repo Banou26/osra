@@ -5,8 +5,10 @@ import type {
   Uuid,
 } from '../types'
 import type { Transport } from '../utils/transport'
+import type { IsJsonOnlyTransport } from '../utils/type-guards'
 
 import { OSRA_BOX } from '../types'
+import { isJsonOnlyTransport } from '../utils/type-guards'
 
 export type { UnderlyingType } from '../utils/type'
 
@@ -63,3 +65,31 @@ export const isRevivableBox = (value: unknown): value is BoxBase =>
   && typeof value === 'object'
   && OSRA_BOX in value
   && value[OSRA_BOX] === 'revivable'
+
+/** Stable string form for an unknown rejection value. Errors keep their stack;
+ *  everything else gets coerced via `String()`. Used wherever a Promise/Function
+ *  rejection has to cross the wire as a serialisable string. */
+export const serializeError = (error: unknown): string =>
+  error instanceof Error ? (error.stack ?? String(error)) : String(error)
+
+/** Wire shape for an ArrayBuffer carried by a JSON or clone transport. JSON
+ *  paths emit a base64 string (so the buffer survives JSON.stringify); clone
+ *  paths pass the buffer through structured-clone unchanged. */
+export type BoxedBuffer<TCtx extends RevivableContext = RevivableContext> =
+  IsJsonOnlyTransport<TCtx['transport']> extends true ? { base64Buffer: string }
+  : IsJsonOnlyTransport<TCtx['transport']> extends false ? { arrayBuffer: ArrayBuffer }
+  : { base64Buffer: string } | { arrayBuffer: ArrayBuffer }
+
+export const boxBuffer = <TCtx extends RevivableContext>(
+  buffer: ArrayBuffer,
+  context: TCtx,
+): BoxedBuffer<TCtx> =>
+  (isJsonOnlyTransport(context.transport)
+    ? { base64Buffer: new Uint8Array(buffer).toBase64() }
+    : { arrayBuffer: buffer }
+  ) as BoxedBuffer<TCtx>
+
+export const reviveBuffer = (boxed: { arrayBuffer: ArrayBuffer } | { base64Buffer: string }): ArrayBuffer =>
+  'arrayBuffer' in boxed
+    ? boxed.arrayBuffer
+    : Uint8Array.fromBase64(boxed.base64Buffer).buffer

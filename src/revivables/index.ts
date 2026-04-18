@@ -17,12 +17,19 @@ import * as response from './response'
 import * as request from './request'
 import * as identity from './identity'
 import * as transfer from './transfer'
+import * as map from './map'
+import * as set from './set'
 
 export { identity } from './identity'
 export { transfer } from './transfer'
 
 export * from './utils'
 
+// Module-level signatures intentionally widen to `any` on the box/revive/init
+// parameters: each module's concrete box takes a narrower input than the
+// shared interface can express, and TS treats `readonly`-property function
+// types contravariantly. The `any`s here are the bivariance escape hatch that
+// lets concrete modules be assigned to `RevivableModule[]` at all.
 export type RevivableModule<
   T extends string = string,
   T2 = any,
@@ -51,7 +58,9 @@ export const defaultRevivableModules = [
   readableStream,
   abortSignal,
   response,
-  request
+  request,
+  map,
+  set,
 ] as const
 
 export type DefaultRevivableModules = typeof defaultRevivableModules
@@ -71,6 +80,18 @@ const findReviveModule = (
 
 const isPlainObject = (value: unknown): value is Record<string, Capable> =>
   !!value && typeof value === 'object' && Object.getPrototypeOf(value) === Object.prototype
+
+const descend = <TOut>(value: unknown, transform: (v: Capable) => unknown): TOut => {
+  if (Array.isArray(value)) {
+    return value.map(v => transform(v)) as TOut
+  }
+  if (isPlainObject(value)) {
+    return Object.fromEntries(
+      Object.entries<Capable>(value).map(([k, v]) => [k, transform(v)]),
+    ) as TOut
+  }
+  return value as TOut
+}
 
 export const box = <
   T extends Capable,
@@ -94,22 +115,15 @@ export const recursiveBox = <
   context: RevivableContext<TModules>
 ): DeepReplaceWithBox<T, TModules[number]> => {
   type ReturnCastType = DeepReplaceWithBox<T, TModules[number]>
-
+  // Already-boxed values pass through — revivables (e.g. createRevivableChannel)
+  // may embed a pre-built BoxedX in their outgoing payload; descending into it
+  // would re-box raw ports nested inside.
+  if (isRevivableBox(value)) return value as ReturnCastType
   const handledByModule = findBoxModule(value, context.revivableModules)
   if (handledByModule) {
     return handledByModule.box(value, context) as ReturnCastType
   }
-
-  if (Array.isArray(value)) {
-    return value.map(v => recursiveBox(v, context)) as ReturnCastType
-  }
-  if (isPlainObject(value)) {
-    return Object.fromEntries(
-      Object.entries<Capable>(value)
-        .map(([key, v]) => [key, recursiveBox(v, context)])
-    ) as ReturnCastType
-  }
-  return value as ReturnCastType
+  return descend<ReturnCastType>(value, v => recursiveBox(v, context))
 }
 
 export const revive = <
@@ -135,22 +149,11 @@ export const recursiveRevive = <
   context: RevivableContext<TModules>
 ): DeepReplaceWithRevive<T, TModules[number]> => {
   type ReturnCastType = DeepReplaceWithRevive<T, TModules[number]>
-
   if (isRevivableBox(value)) {
     const handledByModule = findReviveModule(value, context.revivableModules)
     if (handledByModule) {
       return handledByModule.revive(value, context) as ReturnCastType
     }
   }
-
-  if (Array.isArray(value)) {
-    return value.map(v => recursiveRevive(v, context)) as ReturnCastType
-  }
-  if (isPlainObject(value)) {
-    return Object.fromEntries(
-      Object.entries<Capable>(value)
-        .map(([key, v]) => [key, recursiveRevive(v, context)])
-    ) as ReturnCastType
-  }
-  return value as ReturnCastType
+  return descend<ReturnCastType>(value, v => recursiveRevive(v, context))
 }

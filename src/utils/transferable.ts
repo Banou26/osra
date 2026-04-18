@@ -1,5 +1,5 @@
-import { OSRA_BOX } from '../types'
 import { transfer } from '../revivables/transfer'
+import { isRevivableBox } from '../revivables/utils'
 import { instanceOfAny, isClonable, isTransferable } from './type-guards'
 
 export { transfer }
@@ -17,51 +17,13 @@ const isMustTransfer = (value: unknown): value is Transferable =>
     globalThis.OffscreenCanvas,
   ])
 
-/**
- * Variant of getTransferableObjects that only collects must-transfer types
- * (MessagePort, streams, OffscreenCanvas). Used when re-postMessage'ing in
- * the same realm to route data via a real MessageChannel — clonable
- * transferables (ArrayBuffer, ImageBitmap) should be cloned, not detached,
- * so other listeners on the source can still read them.
- */
-export const getMustTransferOnly = (value: unknown): Transferable[] => {
-  const transferables: Transferable[] = []
-  const seen = new WeakSet<object>()
-
-  const recurse = (value: unknown): void => {
-    if (!value || typeof value !== 'object') return
-    if (seen.has(value)) return
-    seen.add(value)
-
-    if (isMustTransfer(value)) {
-      transferables.push(value)
-      return
-    }
-
-    if (Array.isArray(value)) {
-      for (const item of value) recurse(item)
-      return
-    }
-
-    for (const item of Object.values(value)) recurse(item)
-  }
-
-  recurse(value)
-  return transferables
-}
-
-// Structural check for a transfer revivable box: we deliberately don't import
-// the transfer module's `type` constant here, it's a soft coupling via the
-// string literal so this walker doesn't drag the whole revivables graph in.
+// Structural check for a transfer revivable box. Uses the 'transfer' string
+// literal rather than importing the module's exported `type` constant, so the
+// walker stays decoupled from the module's full graph.
 // The `degraded` flag is set by transfer.box() when the platform can't
 // actually transfer — a degraded box is a no-op for the walker.
 const isTransferBox = (value: unknown): value is { inner: unknown, degraded: boolean } =>
-  !!value
-  && typeof value === 'object'
-  && OSRA_BOX in value
-  && value[OSRA_BOX] === 'revivable'
-  && 'type' in value
-  && value.type === 'transfer'
+  isRevivableBox(value) && value.type === 'transfer'
 
 /**
  * Walk a boxed message and collect the list of Transferable references that
