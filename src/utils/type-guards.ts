@@ -102,8 +102,8 @@ export const isWebExtensionPort = (value: unknown, connectPort: boolean = false)
 
 export type WebExtSender = NonNullable<WebExtPort['sender']>
 
-// Structural guard shared by WebExtOnConnect and WebExtOnMessage — both expose
-// the `addListener` / `hasListener` / `removeListener` trio and nothing else.
+// Structural guard for any `addListener` / `hasListener` / `removeListener` event.
+// Not enough on its own to tell onConnect from onMessage — they have identical shapes.
 const hasListenerApi = (value: unknown): boolean =>
   !!value
   && typeof value === 'object'
@@ -113,9 +113,16 @@ const hasListenerApi = (value: unknown): boolean =>
   && 'hasListener' in value
   && 'removeListener' in value
 
+// Identity-compare against the runtime's onConnect events: structural checks
+// can't distinguish onConnect from onMessage, and misclassifying onMessage as
+// onConnect makes us treat each incoming message as a port and crash on
+// `message.onMessage.addListener`.
 export type WebExtOnConnect = WebExtRuntime['onConnect']
-export const isWebExtensionOnConnect = (value: unknown): value is WebExtOnConnect =>
-  hasListenerApi(value)
+export const isWebExtensionOnConnect = (value: unknown): value is WebExtOnConnect => {
+  const runtime = getWebExtensionRuntime()
+  if (!runtime) return false
+  return value === runtime.onConnect || value === runtime.onConnectExternal
+}
 
 export type WebExtOnMessage = WebExtRuntime['onMessage']
 export const isWebExtensionOnMessage = (value: unknown): value is WebExtOnMessage =>
