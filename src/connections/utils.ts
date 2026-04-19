@@ -49,6 +49,7 @@ export type ProtocolContext<
   revivableModules: TModules
   connectionContexts: Map<string, ConnectionContext<TModules>>
   getUuid: () => Uuid
+  presetRemoteUuid?: Uuid
   sendMessage: (message: MessageVariant) => void
   protocolEventTarget: ProtocolEventTarget<TModules>
   resolveRemoteValue: (value: Capable<TModules>) => void
@@ -65,4 +66,6 @@ export type StartConnectionsOptions<
   origin?: string
   unregisterSignal?: AbortSignal
   revivableModules?: TUserModules
+  uuid?: Uuid
+  remoteUuid?: Uuid
 }

@@ -1,7 +1,26 @@
 import { expect } from 'chai'
 
+import type { Message, Uuid } from '../../src/types'
+import type { Transport } from '../../src'
+
 import { expose } from '../../src/index'
 import { makeJsonTransport } from './utils'
+
+// Spy transport over a MessagePort — records every outbound envelope so
+// tests can assert on uuids and message types exchanged during the handshake.
+// Transferables must be forwarded: boxed functions/streams embed real
+// MessagePorts that aren't structured-clonable without explicit transfer.
+const spyTransport = (port: MessagePort, sink: Message[]): Transport => ({
+  receive: (listener) => {
+    port.addEventListener('message', event =>
+      listener(event.data as Message, {}),
+    )
+  },
+  emit: (message, transferables) => {
+    sink.push(message)
+    port.postMessage(message, transferables ?? [])
+  },
+})
 
 // unregisterSignal: aborting it removes the protocol-level transport listener.
 // Already-established function/promise ports keep working (they own their own
@@ -66,6 +85,96 @@ export const remoteNameFiltering = async () => {
     { transport: port2, name: 'client', remoteName: 'server' },
   )
   await expect(remote.ping()).to.eventually.equal('pong')
+}
+
+// Passing `uuid` overrides the randomly-generated instance uuid. Every
+// outbound envelope from that side must carry the custom value.
+export const customUuidIsUsed = async () => {
+  const { port1, port2 } = new MessageChannel()
+  port1.start()
+  port2.start()
+
+  const sent: Message[] = []
+  const customUuid = '11111111-1111-1111-1111-111111111111' as Uuid
+
+  const value = { ping: async () => 'pong' }
+  expose(value, { transport: port1 })
+
+  const remote = await expose<typeof value>(
+    {},
+    { transport: spyTransport(port2, sent), uuid: customUuid },
+  )
+
+  await expect(remote.ping()).to.eventually.equal('pong')
+  expect(sent.length).to.be.greaterThan(0)
+  for (const m of sent) expect(m.uuid).to.equal(customUuid)
+}
+
+// When both sides preset each other's uuid via `remoteUuid`, the announce
+// handshake is skipped entirely: init flows directly and no envelope of
+// type 'announce' is ever emitted.
+export const presetRemoteUuidSkipsAnnounce = async () => {
+  const { port1, port2 } = new MessageChannel()
+  port1.start()
+  port2.start()
+
+  const uuidA = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' as Uuid
+  const uuidB = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb' as Uuid
+
+  const sentFromA: Message[] = []
+  const sentFromB: Message[] = []
+
+  const value = { ping: async () => 'pong' }
+  expose(value, {
+    transport: spyTransport(port1, sentFromA),
+    uuid: uuidA,
+    remoteUuid: uuidB,
+  })
+
+  const remote = await expose<typeof value>(
+    {},
+    {
+      transport: spyTransport(port2, sentFromB),
+      uuid: uuidB,
+      remoteUuid: uuidA,
+    },
+  )
+
+  await expect(remote.ping()).to.eventually.equal('pong')
+
+  const all = [...sentFromA, ...sentFromB]
+  expect(all.length).to.be.greaterThan(0)
+  for (const m of all) expect(m.type).to.not.equal('announce')
+  // Both sides must have skipped straight to init.
+  expect(sentFromA.some(m => m.type === 'init')).to.be.true
+  expect(sentFromB.some(m => m.type === 'init')).to.be.true
+  expect(sentFromA.every(m => m.uuid === uuidA)).to.be.true
+  expect(sentFromB.every(m => m.uuid === uuidB)).to.be.true
+}
+
+// Aborting `unregisterSignal` tears down a side's protocol listener. Calling
+// expose() again on the same transport must complete a fresh handshake — the
+// remote side doesn't re-expose, it just receives the new announce through
+// its still-live listener and creates a second connection for the new uuid.
+export const reregisterAfterCloseContinuesMessaging = async () => {
+  const { port1, port2 } = new MessageChannel()
+  port1.start()
+  port2.start()
+
+  const serverValue = { ping: async (n: number) => n + 1 }
+  expose(serverValue, { transport: port2 })
+
+  const controller1 = new AbortController()
+  const client1 = await expose<typeof serverValue>(
+    {},
+    { transport: port1, unregisterSignal: controller1.signal },
+  )
+  expect(await client1.ping(1)).to.equal(2)
+
+  controller1.abort()
+
+  const client2 = await expose<typeof serverValue>({}, { transport: port1 })
+  expect(await client2.ping(41)).to.equal(42)
 }
 
 // JSON-only transport: same coverage as keyIsolation to exercise the JSON path.

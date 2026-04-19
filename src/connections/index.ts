@@ -67,7 +67,9 @@ export const startConnections = <
     key = OSRA_DEFAULT_KEY,
     origin = '*',
     unregisterSignal,
-    revivableModules: _userRevivableModules
+    revivableModules: _userRevivableModules,
+    uuid: _uuid,
+    remoteUuid: presetRemoteUuid,
   }: StartConnectionsOptions<TUserModules>
 ): Promise<T> => {
   const transport = normalizeTransport(_transport)
@@ -78,7 +80,7 @@ export const startConnections = <
   const { promise: remoteValuePromise, resolve: resolveRemoteValue } =
     Promise.withResolvers<Capable<MergedModules>>()
 
-  const uuid: Uuid = globalThis.crypto.randomUUID()
+  const uuid: Uuid = _uuid ?? globalThis.crypto.randomUUID()
 
   const sendMessage = (message: MessageVariant) => {
     if (unregisterSignal?.aborted) return
@@ -95,6 +97,7 @@ export const startConnections = <
     revivableModules: mergedRevivableModules,
     connectionContexts,
     getUuid: () => uuid,
+    presetRemoteUuid,
     sendMessage,
     protocolEventTarget,
     resolveRemoteValue,

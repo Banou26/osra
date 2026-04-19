@@ -167,5 +167,27 @@ export const init = <TModules extends readonly RevivableModule[]>(
     )
   })
 
+  if (ctx.presetRemoteUuid !== undefined) {
+    const eventTarget = ctx.createConnectionEventTarget()
+    const connectionContext = {
+      type: 'bidirectional',
+      eventTarget,
+      connection:
+        startBidirectionalConnection<TModules>({
+          transport: ctx.transport,
+          value: ctx.value,
+          remoteUuid: ctx.presetRemoteUuid,
+          eventTarget,
+          send: (m) => ctx.sendMessage(m as MessageVariant),
+          revivableModules: ctx.revivableModules
+        })
+    } satisfies ConnectionContext<TModules>
+    ctx.connectionContexts.set(ctx.presetRemoteUuid, connectionContext)
+    connectionContext.connection.remoteValue.then((remoteValue) =>
+      ctx.resolveRemoteValue(remoteValue)
+    )
+    return
+  }
+
   ctx.sendMessage({ type: 'announce' })
 }
