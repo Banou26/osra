@@ -142,3 +142,64 @@ export const identityTwiceAcrossCallsCallable = async (transport: Transport) => 
   expect(same).to.equal(true)
   expect(result).to.equal(99)
 }
+
+// 9. Round-trip: a function we send and the peer echoes back (identity-wrapped
+// on the return path too) arrives as the ORIGINAL reference on our side —
+// not a new proxy tunneling back through the peer.
+export const roundTripReturnsOriginalFunction = async (transport: Transport) => {
+  const value = async (fn: () => number) => identity(fn)
+  expose(value, { transport })
+  const remote = await expose<typeof value>({}, { transport })
+
+  const fn = () => 42
+  const echoed = await remote(identity(fn))
+  expect(echoed).to.equal(fn)
+  // It is literally the original function, so calling it is a local synchronous call.
+  expect(echoed()).to.equal(42)
+}
+
+// 10. Round-trip: plain object echoed back resolves to the original reference,
+// not a structurally-equal clone.
+export const roundTripReturnsOriginalObject = async (transport: Transport) => {
+  const value = async (o: { a: number }) => identity(o)
+  expose(value, { transport })
+  const remote = await expose<typeof value>({}, { transport })
+
+  const obj = { a: 1 }
+  const echoed = await remote(identity(obj))
+  expect(echoed).to.equal(obj)
+}
+
+// 11. Repeated round-trips of the same value keep returning the same original
+// reference — not a fresh one every time.
+export const roundTripStableAcrossCalls = async (transport: Transport) => {
+  const value = async (fn: () => number) => identity(fn)
+  expose(value, { transport })
+  const remote = await expose<typeof value>({}, { transport })
+
+  const fn = () => 7
+  const [a, b, c] = await Promise.all([
+    remote(identity(fn)),
+    remote(identity(fn)),
+    remote(identity(fn)),
+  ])
+  expect(a).to.equal(fn)
+  expect(b).to.equal(fn)
+  expect(c).to.equal(fn)
+}
+
+// 12. Round-trip is per-reference, not structural. Distinct-but-equal inputs
+// must not collapse to the same echoed reference.
+export const roundTripDistinctObjectsStayDistinct = async (transport: Transport) => {
+  const value = async (o: { a: number }) => identity(o)
+  expose(value, { transport })
+  const remote = await expose<typeof value>({}, { transport })
+
+  const obj1 = { a: 1 }
+  const obj2 = { a: 1 }
+  const echoed1 = await remote(identity(obj1))
+  const echoed2 = await remote(identity(obj2))
+  expect(echoed1).to.equal(obj1)
+  expect(echoed2).to.equal(obj2)
+  expect(echoed1).to.not.equal(echoed2)
+}
