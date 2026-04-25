@@ -20,6 +20,7 @@ import * as transfer from './transfer'
 import * as map from './map'
 import * as set from './set'
 import * as bigInt from './bigint'
+import * as event from './event'
 import * as eventTarget from './event-target'
 
 export { identity } from './identity'
@@ -64,6 +65,7 @@ export const defaultRevivableModules = [
   map,
   set,
   bigInt,
+  event,
   // eventTarget MUST be last among instanceof-EventTarget revivables —
   // MessagePort, AbortSignal, EventPort, Window, Worker, etc. all extend
   // EventTarget; the more specific revivables (messagePort/abortSignal) need
