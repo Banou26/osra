@@ -1,14 +1,10 @@
 import type { Capable } from '../types'
 import type { UnderlyingType, RevivableContext, BoxBase as BoxBaseType } from './utils'
-import type { TypedMessagePort } from '../utils/typed-message-channel'
-import type { AnyPort } from './message-port'
+import type { Handle, HandleId } from '../utils/remote-handle'
 
 import { BoxBase, serializeError } from './utils'
-import {
-  createRevivableChannel,
-  revive as reviveMessagePort,
-  BoxedMessagePort,
-} from './message-port'
+import { recursiveBox, recursiveRevive } from '.'
+import { createHandle, adoptHandle } from '../utils/remote-handle'
 
 export const type = 'function' as const
 
@@ -16,62 +12,17 @@ type ResultMessage =
   | { __osra_ok__: true, value: Capable }
   | { __osra_err__: true, error: string }
 
-type CallMessage = CallContext | { __osra_close__: true }
+/** Wire payload of a single call: [return-handle id, recursively-boxed args]. */
+type CallPayload = [HandleId, Capable[]]
 
-// Per-call record so the FinalizationRegistry callback (and the synchronous
-// postMessage-failed path) can reject the right Promise and tear down the
-// matching return port. Each record is owned by a single in-flight call.
 type CallRecord = {
-  returnLocal: AnyPort<ResultMessage>
   reject: (error: unknown) => void
+  returnHandle: Handle
 }
-
-/**
- * FinalizationRegistry for automatically cleaning up function ports when the
- * revived function is garbage collected. Also rejects any in-flight calls that
- * were initiated through this function — without this, a caller that drops
- * `func` while awaiting its result would leak the return port and leave the
- * Promise hung forever.
- */
-type FunctionCleanupInfo = {
-  port: TypedMessagePort<CallMessage>
-  inFlight: Set<CallRecord>
-}
-
-const functionRegistry = new FinalizationRegistry<FunctionCleanupInfo>((info) => {
-  try {
-    info.port.postMessage({ __osra_close__: true })
-  } catch { /* Port may already be closed */ }
-  try {
-    info.port.close()
-  } catch { /* Port may already be closed */ }
-  for (const { returnLocal, reject } of info.inFlight) {
-    try { reject(new Error('osra function was garbage collected before result arrived')) } catch { /* listener gone */ }
-    inFlightReturnPorts.delete(returnLocal)
-    try { returnLocal.close() } catch { /* port may already be closed */ }
-  }
-  info.inFlight.clear()
-})
-
-// Pins caller-side return-value ports between send and result arriving. The
-// cycle (localPort↔listener↔remotePort) has no external anchor after the
-// Promise executor returns, so under memory pressure GC can collect it before
-// the result arrives — the Promise hangs forever. We remove the entries in
-// the once-listener and in every terminal-state cleanup path below.
-const inFlightReturnPorts = new Set<AnyPort<any>>()
-
-/** Call-site payload (sent over the wire): the return port is pre-boxed by
- *  createRevivableChannel; args are passed live and boxed by the channel. */
-type SentCallContext = [BoxedMessagePort<ResultMessage>, Capable[]]
-
-/** Call-site payload as received by the callee, after box-side revival: the
- *  return port is now a live AnyPort<ResultMessage> (ProtocolPort on clone,
- *  EventPort on JSON); args are revived. */
-export type CallContext = [AnyPort<ResultMessage>, Capable[]]
 
 export type BoxedFunction<T extends (...args: any[]) => any = (...args: any[]) => any> =
   & BoxBaseType<typeof type>
-  & { port: BoxedMessagePort<CallMessage> }
+  & { handleId: HandleId }
   & { [UnderlyingType]: (...args: Parameters<T>) => Promise<Awaited<ReturnType<T>>> }
 
 type CapableFunction<T> = T extends (...args: infer P) => infer R
@@ -85,107 +36,116 @@ export const isType = (value: unknown): value is (...args: any[]) => any =>
 
 export const box = <T extends (...args: any[]) => any, T2 extends RevivableContext>(
   value: T & CapableFunction<T>,
-  context: T2
+  context: T2,
 ): BoxedFunction<T> => {
-  const { localPort, boxedRemote } = createRevivableChannel<CallMessage>(context)
-
-  const cleanup = () => {
-    localPort.close()
-  }
-
-  localPort.addEventListener('message', ({ data }) => {
-    if (!Array.isArray(data)) {
-      // __osra_close__ sentinel — only non-array message on this channel
-      cleanup()
-      return
-    }
-    const [returnPort, args] = data
-    ;(async () => value(...(args as Parameters<T>)))()
-      .then(
-        (resolved) => {
-          try {
-            returnPort.postMessage({ __osra_ok__: true, value: resolved })
-          } catch (postErr) {
-            // Result wasn't clonable / boxable — surface as a remote error
-            // instead of letting the caller hang waiting for a message that
-            // can never be sent.
+  // Owner side: every incoming call arrives as a single handle-message —
+  // no per-call channel, no `__osra_close__` sentinel. The closure pins
+  // `value` as long as this entry lives in the connection's handle table;
+  // peer-side release (proxy GC or explicit) tears the entry down, after
+  // which `value` is free to be collected if the user holds no other ref.
+  const funcHandle = createHandle(context, {
+    onMessage: (payload) => {
+      const [returnId, boxedArgs] = payload as CallPayload
+      // Adopt-only: no tracked value — the return handle's lifetime is
+      // bounded by the call (released in finally below).
+      const returnHandle = adoptHandle(context, returnId, {})
+      const args = recursiveRevive(boxedArgs as Capable, context) as Parameters<T>
+      ;(async () => value(...args))()
+        .then(
+          (resolved) => {
+            const result: ResultMessage = { __osra_ok__: true, value: resolved as Capable }
             try {
-              returnPort.postMessage({
-                __osra_err__: true,
-                error: serializeError(postErr),
-              })
-            } catch { /* error itself failed to serialise; caller cleanup will reject */ }
-          }
-        },
-        (error: unknown) => {
-          try {
-            returnPort.postMessage({
-              __osra_err__: true,
-              error: serializeError(error),
-            })
-          } catch { /* serialised error failed to post; caller cleanup will reject */ }
-        },
-      )
-      .finally(() => {
-        // Close after the message has flushed through the microtask queue so
-        // the result actually dispatches before we tear the channel down.
-        queueMicrotask(() => returnPort.close())
-      })
+              returnHandle.send(recursiveBox(result as Capable, context))
+            } catch (postErr) {
+              // Result wasn't boxable — surface as a remote error so the
+              // caller's await rejects instead of hanging.
+              try {
+                returnHandle.send(recursiveBox(
+                  { __osra_err__: true, error: serializeError(postErr) } satisfies ResultMessage as Capable,
+                  context,
+                ))
+              } catch { /* error itself failed to serialise */ }
+            }
+          },
+          (error: unknown) => {
+            try {
+              returnHandle.send(recursiveBox(
+                { __osra_err__: true, error: serializeError(error) } satisfies ResultMessage as Capable,
+                context,
+              ))
+            } catch { /* serialised error failed to post */ }
+          },
+        )
+        .finally(() => returnHandle.release())
+    },
   })
-  localPort.start()
-
-  return { ...BoxBase, type, port: boxedRemote } as BoxedFunction<T>
+  return { ...BoxBase, type, handleId: funcHandle.id } as BoxedFunction<T>
 }
 
 export const revive = <T extends BoxedFunction, T2 extends RevivableContext>(
   value: T,
-  context: T2
+  context: T2,
 ): T[UnderlyingType] => {
-  const port = reviveMessagePort(value.port, context)
-  // Per-function bag of in-flight calls — captured by both the FinalizationRegistry
-  // callback (rejects on func GC) and each call's once-listener (removes on settle).
   const inFlight = new Set<CallRecord>()
 
+  // Captured by both `func`'s closure (so calls can post on it) and
+  // `funcHandle.onRelease` (so abandoned awaits stop hanging when the
+  // handle dies). Crucially, neither of those reaches `func` — the FR
+  // can fire on `func` once the user drops their last reference.
+  let funcHandle: Handle
   const func = (...args: Capable[]) =>
     new Promise((resolve, reject) => {
-      const { localPort: returnLocal, boxedRemote: returnBoxedRemote } =
-        createRevivableChannel<ResultMessage>(context)
-      // Pin ports to a module-level Set so GC can't collect the
-      // port↔listener cycle while the call is in flight. Without this,
-      // under memory pressure the listener (and thus `resolve`) can be
-      // collected before the result arrives — the Promise hangs forever.
-      inFlightReturnPorts.add(returnLocal)
-      const record: CallRecord = { returnLocal, reject }
+      const returnHandle = createHandle(context, {
+        onMessage: (payload) => {
+          const result = recursiveRevive(payload, context) as ResultMessage
+          if ('__osra_ok__' in result) resolve(result.value)
+          else reject(result.error)
+          inFlight.delete(record)
+          returnHandle.release()
+        },
+      })
+      const record: CallRecord = { reject, returnHandle }
       inFlight.add(record)
-
-      returnLocal.addEventListener('message', ({ data: result }) => {
-        if ('__osra_ok__' in result) resolve(result.value)
-        else reject(result.error)
-        returnLocal.close()
-        inFlightReturnPorts.delete(returnLocal)
-        inFlight.delete(record)
-      }, { once: true })
-      returnLocal.start()
-
-      // Boxing the args may throw synchronously (DataCloneError on a clone
-      // transport, JSON cycle on a JSON transport). Without this catch, the
-      // pin and the in-flight record would leak forever even though the
-      // Promise itself rejects via the executor's implicit try/catch.
       try {
-        port.postMessage([returnBoxedRemote, args] as SentCallContext as unknown as CallMessage)
+        const callPayload: CallPayload = [returnHandle.id, args]
+        funcHandle.send(recursiveBox(callPayload as unknown as Capable, context))
       } catch (sendErr) {
-        inFlightReturnPorts.delete(returnLocal)
+        // Synchronous send-failure (DataCloneError on clone, JSON cycle
+        // on JSON). Without this, the in-flight record would leak and
+        // the executor's implicit catch would still reject the Promise —
+        // we'd just keep a dead `record` in the set forever.
         inFlight.delete(record)
-        try { returnLocal.close() } catch { /* may already be closed */ }
+        returnHandle.release()
         reject(sendErr)
       }
     })
 
-  // Register the function for automatic cleanup when garbage collected. The
-  // callback also rejects every in-flight call so abandoned awaits stop hanging.
-  functionRegistry.register(func, { port, inFlight }, func)
+  funcHandle = adoptHandle(context, value.handleId, {
+    onRelease: () => {
+      // Defer the in-flight rejection. Two motivations: (1) V8's liveness
+      // analysis can drop the proxy local right after the last
+      // `await callback()` syntactic use even though the Promise is still
+      // pending — FR then fires before the result macrotask gets dispatched,
+      // and a tight `await (await remote())()` loop would reject calls
+      // that were a queue-tick away from resolving normally. (2) If the
+      // owner explicitly released, in-flight values may already be on the
+      // wire heading our way; we'd rather deliver them than reject. The
+      // returnHandle entries stay in `state.handles` during the deferral,
+      // so an arriving result can still find its handler and resolve;
+      // each successful onMessage removes its own record from `inFlight`,
+      // and the sweep below only catches calls genuinely stuck.
+      // funcDropRejectsPending tolerates 2s — 100ms is safely under that.
+      setTimeout(() => {
+        for (const { reject, returnHandle } of inFlight) {
+          try { reject(new Error('osra function was garbage collected before result arrived')) } catch { /* listener gone */ }
+          returnHandle.release()
+        }
+        inFlight.clear()
+      }, 100)
+    },
+  }, func)
 
-  return func
+  return func as T[UnderlyingType]
 }
 
 const typeCheck = () => {

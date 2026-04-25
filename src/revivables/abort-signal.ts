@@ -1,13 +1,10 @@
 import type { Capable } from '../types'
 import type { RevivableContext, BoxBase as BoxBaseType } from './utils'
-import type { BoxedMessagePort } from './message-port'
+import type { HandleId } from '../utils/remote-handle'
 
 import { BoxBase } from './utils'
 import { recursiveBox, recursiveRevive } from '.'
-import {
-  createRevivableChannel,
-  revive as reviveMessagePort,
-} from './message-port'
+import { createHandle, adoptHandle } from '../utils/remote-handle'
 
 export const type = 'abortSignal' as const
 
@@ -21,7 +18,7 @@ export type BoxedAbortSignal =
   & {
     aborted: boolean
     reason?: Capable
-    port: BoxedMessagePort<AbortMessage>
+    handleId?: HandleId
   }
 
 export const isType = (value: unknown): value is AbortSignal =>
@@ -31,29 +28,33 @@ export const box = <T extends AbortSignal, T2 extends RevivableContext>(
   value: T,
   context: T2,
 ): BoxedAbortSignal => {
-  const { localPort, boxedRemote } = createRevivableChannel<AbortMessage>(context)
-
-  if (!value.aborted) {
-    value.addEventListener('abort', () => {
-      localPort.postMessage({ type: 'abort', reason: value.reason as Capable })
-      localPort.close()
-    }, { once: true })
-  } else {
-    localPort.close()
+  if (value.aborted) {
+    // Eagerly-aborted reason rides the wrapper. recursiveBox lets reasons
+    // carrying live values (Function/Promise/EventTarget/…) survive — the
+    // outer recursiveBox sees OSRA_BOX on this object and short-circuits.
+    return {
+      ...BoxBase,
+      type,
+      aborted: true,
+      reason: recursiveBox(value.reason as Capable, context) as Capable,
+    }
   }
+  const handle = createHandle(context, {})
+  value.addEventListener('abort', () => {
+    try {
+      handle.send(recursiveBox(
+        { type: 'abort', reason: value.reason as Capable } satisfies AbortMessage as Capable,
+        context,
+      ))
+    } catch { /* reason not serialisable / connection torn down — peer never sees abort, but local cleanup still proceeds */ }
+    handle.release()
+  }, { once: true })
 
-  // Eagerly-aborted reason rides the wrapper instead of the channel, so it
-  // has to go through recursiveBox here — the outer recursiveBox will see
-  // OSRA_BOX on this object and short-circuit before descending into `reason`.
-  // Without this, a reason carrying live values (Function/Promise/EventTarget/…)
-  // throws DataCloneError on clone transports and silently loses fields on
-  // JSON transports.
   return {
     ...BoxBase,
     type,
-    aborted: value.aborted,
-    reason: value.aborted ? recursiveBox(value.reason as Capable, context) as Capable : undefined,
-    port: boxedRemote,
+    aborted: false,
+    handleId: handle.id,
   }
 }
 
@@ -68,14 +69,17 @@ export const revive = <T extends BoxedAbortSignal, T2 extends RevivableContext>(
     return controller.signal
   }
 
-  const port = reviveMessagePort(value.port, context)
-  port.start()
+  if (value.handleId === undefined) return controller.signal
 
-  port.addEventListener('message', ({ data: message }) => {
-    if (message.type === 'abort') {
-      controller.abort(recursiveRevive(message.reason as Capable, context))
-      port.close()
-    }
+  // Closure pins `controller`. The handle's entry sits in the connection
+  // table — the controller stays addressable even if user code drops the
+  // signal handle (signals retain their AbortController via spec anyway).
+  const handle = adoptHandle(context, value.handleId, {
+    onMessage: (payload) => {
+      const message = recursiveRevive(payload, context) as AbortMessage
+      controller.abort(message.reason)
+      handle.release()
+    },
   })
 
   return controller.signal

@@ -1,22 +1,19 @@
 import type { Capable } from '../types'
 import type { RevivableContext, BoxBase as BoxBaseType } from './utils'
 import type { UnderlyingType } from '.'
+import type { HandleId } from '../utils/remote-handle'
 import type {
   BadFieldValue, BadFieldPath, BadFieldParent,
   ErrorMessage, BadValue, Path, ParentObject
 } from '../utils/capable-check'
 
 import { BoxBase, serializeError } from './utils'
-import {
-  createRevivableChannel,
-  revive as reviveMessagePort,
-  BoxedMessagePort,
-  AnyPort,
-} from './message-port'
+import { recursiveBox, recursiveRevive } from '.'
+import { createHandle, adoptHandle } from '../utils/remote-handle'
 
 export const type = 'promise' as const
 
-export type Context =
+export type ResultMessage =
   | { type: 'resolve', data: Capable }
   | { type: 'reject', error: string }
 
@@ -48,65 +45,71 @@ const isCapablePromise = <T, U extends Capable = ExtractCapable<T>>(value: T): v
 
 export type BoxedPromise<T extends Capable = Capable> =
   & BoxBaseType<typeof type>
-  & { port: BoxedMessagePort<Context> }
+  & { handleId: HandleId }
   & { [UnderlyingType]: T }
-
-// Pins the revived port between executor return and result arrival. The
-// port↔listener cycle has no external anchor — the caller only holds the
-// returned Promise, which references its native resolvers, not the port.
-// Without this Set, GC under memory pressure can collect the cycle before
-// the result arrives and the Promise hangs forever. Mirrors the
-// inFlightReturnPorts pattern in function.ts.
-const inFlightPromisePorts = new Set<AnyPort<Context>>()
 
 export const isType = (value: unknown): value is Promise<any> =>
   value instanceof Promise
 
 export const box = <T, T2 extends RevivableContext>(
   value: CapablePromise<T>,
-  context: T2
+  context: T2,
 ): BoxedPromise<ExtractCapable<T>> => {
   if (!isCapablePromise(value)) throw new TypeError('Expected Promise')
-  const promise = value
-  // Revivable-internal channel: localPort auto-boxes on send regardless of
-  // transport (ProtocolPort over MessageChannel on clone, EventChannel +
-  // portId on JSON). We just post the result and let it take care of boxing.
-  const { localPort, boxedRemote } = createRevivableChannel<Context>(context)
-
-  const sendResult = (result: Context) => {
-    localPort.postMessage(result)
-    localPort.close()
+  // One-shot handle: send result, release. The promise itself owns the
+  // settlement; no GC tracking needed on this side.
+  const handle = createHandle(context, {})
+  const trySend = (msg: ResultMessage) => {
+    try { handle.send(recursiveBox(msg as Capable, context)) }
+    catch (sendErr) {
+      // Resolve value wasn't serialisable. Surface it as a reject so the
+      // peer's await rejects rather than hanging — mirrors function.ts's
+      // DataCloneError fallback. If the error envelope itself fails too,
+      // there's nothing left to do.
+      if (msg.type === 'resolve') {
+        try {
+          handle.send(recursiveBox(
+            { type: 'reject', error: serializeError(sendErr) } satisfies ResultMessage as Capable,
+            context,
+          ))
+        } catch { /* error envelope failed too */ }
+      }
+    }
   }
-
-  promise
-    .then((data: ExtractCapable<T>) => sendResult({ type: 'resolve', data }))
-    .catch((error: unknown) => sendResult({
-      type: 'reject',
-      error: serializeError(error),
-    }))
-
-  return { ...BoxBase, type, port: boxedRemote } as BoxedPromise<ExtractCapable<T>>
+  value
+    .then((data: ExtractCapable<T>) => trySend({ type: 'resolve', data }))
+    .catch((error: unknown) => trySend({ type: 'reject', error: serializeError(error) }))
+    .finally(() => handle.release())
+  return { ...BoxBase, type, handleId: handle.id } as BoxedPromise<ExtractCapable<T>>
 }
 
 export const revive = <T extends BoxedPromise, T2 extends RevivableContext>(
   value: T,
-  context: T2
-) => {
-  const port = reviveMessagePort(value.port, context)
-  inFlightPromisePorts.add(port)
-  return new Promise<T[UnderlyingType]>((resolve, reject) => {
-    port.addEventListener('message', ({ data: result }) => {
-      if (result.type === 'resolve') {
-        resolve(result.data as T[UnderlyingType])
-      } else {
-        reject(result.error)
-      }
-      port.close()
-      inFlightPromisePorts.delete(port)
-    }, { once: true })
-    port.start()
+  context: T2,
+) =>
+  new Promise<T[UnderlyingType]>((resolve, reject) => {
+    // Closure pins `resolve`/`reject` until the handle delivers — the
+    // handle entry lives in the connection's handle table, which is held
+    // by the connection state, so there's no risk of the cycle getting
+    // collected mid-flight (the issue the old `inFlightPromisePorts` Set
+    // worked around).
+    const handle = adoptHandle(context, value.handleId, {
+      onMessage: (payload) => {
+        const result = recursiveRevive(payload, context) as ResultMessage
+        if (result.type === 'resolve') resolve(result.data as T[UnderlyingType])
+        else reject(result.error)
+        handle.release()
+      },
+      onRelease: () => {
+        // Owner side dropped without sending — surface as a reject so the
+        // caller's await stops hanging. The opposite direction (we drop
+        // the proxy Promise) is handled implicitly: the Promise object
+        // itself isn't tracked here, so dropping it just abandons the
+        // executor and the handle releases when peer's send arrives.
+        reject(new Error('osra promise was released before settling'))
+      },
+    })
   })
-}
 
 const typeCheck = () => {
   const boxed = box(Promise.resolve(1 as const), {} as RevivableContext)
