@@ -6,11 +6,9 @@ import type {
   Capable, MessageEventTarget, MessageFields,
   MessageVariant, Uuid,
 } from '../types'
-import type { HandleMessages } from '../utils/remote-handle'
 
 import { recursiveBox, recursiveRevive } from '../revivables'
 import { isEmitTransport, isReceiveTransport } from '../utils/type-guards'
-import { init as initRemoteHandle } from '../utils/remote-handle'
 
 export const type = 'bidirectional' as const
 
@@ -28,7 +26,6 @@ export declare const Messages: <
   T extends Capable<TModules> = Capable<TModules>
 >(modules: TModules, value: T) =>
   | InitMessage<TModules, T>
-  | HandleMessages
 
 export type Messages<
   TModules extends readonly RevivableModule[] = DefaultRevivableModules,
@@ -74,10 +71,6 @@ export const startBidirectionalConnection = <
     revivableModules
   } satisfies ConnectionRevivableContext<TModules>
 
-  // Remote-handle state must exist before any revivable runs — function /
-  // message-port / event-target all open handles in their own init or box.
-  initRemoteHandle(revivableContext)
-
   for (const module of revivableModules) {
     module.init?.(revivableContext)
   }
@@ -116,8 +109,7 @@ export type BidirectionalConnection<
  * init() — mounts the bidirectional mode on the shared protocol context.
  * Only activates when the transport can both emit and receive. Owns the
  * announce / close handshake and routes per-connection messages (init /
- * osra-handle-message / osra-handle-release) to the right connection's
- * eventTarget.
+ * message / message-port-close) to the right connection's eventTarget.
  */
 export const init = <TModules extends readonly RevivableModule[]>(
   ctx: ProtocolContext<TModules>
@@ -164,7 +156,7 @@ export const init = <TModules extends readonly RevivableModule[]>(
       ctx.connectionContexts.delete(message.uuid)
       return
     }
-    // "init" | "osra-handle-message" | "osra-handle-release"
+    // "init" | "message" | "message-port-close"
     if (message.remoteUuid !== ctx.getUuid()) return
     const connection = ctx.connectionContexts.get(message.uuid)
     // drop messages that arrive before the remote has announced itself,

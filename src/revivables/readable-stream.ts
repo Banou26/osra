@@ -1,20 +1,26 @@
-import type { Capable } from '../types'
 import type { RevivableContext, BoxBase as BoxBaseType } from './utils'
 import type { UnderlyingType } from '.'
-import type { HandleId } from '../utils/remote-handle'
 
 import { BoxBase } from './utils'
-import { recursiveBox, recursiveRevive } from '.'
-import { createHandle, adoptHandle } from '../utils/remote-handle'
+import {
+  createRevivableChannel,
+  revive as reviveMessagePort,
+  BoxedMessagePort
+} from './message-port'
 
 export const type = 'readableStream' as const
 
-type Outgoing = ReadableStreamReadResult<Capable>
-type Incoming = { type: 'pull' } | { type: 'cancel' }
+export type PullContext = {
+  type: 'pull' | 'cancel'
+}
+
+type ChunkMessage<T = unknown> = Promise<ReadableStreamReadResult<T>>
+
+type Msg = PullContext | ChunkMessage
 
 export type BoxedReadableStream<T extends ReadableStream = ReadableStream> =
   & BoxBaseType<typeof type>
-  & { handleId: HandleId }
+  & { port: BoxedMessagePort<Msg> }
   & { [UnderlyingType]: T }
 
 export const isType = (value: unknown): value is ReadableStream =>
@@ -22,83 +28,52 @@ export const isType = (value: unknown): value is ReadableStream =>
 
 export const box = <T extends ReadableStream, T2 extends RevivableContext>(
   value: T,
-  context: T2,
+  context: T2
 ): BoxedReadableStream<T> => {
+  const { localPort, boxedRemote } = createRevivableChannel<Msg>(context)
   const reader = value.getReader()
-  const handle = createHandle(context, {
-    onMessage: (payload) => {
-      const message = payload as Incoming
-      if (message.type === 'pull') {
-        reader.read().then(
-          (result) => {
-            try {
-              handle.send(recursiveBox(result as unknown as Capable, context))
-            } catch { /* chunk not serialisable / connection torn down */ }
-            if (result.done) handle.release()
-          },
-          () => {
-            // Read error: surface as `done: true` on a fresh chunk message
-            // so the receiver's pull-promise rejects cleanly.
-            try {
-              handle.send(recursiveBox(
-                { done: true, value: undefined } satisfies Outgoing as unknown as Capable,
-                context,
-              ))
-            } catch { /* connection torn down */ }
-            handle.release()
-            try { reader.releaseLock() } catch { /* may be released */ }
-          },
-        )
-        return
-      }
-      // 'cancel' — receiver tore down their stream
-      reader.cancel().catch(() => {/* cancel can reject; drop */})
-      handle.release()
-    },
+
+  localPort.addEventListener('message', ({ data }) => {
+    if ('type' in data && data.type === 'pull') {
+      // reader.read() is a Promise — posting it live works because localPort
+      // (ProtocolPort or EventPort) boxes it internally for the transport.
+      localPort.postMessage(reader.read())
+    } else {
+      reader.cancel()
+      localPort.close()
+    }
   })
-  return { ...BoxBase, type, handleId: handle.id } as BoxedReadableStream<T>
+  localPort.start()
+
+  return { ...BoxBase, type, port: boxedRemote } as BoxedReadableStream<T>
 }
 
 export const revive = <T extends BoxedReadableStream, T2 extends RevivableContext>(
   value: T,
-  context: T2,
+  context: T2
 ): T[UnderlyingType] => {
-  let pendingPull: { resolve: () => void, reject: (e: unknown) => void, controller: ReadableStreamDefaultController } | undefined
-
-  const handle = adoptHandle(context, value.handleId, {
-    onMessage: (payload) => {
-      const result = recursiveRevive(payload, context) as Outgoing
-      const p = pendingPull
-      if (!p) return
-      pendingPull = undefined
-      if (result.done) p.controller.close()
-      else p.controller.enqueue(result.value)
-      p.resolve()
-    },
-    onRelease: () => {
-      // Owner side dropped — fail any pending pull so the consumer stops
-      // hanging.
-      const p = pendingPull
-      if (p) {
-        pendingPull = undefined
-        p.reject(new Error('osra readable-stream was released before pull resolved'))
-      }
-    },
-  })
+  const port = reviveMessagePort(value.port, context)
+  port.start()
 
   return new ReadableStream({
     pull: (controller) => new Promise<void>((resolve, reject) => {
-      pendingPull = { resolve, reject, controller }
-      try { handle.send({ type: 'pull' } satisfies Incoming as Capable) }
-      catch (sendErr) {
-        pendingPull = undefined
-        reject(sendErr)
-      }
+      port.addEventListener('message', ({ data }) => {
+        if (!(data instanceof Promise)) return
+        data
+          .then(result => {
+            if (result.done) controller.close()
+            else controller.enqueue(result.value)
+            resolve()
+          })
+          .catch(reject)
+      }, { once: true })
+      port.postMessage({ type: 'pull' })
     }),
     cancel: () => {
-      try { handle.send({ type: 'cancel' } satisfies Incoming as Capable) }
-      catch { /* connection torn down */ }
-      handle.release()
+      port.postMessage({ type: 'cancel' })
+      // Defer close so the cancel message dispatches before tear-down — same
+      // pattern function.ts uses for return-port cleanup.
+      queueMicrotask(() => port.close())
     },
   }) as T[UnderlyingType]
 }
