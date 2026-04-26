@@ -124,13 +124,15 @@ export const revivedEventTargetDropTearsDownSource = async (transport: Transport
   expect(await remote.forwarderLive()).to.equal(0)
 }
 
-// Proves bug_008 func-GC path: when the revived function is collected
-// while a call is in flight, the FinalizationRegistry callback rejects
-// the pending Promise instead of letting it hang forever. We construct
-// a call the box side never answers (synchronous loop) — pre-fix the
-// caller would wait forever; post-fix it rejects within a bounded window
-// once we null the function reference and force GC.
-export const funcDropRejectsPending = async (transport: Transport) => {
+// Spec-aligned semantics: dropping the proxy mid-call does NOT reject the
+// in-flight await. Promises don't auto-reject on slowness, and there's no
+// MessagePort signal that says "sender lost interest, reject everyone" —
+// the queued call message is delivered, the receiver may or may not reply,
+// and the awaiter settles when (and only when) it does. Auto-rejecting
+// would fire spuriously whenever V8's liveness analysis collects the
+// proxy local mid-await, silently failing legitimate calls under memory
+// pressure. Users who want a deadline can `Promise.race` with a timeout.
+export const funcDropDoesNotRejectPending = async (transport: Transport) => {
   // Box-side function that never resolves — simulates a remote that
   // accepts the call but can't/won't reply.
   const value = { slow: (): Promise<number> => new Promise(() => {}) }
@@ -139,28 +141,24 @@ export const funcDropRejectsPending = async (transport: Transport) => {
   const remote = await expose<typeof value>({}, { transport })
 
   const callPromise = remote.slow().then(
-    () => 'resolved' as const,
-    () => 'rejected' as const,
+    () => 'settled' as const,
+    () => 'settled' as const,
   )
 
   // Allow the call to actually dispatch before we drop the function.
   await new Promise(r => setTimeout(r, 50))
 
-  // Clear the property that pointed to the revived function. Nulling the
-  // local binding alone isn't enough: osra's connection state retains the
-  // same init-object reference, so the function stays alive until the
-  // field itself is scrubbed. After this, the pending call's resolve/reject
-  // live inside the once-listener closure — held by returnLocal which is
-  // pinned by inFlightReturnPorts — and the finalizer is what breaks the
-  // hang by walking inFlight and rejecting each outstanding record.
+  // Drop the proxy and force GC — the box-side function port tears down
+  // (no further calls accepted), but the in-flight call's return port
+  // stays alive waiting for a result that will never come.
   ;(remote as { slow?: unknown }).slow = undefined
   await __osraForceGc()
 
   const settled = await Promise.race([
     callPromise,
-    new Promise<'hung'>(r => setTimeout(() => r('hung'), 2_000)),
+    new Promise<'hung'>(r => setTimeout(() => r('hung'), 200)),
   ])
-  expect(settled).to.equal('rejected')
+  expect(settled).to.equal('hung')
 }
 
 export const gc = {
@@ -168,5 +166,5 @@ export const gc = {
   revivedEventTargetDroppedWithoutListenerIsCollected,
   revivedFunctionDroppedIsCollected,
   revivedEventTargetDropTearsDownSource,
-  funcDropRejectsPending,
+  funcDropDoesNotRejectPending,
 }
