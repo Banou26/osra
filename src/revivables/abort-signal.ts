@@ -1,13 +1,12 @@
 import type { Capable } from '../types'
 import type { RevivableContext, BoxBase as BoxBaseType } from './utils'
-import type { UnderlyingType } from '../utils/type'
 import type { BoxedMessagePort } from './message-port'
 
 import { BoxBase } from './utils'
 import { recursiveBox, recursiveRevive } from '.'
 import {
   createRevivableChannel,
-  revive as reviveMessagePort
+  revive as reviveMessagePort,
 } from './message-port'
 
 export const type = 'abortSignal' as const
@@ -17,22 +16,21 @@ type AbortMessage = {
   reason?: Capable
 }
 
-export type BoxedAbortSignal<T extends AbortSignal = AbortSignal> =
+export type BoxedAbortSignal =
   & BoxBaseType<typeof type>
   & {
     aborted: boolean
     reason?: Capable
     port: BoxedMessagePort<AbortMessage>
   }
-  & { [UnderlyingType]: T }
 
 export const isType = (value: unknown): value is AbortSignal =>
   value instanceof AbortSignal
 
 export const box = <T extends AbortSignal, T2 extends RevivableContext>(
   value: T,
-  context: T2
-): BoxedAbortSignal<T> => {
+  context: T2,
+): BoxedAbortSignal => {
   const { localPort, boxedRemote } = createRevivableChannel<AbortMessage>(context)
 
   if (!value.aborted) {
@@ -44,24 +42,20 @@ export const box = <T extends AbortSignal, T2 extends RevivableContext>(
     localPort.close()
   }
 
-  // Eagerly-aborted reason rides the wrapper instead of the channel, so it
-  // has to go through recursiveBox here — the outer recursiveBox will see
-  // OSRA_BOX on this object and short-circuit before descending into `reason`.
-  // Without this, a reason carrying live values (Function/Promise/EventTarget/…)
-  // throws DataCloneError on clone transports and silently loses fields on
-  // JSON transports.
+  // Eagerly-aborted reason rides the wrapper, so we must box it here —
+  // recursiveBox short-circuits on OSRA_BOX without descending in.
   return {
     ...BoxBase,
     type,
     aborted: value.aborted,
     reason: value.aborted ? recursiveBox(value.reason as Capable, context) as Capable : undefined,
     port: boxedRemote,
-  } as BoxedAbortSignal<T>
+  }
 }
 
 export const revive = <T extends BoxedAbortSignal, T2 extends RevivableContext>(
   value: T,
-  context: T2
+  context: T2,
 ): AbortSignal => {
   const controller = new AbortController()
 

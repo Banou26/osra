@@ -11,9 +11,8 @@ export type BoxedSet<T extends Set<Capable> = Set<Capable>> =
   & { values: Array<Capable> }
   & { [UnderlyingType]: T }
 
-// `Set<unknown>` rather than `Set<Capable>` here breaks the Capable ↔
-// defaultRevivableModules ↔ this module type cycle. box() narrows to
-// Set<Capable> so misuse is still caught at the box site.
+// `Set<unknown>` breaks the Capable ↔ defaultRevivableModules ↔ this module
+// type cycle; box() narrows to `Set<Capable>` so misuse is caught there.
 export const isType = (value: unknown): value is Set<unknown> =>
   value instanceof Set
 

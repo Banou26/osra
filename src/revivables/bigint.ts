@@ -1,14 +1,8 @@
-import type { RevivableContext, UnderlyingType } from './utils'
+import type { RevivableContext } from './utils'
 
 import { BoxBase } from './utils'
 
 export const type = 'bigint' as const
-
-type BoxedBigInt<T extends bigint> =
-  & typeof BoxBase
-  & { type: typeof type }
-  & { value: string }
-  & { [UnderlyingType]: T }
 
 export const isType = (value: unknown): value is bigint =>
   typeof value === 'bigint'
@@ -16,14 +10,16 @@ export const isType = (value: unknown): value is bigint =>
 export const box = <T extends bigint, T2 extends RevivableContext>(
   value: T,
   _context: T2,
-): BoxedBigInt<T> =>
-  ({ ...BoxBase, type, value: value.toString() }) as BoxedBigInt<T>
+) => ({
+  ...BoxBase,
+  type,
+  value: value.toString(),
+})
 
-export const revive = <T extends BoxedBigInt<bigint>>(
+export const revive = <T extends ReturnType<typeof box>>(
   value: T,
   _context: RevivableContext,
-): T[UnderlyingType] =>
-  BigInt(value.value) as T[UnderlyingType]
+) => BigInt(value.value)
 
 const typeCheck = () => {
   const boxed = box(123n, {} as RevivableContext)

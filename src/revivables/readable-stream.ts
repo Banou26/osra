@@ -35,8 +35,7 @@ export const box = <T extends ReadableStream, T2 extends RevivableContext>(
 
   localPort.addEventListener('message', ({ data }) => {
     if ('type' in data && data.type === 'pull') {
-      // reader.read() is a Promise — posting it live works because localPort
-      // (ProtocolPort or EventPort) boxes it internally for the transport.
+      // reader.read() is a Promise — localPort boxes it for the transport.
       localPort.postMessage(reader.read())
     } else {
       reader.cancel()
@@ -71,8 +70,7 @@ export const revive = <T extends BoxedReadableStream, T2 extends RevivableContex
     }),
     cancel: () => {
       port.postMessage({ type: 'cancel' })
-      // Defer close so the cancel message dispatches before tear-down — same
-      // pattern function.ts uses for return-port cleanup.
+      // Defer close so the cancel message dispatches before tear-down.
       queueMicrotask(() => port.close())
     },
   }) as T[UnderlyingType]
