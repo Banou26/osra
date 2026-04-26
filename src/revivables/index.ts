@@ -20,18 +20,18 @@ import * as transfer from './transfer'
 import * as map from './map'
 import * as set from './set'
 import * as bigInt from './bigint'
+import * as event from './event'
 import * as eventTarget from './event-target'
+import { clonable, transferable, unclonable } from './fallbacks'
 
 export { identity } from './identity'
 export { transfer } from './transfer'
 
 export * from './utils'
 
-// Module-level signatures intentionally widen to `any` on the box/revive/init
-// parameters: each module's concrete box takes a narrower input than the
-// shared interface can express, and TS treats `readonly`-property function
-// types contravariantly. The `any`s here are the bivariance escape hatch that
-// lets concrete modules be assigned to `RevivableModule[]` at all.
+// `any` on box/revive/init: each module's concrete box has a narrower input
+// than the shared interface can express, and TS treats readonly function
+// types contravariantly. The bivariance escape hatch lets modules assign.
 export type RevivableModule<
   T extends string = string,
   T2 = any,
@@ -64,11 +64,18 @@ export const defaultRevivableModules = [
   map,
   set,
   bigInt,
+  event,
   // eventTarget MUST be last among instanceof-EventTarget revivables —
-  // MessagePort, AbortSignal, EventPort, Window, Worker, etc. all extend
-  // EventTarget; the more specific revivables (messagePort/abortSignal) need
-  // first dibs via findBoxModule's iteration order.
+  // MessagePort/AbortSignal/Window/Worker all extend EventTarget; the
+  // specific ones need first dibs via findBoxModule iteration order.
   eventTarget,
+  // Pass-through fast paths for wire-safe types — short-circuit findBoxModule
+  // before unclonable's structuredClone probe runs on a known-safe value.
+  clonable,
+  transferable,
+  // Catch-all: structuredClone-probes and coerces unclonables to `{}`,
+  // matching JSON.stringify(new WeakMap()) === "{}".
+  unclonable,
 ] as const
 
 export type DefaultRevivableModules = typeof defaultRevivableModules
@@ -123,9 +130,8 @@ export const recursiveBox = <
   context: RevivableContext<TModules>
 ): DeepReplaceWithBox<T, TModules[number]> => {
   type ReturnCastType = DeepReplaceWithBox<T, TModules[number]>
-  // Already-boxed values pass through — revivables (e.g. createRevivableChannel)
-  // may embed a pre-built BoxedX in their outgoing payload; descending into it
-  // would re-box raw ports nested inside.
+  // Already-boxed values pass through — revivables may embed a pre-built
+  // BoxedX in their outgoing payload; descending would re-box raw ports.
   if (isRevivableBox(value)) return value as ReturnCastType
   const handledByModule = findBoxModule(value, context.revivableModules)
   if (handledByModule) {
