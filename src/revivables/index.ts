@@ -22,6 +22,8 @@ import * as set from './set'
 import * as bigInt from './bigint'
 import * as event from './event'
 import * as eventTarget from './event-target'
+import * as blob from './blob'
+import * as symbol from './symbol'
 import { clonable, transferable, unclonable } from './fallbacks'
 
 export { identity } from './identity'
@@ -54,6 +56,10 @@ export const defaultRevivableModules = [
   headers,
   error,
   typedArray,
+  // blob MUST come before clonable — clonable would otherwise pass-through
+  // a Blob unboxed, which works on clone transports but loses the data on
+  // JSON. Blob's isType excludes File so File still rides clonable.
+  blob,
   promise,
   func,
   messagePort,
@@ -64,6 +70,7 @@ export const defaultRevivableModules = [
   map,
   set,
   bigInt,
+  symbol,
   event,
   // eventTarget MUST be last among instanceof-EventTarget revivables —
   // MessagePort/AbortSignal/Window/Worker all extend EventTarget; the

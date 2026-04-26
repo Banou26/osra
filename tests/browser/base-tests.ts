@@ -1042,6 +1042,59 @@ export const userEventTargetOnceUnsubscribes = async (transport: Transport) => {
   expect(await probe()).to.equal(probeAfterFirst + 1)
 }
 
+export const userBlob = async (transport: Transport) => {
+  const _blob = new Blob(['hello blob'], { type: 'text/plain' })
+  const value = { blob: _blob }
+  expose(value, { transport })
+
+  const { blob } = await expose<typeof value>({}, { transport })
+
+  // Blob revive returns Promise<Blob> — bytes arrive async over the wire.
+  const revived = await blob
+  expect(revived).to.be.instanceOf(Blob)
+  expect(revived.type).to.equal('text/plain')
+  expect(await revived.text()).to.equal('hello blob')
+  expect(revived.size).to.equal(_blob.size)
+}
+
+export const userBlobBinary = async (transport: Transport) => {
+  const bytes = new Uint8Array([0, 1, 2, 3, 250, 251, 252, 253, 254, 255])
+  const _blob = new Blob([bytes], { type: 'application/octet-stream' })
+  const value = { blob: _blob }
+  expose(value, { transport })
+
+  const { blob } = await expose<typeof value>({}, { transport })
+
+  const revived = await blob
+  expect(revived.type).to.equal('application/octet-stream')
+  const buf = new Uint8Array(await revived.arrayBuffer())
+  expect(Array.from(buf)).to.deep.equal(Array.from(bytes))
+}
+
+export const userSymbol = async (transport: Transport) => {
+  const _sym = Symbol('hello symbol')
+  const value = { sym: _sym }
+  expose(value, { transport })
+
+  const { sym } = await expose<typeof value>({}, { transport })
+
+  expect(typeof sym).to.equal('symbol')
+  expect(sym.description).to.equal('hello symbol')
+  // Description-based serialization can't preserve identity — a fresh
+  // Symbol() with the same description is intentionally !== the original.
+  expect(sym).to.not.equal(_sym)
+}
+
+export const userSymbolNoDescription = async (transport: Transport) => {
+  const value = { sym: Symbol() }
+  expose(value, { transport })
+
+  const { sym } = await expose<typeof value>({}, { transport })
+
+  expect(typeof sym).to.equal('symbol')
+  expect(sym.description).to.be.undefined
+}
+
 export const base = {
   argsAndResponse,
   callback,
@@ -1100,4 +1153,8 @@ export const base = {
   userEventTargetOnceUnsubscribes,
   userAbortSignalAlreadyAbortedWithLiveReason,
   functionNonClonableResultRejects,
+  userBlob,
+  userBlobBinary,
+  userSymbol,
+  userSymbolNoDescription,
 }

@@ -155,6 +155,6 @@ const typeCheck = () => {
   const expected: typeof fn = revived
   // @ts-expect-error - revived is the original function type, not string
   const notExpected: string = revived
-  // @ts-expect-error - cannot box a non-Capable wrapper (Symbol not assignable)
-  box({ [IDENTITY_MARKER]: true, value: Symbol() } as IdentityWrapper<symbol>, {} as RevivableContext)
+  // @ts-expect-error - cannot box a non-Capable wrapper (WeakMap not assignable)
+  box({ [IDENTITY_MARKER]: true, value: new WeakMap() } as IdentityWrapper<WeakMap<object, string>>, {} as RevivableContext)
 }

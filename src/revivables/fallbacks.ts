@@ -12,7 +12,6 @@ type AnyCtor = abstract new (...args: any[]) => unknown
 // -------------------------------------------------------------------------
 
 const TYPED_CLONABLE_CTORS = [
-  globalThis.Blob,
   globalThis.File,
   globalThis.FileList,
   globalThis.RegExp,
@@ -117,7 +116,6 @@ const isPlainObject = (value: unknown): boolean => {
 const isUnclonable = (value: unknown): boolean => {
   if (value === null) return false
   const t = typeof value
-  if (t === 'symbol') return true
   if (t !== 'object') return false
   if (Array.isArray(value)) return false
   if (isPlainObject(value)) return false

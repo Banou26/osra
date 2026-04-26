@@ -105,8 +105,8 @@ const typeCheck = () => {
   const wrongReturn: (a: number, b: string) => Promise<string> = revived
   // @ts-expect-error - wrong parameter types
   const wrongParams: (a: string, b: number) => Promise<number> = revived
-  // @ts-expect-error - non-Capable parameter type (symbols aren't structured-clonable)
-  box((a: symbol) => a.toString(), {} as RevivableContext)
+  // @ts-expect-error - non-Capable parameter type (WeakMap isn't structured-clonable)
+  box((a: WeakMap<object, string>) => a.toString(), {} as RevivableContext)
   // @ts-expect-error - non-Capable return type
-  box(() => Symbol(), {} as RevivableContext)
+  box(() => new WeakMap<object, string>(), {} as RevivableContext)
 }

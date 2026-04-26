@@ -81,6 +81,6 @@ const typeCheck = () => {
   const expected: ArrayBuffer = revived
   // @ts-expect-error - revived is ArrayBuffer, not string
   const notExpected: string = revived
-  // @ts-expect-error - cannot box a non-Capable wrapper (Symbol not assignable)
-  box({ [TRANSFER_MARKER]: true, value: Symbol() } as TransferWrapper<symbol>, {} as RevivableContext)
+  // @ts-expect-error - cannot box a non-Capable wrapper (WeakMap not assignable)
+  box({ [TRANSFER_MARKER]: true, value: new WeakMap() } as TransferWrapper<WeakMap<object, string>>, {} as RevivableContext)
 }

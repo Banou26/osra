@@ -63,7 +63,11 @@ type _CapablePositives = [
 type _CapableNegatives = [
   Expect<Equals<WeakMap<object, string> extends Capable ? true : false, false>>,
   Expect<Equals<WeakSet<object> extends Capable ? true : false, false>>,
-  Expect<Equals<symbol extends Capable ? true : false, false>>,
+]
+
+// Symbol is Capable via the `symbol` revivable (description-based).
+type _CapableSymbol = [
+  Expect<Assignable<symbol, Capable>>,
 ]
 
 // --- Transport-aware Capable narrowing -----------------------------------
@@ -90,10 +94,10 @@ type _CapableCloneCtxPositives = [
 ]
 
 // On a JSON-only transport, those same types are NOT assignable —
-// the type system rejects them at the `expose()` call site.
+// the type system rejects them at the `expose()` call site. Blob and
+// its File subclass are the exception: the `blob` revivable encodes
+// via boxBuffer (base64 on JSON) so they stay Capable everywhere.
 type _CapableJsonCtxNegatives = [
-  Expect<Equals<Blob extends Capable<DefaultRevivableModule[], JsonCtx> ? true : false, false>>,
-  Expect<Equals<File extends Capable<DefaultRevivableModule[], JsonCtx> ? true : false, false>>,
   Expect<Equals<RegExp extends Capable<DefaultRevivableModule[], JsonCtx> ? true : false, false>>,
   Expect<Equals<ImageData extends Capable<DefaultRevivableModule[], JsonCtx> ? true : false, false>>,
 ]
@@ -108,6 +112,9 @@ type _CapableJsonCtxPositives = [
   Expect<Assignable<Set<number>, Capable<DefaultRevivableModule[], JsonCtx>>>,
   Expect<Assignable<Promise<number>, Capable<DefaultRevivableModule[], JsonCtx>>>,
   Expect<Assignable<() => number, Capable<DefaultRevivableModule[], JsonCtx>>>,
+  Expect<Assignable<symbol, Capable<DefaultRevivableModule[], JsonCtx>>>,
+  Expect<Assignable<Blob, Capable<DefaultRevivableModule[], JsonCtx>>>,
+  Expect<Assignable<File, Capable<DefaultRevivableModule[], JsonCtx>>>,
 ]
 
 // --- ReplaceWithBox: confirm value-shape revivables transform correctly ---
@@ -177,7 +184,7 @@ const pointModule = {
 type _PointTypeLiteral = Expect<Equals<typeof pointModule.type, 'point'>>
 
 export const __types = () => null as unknown as
-  | [_JsonablePositives, _StructurablePositives, _CapablePositives, _CapableNegatives]
+  | [_JsonablePositives, _StructurablePositives, _CapablePositives, _CapableNegatives, _CapableSymbol]
   | [_CheckMapReplaced, _CheckSetReplaced, _CheckBigIntReplaced]
   | [_CheckPlainPassthrough, _CheckDeepObjMap, _CheckDeepArrMap]
   | [_PointTypeLiteral]
