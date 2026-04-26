@@ -105,12 +105,8 @@ export type BidirectionalConnection<
   remoteValue: Promise<Capable>
 }
 
-/**
- * init() — mounts the bidirectional mode on the shared protocol context.
- * Only activates when the transport can both emit and receive. Owns the
- * announce / close handshake and routes per-connection messages (init /
- * message / message-port-close) to the right connection's eventTarget.
- */
+/** Mounts bidirectional mode on the shared protocol context. Only active
+ *  when the transport can both emit and receive. */
 export const init = <TModules extends readonly RevivableModule[]>(
   ctx: ProtocolContext<TModules>
 ): void => {
@@ -123,13 +119,10 @@ export const init = <TModules extends readonly RevivableModule[]>(
         return
       }
       if (message.remoteUuid !== ctx.getUuid()) return
-      // Already-tracked uuid is the normal handshake-echo case (the peer
-      // re-announcing back at us after we replied to its initial announce),
-      // not a uuid collision — silently drop it so we don't double-set up
-      // the same connection.
+      // Already-tracked uuid is the normal handshake-echo (peer re-announcing
+      // back after our reply), not a collision — drop it.
       if (ctx.connectionContexts.has(message.uuid)) return
-      // Send announce back so the other side can also create a connection
-      // (in case they missed our initial announce due to timing)
+      // Echo announce back in case the peer missed our initial one.
       ctx.sendMessage({ type: 'announce', remoteUuid: message.uuid })
       const eventTarget = ctx.createConnectionEventTarget()
       const connectionContext = {
@@ -159,8 +152,7 @@ export const init = <TModules extends readonly RevivableModule[]>(
     // "init" | "message" | "message-port-close"
     if (message.remoteUuid !== ctx.getUuid()) return
     const connection = ctx.connectionContexts.get(message.uuid)
-    // drop messages that arrive before the remote has announced itself,
-    // or after its connection has been torn down
+    // drop messages from peers we haven't tracked (pre-announce or post-close)
     if (!connection) return
     connection.eventTarget.dispatchEvent(
       new CustomEvent('message', { detail: message })

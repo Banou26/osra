@@ -62,8 +62,8 @@ export const isOsraMessage = (value: unknown): value is Message =>
 
 type AnyConstructor = abstract new (...args: any[]) => unknown
 
-/** True if `value` is an instance of any of the given (possibly undefined-on-this-platform)
- *  constructors. Tolerates missing globals so callers don't have to guard each one. */
+/** True if `value` is an instance of any of the given constructors.
+ *  Tolerates undefined entries (constructors missing on this platform). */
 export const instanceOfAny = (value: unknown, ctors: readonly (AnyConstructor | undefined)[]): boolean => {
   for (const ctor of ctors) if (ctor && value instanceof ctor) return true
   return false
@@ -72,6 +72,9 @@ export const instanceOfAny = (value: unknown, ctors: readonly (AnyConstructor | 
 export const isClonable = (value: unknown): boolean =>
   instanceOfAny(value, [globalThis.SharedArrayBuffer])
 
+// Types eligible for transfer when the user opts in via `transfer()`. Some
+// entries are also clonable (ArrayBuffer, ImageBitmap, …) — outside a
+// `transfer` box they fall back to clone.
 export const isTransferable = (value: unknown): value is Transferable =>
   instanceOfAny(value, [
     globalThis.ArrayBuffer,
@@ -80,6 +83,15 @@ export const isTransferable = (value: unknown): value is Transferable =>
     globalThis.WritableStream,
     globalThis.TransformStream,
     globalThis.ImageBitmap,
+    globalThis.OffscreenCanvas,
+    (globalThis as { AudioData?: abstract new (...args: any[]) => unknown }).AudioData,
+    (globalThis as { VideoFrame?: abstract new (...args: any[]) => unknown }).VideoFrame,
+    (globalThis as { MediaSourceHandle?: abstract new (...args: any[]) => unknown }).MediaSourceHandle,
+    (globalThis as { MediaStreamTrack?: abstract new (...args: any[]) => unknown }).MediaStreamTrack,
+    (globalThis as { MIDIAccess?: abstract new (...args: any[]) => unknown }).MIDIAccess,
+    (globalThis as { RTCDataChannel?: abstract new (...args: any[]) => unknown }).RTCDataChannel,
+    (globalThis as { WebTransportReceiveStream?: abstract new (...args: any[]) => unknown }).WebTransportReceiveStream,
+    (globalThis as { WebTransportSendStream?: abstract new (...args: any[]) => unknown }).WebTransportSendStream,
   ])
 
 export type WebExtRuntime = typeof browser.runtime
@@ -102,21 +114,19 @@ export const isWebExtensionPort = (value: unknown, connectPort: boolean = false)
 
 export type WebExtSender = NonNullable<WebExtPort['sender']>
 
-// Structural guard for any `addListener` / `hasListener` / `removeListener` event.
-// Not enough on its own to tell onConnect from onMessage — they have identical shapes.
+// Structural guard. Can't distinguish onConnect from onMessage on its own —
+// they share this exact shape.
 const hasListenerApi = (value: unknown): boolean =>
   !!value
   && typeof value === 'object'
-  // Prevent SecurityError when `value` is a cross-origin window.
   && !isWindow(value)
   && 'addListener' in value
   && 'hasListener' in value
   && 'removeListener' in value
 
-// Identity-compare against the runtime's onConnect events: structural checks
-// can't distinguish onConnect from onMessage, and misclassifying onMessage as
-// onConnect makes us treat each incoming message as a port and crash on
-// `message.onMessage.addListener`.
+// Identity-compare against runtime.onConnect — structural checks can't
+// distinguish onConnect from onMessage, and misclassifying causes us to
+// treat each incoming message as a port and crash.
 export type WebExtOnConnect = WebExtRuntime['onConnect']
 export const isWebExtensionOnConnect = (value: unknown): value is WebExtOnConnect => {
   const runtime = getWebExtensionRuntime()
@@ -133,8 +143,8 @@ export const isWindow = (value: unknown): value is Window => {
   try {
     return 'window' in value && value.window === value
   } catch {
-    // Cross-origin Window access can throw SecurityError; fall back to a
-    // no-read shape probe that tolerates protected properties.
+    // Cross-origin Window access can throw SecurityError — fall back to a
+    // shape probe over properties that don't trigger the security check.
     try {
       return 'closed' in value
         && typeof value.closed === 'boolean'

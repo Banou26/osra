@@ -4,10 +4,9 @@ import { instanceOfAny, isClonable, isTransferable } from './type-guards'
 
 export { transfer }
 
-// "Must-transfer" types: structured clone cannot copy these, so any occurrence
-// in the outgoing message has to go on the transfer list regardless of whether
-// the user opted in with `transfer()`. MessagePort is the canonical case —
-// cloning one would leave the remote side unable to respond.
+// Must-transfer types: structured clone can't copy these, so any occurrence
+// in the outgoing message must go on the transfer list — opt-in or not.
+// (MessagePort is the canonical case: cloning would leave the peer mute.)
 const isMustTransfer = (value: unknown): value is Transferable =>
   instanceOfAny(value, [
     globalThis.MessagePort,
@@ -15,33 +14,25 @@ const isMustTransfer = (value: unknown): value is Transferable =>
     globalThis.WritableStream,
     globalThis.TransformStream,
     globalThis.OffscreenCanvas,
+    (globalThis as { MediaSourceHandle?: abstract new (...args: any[]) => unknown }).MediaSourceHandle,
+    (globalThis as { MediaStreamTrack?: abstract new (...args: any[]) => unknown }).MediaStreamTrack,
+    (globalThis as { MIDIAccess?: abstract new (...args: any[]) => unknown }).MIDIAccess,
+    (globalThis as { RTCDataChannel?: abstract new (...args: any[]) => unknown }).RTCDataChannel,
+    (globalThis as { WebTransportReceiveStream?: abstract new (...args: any[]) => unknown }).WebTransportReceiveStream,
+    (globalThis as { WebTransportSendStream?: abstract new (...args: any[]) => unknown }).WebTransportSendStream,
   ])
 
-// Structural check for a transfer revivable box. Uses the 'transfer' string
-// literal rather than importing the module's exported `type` constant, so the
-// walker stays decoupled from the module's full graph.
-// The `degraded` flag is set by transfer.box() when the platform can't
-// actually transfer — a degraded box is a no-op for the walker.
+// Structural check — keeps the walker decoupled from the module graph.
+// `degraded` (set by transfer.box) means the wrapper is a no-op here.
 const isTransferBox = (value: unknown): value is { inner: unknown, degraded: boolean } =>
   isRevivableBox(value) && value.type === 'transfer'
 
-/**
- * Walk a boxed message and collect the list of Transferable references that
- * should be moved (rather than cloned) when calling postMessage.
- *
- * The rules are:
- *   1. Must-transfer types (MessagePort, streams, OffscreenCanvas) are always
- *      included — structured clone cannot represent them.
- *   2. Clonable types (SharedArrayBuffer) are skipped entirely.
- *   3. Other Transferable types (ArrayBuffer, ImageBitmap) are included only
- *      when the walker is inside a non-degraded transfer box — i.e. when the
- *      user explicitly opted into move semantics at the send site via
- *      transfer() AND the platform supports transferring.
- *
- * The transfer intent is carried on the wire by the transfer revivable box;
- * recognising it structurally here (without importing the module) is all the
- * coupling this file needs.
- */
+/** Walk a boxed message and collect Transferables to move (rather than copy)
+ *  on postMessage:
+ *    1. Must-transfer types are always included.
+ *    2. Clonable types (SharedArrayBuffer) are skipped.
+ *    3. Other Transferables are included only inside a non-degraded transfer
+ *       box (user opted in AND the platform supports transferring). */
 export const getTransferableObjects = (value: unknown): Transferable[] => {
   const transferables: Transferable[] = []
   const seen = new WeakSet<object>()
@@ -54,11 +45,7 @@ export const getTransferableObjects = (value: unknown): Transferable[] => {
     if (isClonable(value)) return
 
     if (isTransferBox(value)) {
-      // Non-degraded box: flip into transfer mode — every Transferable found
-      // below this point on this branch of the walk gets added to the
-      // transfer list. Degraded box (platform can't transfer): keep whatever
-      // mode we were in, so the wrapper becomes a no-op and the inner gets
-      // walked as a normal copy payload.
+      // Non-degraded box flips into transfer mode for everything below.
       recurse(value.inner, inTransferBox || !value.degraded)
       return
     }
@@ -75,10 +62,9 @@ export const getTransferableObjects = (value: unknown): Transferable[] => {
       return
     }
 
-    // TypedArray / DataView expose every numeric index as an own key — iterating
-    // `Object.keys` of a 100 KB buffer touches 100 K entries for no useful
-    // result. The underlying buffer is the only thing we could transfer, and
-    // that happens via the transfer box / typed-array revivable path anyway.
+    // TypedArray / DataView expose every numeric index — iterating a 100 KB
+    // buffer would walk 100 K entries for nothing. The underlying buffer is
+    // the only candidate; the typed-array revivable handles that path.
     if (ArrayBuffer.isView(value)) return
 
     if (Array.isArray(value)) {

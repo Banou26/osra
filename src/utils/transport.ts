@@ -111,7 +111,7 @@ export const registerOsraMessageListener = (
     return
   }
 
-  // WebExtension family — subscribe to an `onMessage`-style listener API.
+  // WebExtension family — subscribe to an `onMessage`-style listener.
   if (
     isWebExtensionRuntime(receiveTransport)
     || isWebExtensionPort(receiveTransport)
@@ -131,9 +131,6 @@ export const registerOsraMessageListener = (
     if (isWebExtensionRuntime(receiveTransport)) {
       listenOnWebExtOnMessage(receiveTransport.onMessage)
     } else if (isWebExtensionOnConnect(receiveTransport)) {
-      // Port.onMessage has a narrower (message, port) shape than the shared
-      // (message, sender) Runtime.onMessage — but our listener only reads
-      // `message` so the runtime shape covers both.
       const _listener = (port: WebExtPort) =>
         listenOnWebExtOnMessage(port.onMessage as WebExtOnMessage, port)
       receiveTransport.addListener(_listener)
@@ -170,7 +167,7 @@ export const sendOsraMessage = (
   if (typeof emitTransport === 'function') {
     emitTransport(message, transferables)
   } else if (isWindow(emitTransport)) {
-    // Must be checked first: cross-origin windows throw on other property access.
+    // Must check first — cross-origin windows throw on other property access.
     emitTransport.postMessage(message, origin, transferables)
   } else if (isWebExtensionPort(emitTransport)) {
     emitTransport.postMessage(message)
