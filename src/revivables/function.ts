@@ -1,14 +1,11 @@
 import type { Capable } from '../types'
 import type { UnderlyingType, RevivableContext, BoxBase as BoxBaseType } from './utils'
-import type { TypedMessagePort } from '../utils/typed-message-channel'
-import type { AnyPort } from './message-port'
 
 import { BoxBase, serializeError } from './utils'
-import {
-  createRevivableChannel,
-  revive as reviveMessagePort,
-  BoxedMessagePort,
-} from './message-port'
+import { recursiveBox } from '.'
+import { getTransferableObjects } from '../utils'
+import { EventChannel, type EventPort } from '../utils/event-channel'
+import { box as boxMessagePort, revive as reviveMessagePort, BoxedMessagePort } from './message-port'
 
 export const type = 'function' as const
 
@@ -16,62 +13,15 @@ type ResultMessage =
   | { __osra_ok__: true, value: Capable }
   | { __osra_err__: true, error: string }
 
-type CallMessage = CallContext | { __osra_close__: true }
+type CallContext = [EventPort<Capable>, Capable[]]
 
-// Per-call record so the FinalizationRegistry callback (and the synchronous
-// postMessage-failed path) can reject the right Promise and tear down the
-// matching return port. Each record is owned by a single in-flight call.
-type CallRecord = {
-  returnLocal: AnyPort<ResultMessage>
-  reject: (error: unknown) => void
-}
-
-/**
- * FinalizationRegistry for automatically cleaning up function ports when the
- * revived function is garbage collected. Also rejects any in-flight calls that
- * were initiated through this function — without this, a caller that drops
- * `func` while awaiting its result would leak the return port and leave the
- * Promise hung forever.
- */
-type FunctionCleanupInfo = {
-  port: TypedMessagePort<CallMessage>
-  inFlight: Set<CallRecord>
-}
-
-const functionRegistry = new FinalizationRegistry<FunctionCleanupInfo>((info) => {
-  try {
-    info.port.postMessage({ __osra_close__: true })
-  } catch { /* Port may already be closed */ }
-  try {
-    info.port.close()
-  } catch { /* Port may already be closed */ }
-  for (const { returnLocal, reject } of info.inFlight) {
-    try { reject(new Error('osra function was garbage collected before result arrived')) } catch { /* listener gone */ }
-    inFlightReturnPorts.delete(returnLocal)
-    try { returnLocal.close() } catch { /* port may already be closed */ }
-  }
-  info.inFlight.clear()
-})
-
-// Pins caller-side return-value ports between send and result arriving. The
-// cycle (localPort↔listener↔remotePort) has no external anchor after the
-// Promise executor returns, so under memory pressure GC can collect it before
-// the result arrives — the Promise hangs forever. We remove the entries in
-// the once-listener and in every terminal-state cleanup path below.
-const inFlightReturnPorts = new Set<AnyPort<any>>()
-
-/** Call-site payload (sent over the wire): the return port is pre-boxed by
- *  createRevivableChannel; args are passed live and boxed by the channel. */
-type SentCallContext = [BoxedMessagePort<ResultMessage>, Capable[]]
-
-/** Call-site payload as received by the callee, after box-side revival: the
- *  return port is now a live AnyPort<ResultMessage> (ProtocolPort on clone,
- *  EventPort on JSON); args are revived. */
-export type CallContext = [AnyPort<ResultMessage>, Capable[]]
+// Pins return-value ports between call-site return and result arrival —
+// the (port ↔ once-listener ↔ resolve/reject) cycle has no other anchor.
+const inFlightReturnPorts = new Set<EventPort<Capable>>()
 
 export type BoxedFunction<T extends (...args: any[]) => any = (...args: any[]) => any> =
   & BoxBaseType<typeof type>
-  & { port: BoxedMessagePort<CallMessage> }
+  & { port: BoxedMessagePort<CallContext> }
   & { [UnderlyingType]: (...args: Parameters<T>) => Promise<Awaited<ReturnType<T>>> }
 
 type CapableFunction<T> = T extends (...args: infer P) => infer R
@@ -85,107 +35,66 @@ export const isType = (value: unknown): value is (...args: any[]) => any =>
 
 export const box = <T extends (...args: any[]) => any, T2 extends RevivableContext>(
   value: T & CapableFunction<T>,
-  context: T2
+  context: T2,
 ): BoxedFunction<T> => {
-  const { localPort, boxedRemote } = createRevivableChannel<CallMessage>(context)
-
-  const cleanup = () => {
-    localPort.close()
-  }
+  // EventChannel rather than MessageChannel: revived live values arriving
+  // in args (functions, EventTarget façades, …) aren't structured-clonable.
+  const { port1: localPort, port2: remotePort } = new EventChannel<CallContext, CallContext>()
 
   localPort.addEventListener('message', ({ data }) => {
-    if (!Array.isArray(data)) {
-      // __osra_close__ sentinel — only non-array message on this channel
-      cleanup()
-      return
-    }
-    const [returnPort, args] = data
-    ;(async () => value(...(args as Parameters<T>)))()
-      .then(
-        (resolved) => {
-          try {
-            returnPort.postMessage({ __osra_ok__: true, value: resolved })
-          } catch (postErr) {
-            // Result wasn't clonable / boxable — surface as a remote error
-            // instead of letting the caller hang waiting for a message that
-            // can never be sent.
-            try {
-              returnPort.postMessage({
-                __osra_err__: true,
-                error: serializeError(postErr),
-              })
-            } catch { /* error itself failed to serialise; caller cleanup will reject */ }
-          }
-        },
-        (error: unknown) => {
-          try {
-            returnPort.postMessage({
-              __osra_err__: true,
-              error: serializeError(error),
-            })
-          } catch { /* serialised error failed to post; caller cleanup will reject */ }
-        },
-      )
-      .finally(() => {
-        // Close after the message has flushed through the microtask queue so
-        // the result actually dispatches before we tear the channel down.
-        queueMicrotask(() => returnPort.close())
+    // Don't recursiveRevive — message-port handler already revived in place.
+    // Re-walking would Object.fromEntries plain args, breaking identity.
+    const [returnPort, args] = data as CallContext
+    ;(async () => {
+      let message: ResultMessage
+      try {
+        const resolved = await value(...(args as Parameters<T>))
+        message = { __osra_ok__: true, value: resolved as Capable }
+      } catch (error) {
+        message = { __osra_err__: true, error: serializeError(error) }
+      }
+      const boxedResult = recursiveBox(message as Capable, context)
+      returnPort.postMessage(boxedResult, getTransferableObjects(boxedResult))
+      // Defer close so the result reaches the peer before tear-down. The
+      // close fires _onClose, dropping per-call routing entries on both
+      // sides — without it portHandlers grows one entry per call.
+      queueMicrotask(() => {
+        try { returnPort.close() } catch { /* may already be closed */ }
       })
+    })()
   })
   localPort.start()
 
-  return { ...BoxBase, type, port: boxedRemote } as BoxedFunction<T>
+  return {
+    ...BoxBase,
+    type,
+    port: boxMessagePort(remotePort as unknown as MessagePort, context),
+  } as unknown as BoxedFunction<T>
 }
 
 export const revive = <T extends BoxedFunction, T2 extends RevivableContext>(
   value: T,
-  context: T2
+  context: T2,
 ): T[UnderlyingType] => {
-  const port = reviveMessagePort(value.port, context)
-  // Per-function bag of in-flight calls — captured by both the FinalizationRegistry
-  // callback (rejects on func GC) and each call's once-listener (removes on settle).
-  const inFlight = new Set<CallRecord>()
+  const port = reviveMessagePort(value.port, context) as unknown as MessagePort
 
-  const func = (...args: Capable[]) =>
+  return ((...args: Capable[]) =>
     new Promise((resolve, reject) => {
-      const { localPort: returnLocal, boxedRemote: returnBoxedRemote } =
-        createRevivableChannel<ResultMessage>(context)
-      // Pin ports to a module-level Set so GC can't collect the
-      // port↔listener cycle while the call is in flight. Without this,
-      // under memory pressure the listener (and thus `resolve`) can be
-      // collected before the result arrives — the Promise hangs forever.
+      const { port1: returnLocal, port2: returnRemote } = new EventChannel<Capable, Capable>()
       inFlightReturnPorts.add(returnLocal)
-      const record: CallRecord = { returnLocal, reject }
-      inFlight.add(record)
 
-      returnLocal.addEventListener('message', ({ data: result }) => {
-        if ('__osra_ok__' in result) resolve(result.value)
-        else reject(result.error)
+      returnLocal.addEventListener('message', ({ data }) => {
+        const message = data as ResultMessage
+        if ('__osra_ok__' in message) resolve(message.value)
+        else reject(message.error)
         returnLocal.close()
         inFlightReturnPorts.delete(returnLocal)
-        inFlight.delete(record)
       }, { once: true })
       returnLocal.start()
 
-      // Boxing the args may throw synchronously (DataCloneError on a clone
-      // transport, JSON cycle on a JSON transport). Without this catch, the
-      // pin and the in-flight record would leak forever even though the
-      // Promise itself rejects via the executor's implicit try/catch.
-      try {
-        port.postMessage([returnBoxedRemote, args] as SentCallContext as unknown as CallMessage)
-      } catch (sendErr) {
-        inFlightReturnPorts.delete(returnLocal)
-        inFlight.delete(record)
-        try { returnLocal.close() } catch { /* may already be closed */ }
-        reject(sendErr)
-      }
-    })
-
-  // Register the function for automatic cleanup when garbage collected. The
-  // callback also rejects every in-flight call so abandoned awaits stop hanging.
-  functionRegistry.register(func, { port, inFlight }, func)
-
-  return func
+      const callContext = recursiveBox([returnRemote, args] as unknown as Capable, context)
+      port.postMessage(callContext, getTransferableObjects(callContext))
+    })) as T[UnderlyingType]
 }
 
 const typeCheck = () => {
@@ -196,8 +105,8 @@ const typeCheck = () => {
   const wrongReturn: (a: number, b: string) => Promise<string> = revived
   // @ts-expect-error - wrong parameter types
   const wrongParams: (a: string, b: number) => Promise<number> = revived
-  // @ts-expect-error - non-Capable parameter type (Set is not directly Capable as parameter)
-  box((a: WeakMap<object, string>) => a, {} as RevivableContext)
+  // @ts-expect-error - non-Capable parameter type (symbols aren't structured-clonable)
+  box((a: symbol) => a.toString(), {} as RevivableContext)
   // @ts-expect-error - non-Capable return type
-  box(() => new WeakMap(), {} as RevivableContext)
+  box(() => Symbol(), {} as RevivableContext)
 }
