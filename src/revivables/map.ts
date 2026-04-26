@@ -11,10 +11,9 @@ export type BoxedMap<T extends Map<Capable, Capable> = Map<Capable, Capable>> =
   & { entries: Array<[Capable, Capable]> }
   & { [UnderlyingType]: T }
 
-// `Map<unknown, unknown>` rather than `Map<Capable, Capable>` here breaks
-// the Capable ↔ defaultRevivableModules ↔ this module type cycle.
-// box() narrows to Map<Capable, Capable> so misuse is still caught at the
-// box site.
+// `Map<unknown, unknown>` (rather than `Map<Capable, Capable>`) breaks the
+// Capable ↔ defaultRevivableModules ↔ this module type cycle. box() still
+// narrows to `Map<Capable, Capable>` so misuse is caught there.
 export const isType = (value: unknown): value is Map<unknown, unknown> =>
   value instanceof Map
 

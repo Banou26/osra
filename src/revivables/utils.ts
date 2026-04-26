@@ -34,10 +34,15 @@ export type RevivableContext<
   eventTarget: MessageEventTarget<TModules>
 }
 
-export type ExtractType<T> =
-  T extends { isType: (value: unknown) => value is infer S }
-    ? S
-    : never
+/** Extract the type a module's `isType` narrows to. Modules marked
+ *  `capableOnly: true` (clonable, transferable) contribute `never` on JSON
+ *  transports so users can't type values JSON would silently drop. */
+export type ExtractType<T, Ctx extends RevivableContext = RevivableContext> =
+  T extends { capableOnly: true }
+    ? IsJsonOnlyTransport<Ctx['transport']> extends true
+      ? never
+      : T extends { isType: (value: unknown) => value is infer S } ? S : never
+    : T extends { isType: (value: unknown) => value is infer S } ? S : never
 
 export type ExtractBox<T> =
   T extends { box: (...args: any[]) => infer B }
@@ -54,8 +59,11 @@ export type ExtractMessages<T> =
 export type InferMessages<TModules extends readonly unknown[]> =
   ExtractMessages<TModules[number]>
 
-export type InferRevivables<TModules extends readonly unknown[]> =
-  ExtractType<TModules[number]>
+export type InferRevivables<
+  TModules extends readonly unknown[],
+  Ctx extends RevivableContext = RevivableContext,
+> =
+  ExtractType<TModules[number], Ctx>
 
 export type InferRevivableBox<TModules extends readonly unknown[]> =
   ExtractBox<TModules[number]>
@@ -66,15 +74,10 @@ export const isRevivableBox = (value: unknown): value is BoxBase =>
   && OSRA_BOX in value
   && value[OSRA_BOX] === 'revivable'
 
-/** Stable string form for an unknown rejection value. Errors keep their stack;
- *  everything else gets coerced via `String()`. Used wherever a Promise/Function
- *  rejection has to cross the wire as a serialisable string. */
 export const serializeError = (error: unknown): string =>
   error instanceof Error ? (error.stack ?? String(error)) : String(error)
 
-/** Wire shape for an ArrayBuffer carried by a JSON or clone transport. JSON
- *  paths emit a base64 string (so the buffer survives JSON.stringify); clone
- *  paths pass the buffer through structured-clone unchanged. */
+/** Wire shape for an ArrayBuffer: base64 on JSON, raw on clone. */
 export type BoxedBuffer<TCtx extends RevivableContext = RevivableContext> =
   IsJsonOnlyTransport<TCtx['transport']> extends true ? { base64Buffer: string }
   : IsJsonOnlyTransport<TCtx['transport']> extends false ? { arrayBuffer: ArrayBuffer }

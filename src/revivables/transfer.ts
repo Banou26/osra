@@ -26,9 +26,6 @@ const isObject = (value: unknown): value is object =>
 const isTransferWrapper = (value: unknown): value is TransferWrapper =>
   isObject(value) && TRANSFER_MARKER in value && value[TRANSFER_MARKER] === true
 
-// The set of types `transfer()` accepts. Anything else — primitives, nullish,
-// plain objects, Dates, Errors, Promises, etc. — is returned unchanged so
-// normal payloads don't blow up if someone wraps the wrong thing.
 const isWrappableTransferable = (value: unknown): boolean => {
   if (!isObject(value)) return false
   if (ArrayBuffer.isView(value)) return true
@@ -43,34 +40,15 @@ const isWrappableTransferable = (value: unknown): boolean => {
   ])
 }
 
-/**
- * Opt into transfer semantics for a transferable value. Without this wrapper
- * osra sends transferables as structured clones (copies) — the sender-side
- * reference stays usable after the RPC. Wrapping hands the underlying storage
- * off to the receiver and neuters the sender-side reference, matching what
- * you'd get by listing it in the transfer list of `postMessage(msg, [buf])`.
- *
- * - Primitives, null, undefined, plain objects, Promises, Dates, etc. are
- *   returned unchanged.
- * - Typed array views (`Uint8Array`, `DataView`, …) are accepted as a
- *   convenience — their underlying `.buffer` is what actually gets moved.
- * - `transfer(transfer(x))` returns the same wrapper as `transfer(x)`.
- * - If the current platform cannot transfer the given type, the wrapper
- *   silently degrades to a copy — nothing throws.
- *
- * NOTE: This lies at the type level — the runtime value for transferable
- * inputs is a TransferWrapper<T>, typed as T so the user's surrounding
- * code stays unchanged. The box-site unwraps it.
- */
+/** Opt into transfer (move) semantics for a transferable value. Idempotent;
+ *  non-transferable inputs pass through unchanged. Silently degrades to a
+ *  copy when the platform/transport can't transfer the given type. Lies at
+ *  the type level — runtime value is a TransferWrapper<T> typed as T. */
 export const transfer = <T>(value: T): T =>
   (isWrappableTransferable(value)
     ? { [TRANSFER_MARKER]: true, value }
     : value
   ) as T
-
-// -------------------------------------------------------------------------
-// Revivable module interface
-// -------------------------------------------------------------------------
 
 export const isType = (value: unknown): value is TransferWrapper =>
   isTransferWrapper(value)
@@ -78,22 +56,16 @@ export const isType = (value: unknown): value is TransferWrapper =>
 export const box = <T extends Capable, TContext extends RevivableContext>(
   wrapper: TransferWrapper<T>,
   context: TContext,
-): BoxedTransfer<T> => {
-  const inner = wrapper.value
-  const innerBoxed = recursiveBox(inner, context)
-  // The `degraded` flag carries the transport mode to the send-time walker
-  // in getTransferableObjects. When true, the walker treats this box as if
-  // it weren't a transfer box at all — no mode flip, no transferables on
-  // the transfer list — and the wrapper silently degrades to a copy. JSON
-  // transports can't move ownership over the wire, so transfer semantics
-  // don't apply and we degrade.
-  return {
+): BoxedTransfer<T> =>
+  // `degraded` tells the send-time walker in getTransferableObjects to treat
+  // this box as a regular value (no transfer-list entry). JSON transports
+  // can't move ownership, so transfer semantics don't apply.
+  ({
     ...BoxBase,
     type,
-    inner: innerBoxed,
+    inner: recursiveBox(wrapper.value, context),
     degraded: isJsonOnlyTransport(context.transport),
-  } as BoxedTransfer<T>
-}
+  }) as unknown as BoxedTransfer<T>
 
 export const revive = <T extends BoxedTransfer, TContext extends RevivableContext>(
   value: T,
@@ -106,7 +78,6 @@ const typeCheck = () => {
   const wrapper = { [TRANSFER_MARKER]: true, value: ab } as TransferWrapper<ArrayBuffer>
   const boxed = box(wrapper, {} as RevivableContext)
   const revived = revive(boxed, {} as RevivableContext)
-  // Revive recovers the original ArrayBuffer type via the UnderlyingType phantom.
   const expected: ArrayBuffer = revived
   // @ts-expect-error - revived is ArrayBuffer, not string
   const notExpected: string = revived

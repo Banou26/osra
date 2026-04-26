@@ -19,9 +19,7 @@ export const box = <T extends Date, T2 extends RevivableContext>(
 export const revive = <T extends ReturnType<typeof box>, T2 extends RevivableContext>(
   value: T,
   _context: T2
-): Date => {
-  return new Date(value.ISOString)
-}
+) => new Date(value.ISOString)
 
 const typeCheck = () => {
   const boxed = box(new Date(), {} as RevivableContext)

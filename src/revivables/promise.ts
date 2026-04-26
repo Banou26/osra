@@ -20,9 +20,8 @@ export type Context =
   | { type: 'resolve', data: Capable }
   | { type: 'reject', error: string }
 
-// Error branches intersect with T so the user's own keys are present on the
-// target — otherwise TS's excess-property check flags the first user key
-// (e.g. `foo`) instead of reporting the failure against the whole argument.
+// Error branches intersect with T so the user's own keys land on the target —
+// otherwise TS's excess-property check flags a user key instead of the failure.
 type CapablePromise<T> = T extends Promise<infer U>
   ? U extends Capable
     ? T
@@ -51,12 +50,9 @@ export type BoxedPromise<T extends Capable = Capable> =
   & { port: BoxedMessagePort<Context> }
   & { [UnderlyingType]: T }
 
-// Pins the revived port between executor return and result arrival. The
-// port↔listener cycle has no external anchor — the caller only holds the
-// returned Promise, which references its native resolvers, not the port.
-// Without this Set, GC under memory pressure can collect the cycle before
-// the result arrives and the Promise hangs forever. Mirrors the
-// inFlightReturnPorts pattern in function.ts.
+// Pins the revived port between executor return and result arrival — the
+// port↔listener cycle has no other anchor (the caller only holds the
+// returned Promise). The once-listener removes its entry on settle.
 const inFlightPromisePorts = new Set<AnyPort<Context>>()
 
 export const isType = (value: unknown): value is Promise<any> =>
@@ -67,10 +63,6 @@ export const box = <T, T2 extends RevivableContext>(
   context: T2
 ): BoxedPromise<ExtractCapable<T>> => {
   if (!isCapablePromise(value)) throw new TypeError('Expected Promise')
-  const promise = value
-  // Revivable-internal channel: localPort auto-boxes on send regardless of
-  // transport (ProtocolPort over MessageChannel on clone, EventChannel +
-  // portId on JSON). We just post the result and let it take care of boxing.
   const { localPort, boxedRemote } = createRevivableChannel<Context>(context)
 
   const sendResult = (result: Context) => {
@@ -78,12 +70,9 @@ export const box = <T, T2 extends RevivableContext>(
     localPort.close()
   }
 
-  promise
+  value
     .then((data: ExtractCapable<T>) => sendResult({ type: 'resolve', data }))
-    .catch((error: unknown) => sendResult({
-      type: 'reject',
-      error: serializeError(error),
-    }))
+    .catch((error: unknown) => sendResult({ type: 'reject', error: serializeError(error) }))
 
   return { ...BoxBase, type, port: boxedRemote } as BoxedPromise<ExtractCapable<T>>
 }
@@ -96,11 +85,8 @@ export const revive = <T extends BoxedPromise, T2 extends RevivableContext>(
   inFlightPromisePorts.add(port)
   return new Promise<T[UnderlyingType]>((resolve, reject) => {
     port.addEventListener('message', ({ data: result }) => {
-      if (result.type === 'resolve') {
-        resolve(result.data as T[UnderlyingType])
-      } else {
-        reject(result.error)
-      }
+      if (result.type === 'resolve') resolve(result.data as T[UnderlyingType])
+      else reject(result.error)
       port.close()
       inFlightPromisePorts.delete(port)
     }, { once: true })
