@@ -74,7 +74,20 @@ export const box = <T, T2 extends RevivableContext>(
   const { localPort, boxedRemote } = createRevivableChannel<Context>(context)
 
   const sendResult = (result: Context) => {
-    localPort.postMessage(result)
+    try {
+      localPort.postMessage(result)
+    } catch (postErr) {
+      // Resolved value wasn't clonable / boxable. Surface as a rejection
+      // so the receiver's await rejects rather than hanging — function.ts
+      // (and any other caller that delivers a result via a boxed Promise)
+      // depends on this fallback to translate DataCloneError into a clean
+      // rejection on the other side.
+      if (result.type === 'resolve') {
+        try {
+          localPort.postMessage({ type: 'reject', error: serializeError(postErr) })
+        } catch { /* error envelope itself failed to serialise */ }
+      }
+    }
     localPort.close()
   }
 
