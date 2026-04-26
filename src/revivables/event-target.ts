@@ -1,279 +1,93 @@
-import type { Capable } from '../types'
-import type { RevivableContext, BoxBase as BoxBaseType, UnderlyingType } from './utils'
-import type { AnyPort, BoxedMessagePort } from './message-port'
-
-import { BoxBase } from './utils'
-import {
-  createRevivableChannel,
-  revive as reviveMessagePort,
-} from './message-port'
+import { BoxBase, type RevivableContext } from './utils'
+import { identity } from './identity'
+import { box as boxFunction, revive as reviveFunction } from './function'
+import { trackGc } from '../utils/gc-tracker'
 
 export const type = 'eventTarget' as const
 
-// Wire protocol — receiver tells source which event types to forward (so we
-// don't broadcast every dispatch); source pushes a serialised event when its
-// EventTarget fires a matching type. The `close` sentinel lets the revive
-// side notify the box side that the revived target is gone so it can tear
-// down its forwarder listeners.
-type EventTargetMessage =
-  | { kind: 'subscribe', eventType: string }
-  | { kind: 'unsubscribe', eventType: string }
-  | { kind: 'close' }
-  | {
-      kind: 'event'
-      eventType: string
-      bubbles: boolean
-      cancelable: boolean
-      composed: boolean
-      // Present iff the source dispatched a CustomEvent — preserves `detail`
-      // (boxed via the surrounding revivable graph so live values flow).
-      detail?: Capable
-    }
+type ListenerOpts = boolean | { capture?: boolean, once?: boolean, passive?: boolean, signal?: AbortSignal }
 
-export type BoxedEventTarget<T extends EventTarget = EventTarget> =
-  & BoxBaseType<typeof type>
-  & { port: BoxedMessagePort<EventTargetMessage> }
-  & { [UnderlyingType]: T }
+export const isType = (value: unknown): value is EventTarget => value instanceof EventTarget
 
-// FinalizationRegistry — when the revived EventTarget is collected the box
-// side needs to remove the forwarder listeners it installed on the user's
-// source EventTarget; otherwise long-lived sources (window, document, …)
-// retain the forwarder forever and keep posting into a dead channel on
-// every dispatch. We post a `close` sentinel through the revive-side port
-// but deliberately do NOT call .close() on the port here: on synthetic
-// EventPort channels (JSON transport) close() synchronously sends a
-// `message-port-close` to the box side via _onClose, which races ahead of
-// our queued sentinel and tears the box-side portHandlers entry down
-// before the sentinel arrives — so the sentinel gets dropped and tearDown
-// never runs. Leaving the port open lets messagePortRegistry clean it up
-// a GC cycle later, by which time the sentinel has already flushed.
-type EventTargetCleanupInfo = {
-  port: AnyPort<EventTargetMessage>
-}
-
-const eventTargetRegistry = new FinalizationRegistry<EventTargetCleanupInfo>((info) => {
-  try {
-    info.port.postMessage({ kind: 'close' })
-  } catch { /* Port may already be closed */ }
+export const box = <T extends EventTarget, T2 extends RevivableContext>(value: T, context: T2) => ({
+  ...BoxBase,
+  type,
+  addListener: boxFunction(
+    (type: string, listener: EventListener, options?: ListenerOpts) =>
+      value.addEventListener(type, listener, options),
+    context,
+  ),
+  removeListener: boxFunction(
+    (type: string, listener: EventListener, options?: ListenerOpts) =>
+      value.removeEventListener(type, listener, options),
+    context,
+  ),
 })
 
-export const isType = (value: unknown): value is EventTarget =>
-  value instanceof EventTarget
+export type BoxedEventTarget = ReturnType<typeof box>
 
-export const box = <T extends EventTarget, T2 extends RevivableContext>(
-  value: T,
-  context: T2,
-): BoxedEventTarget<T> => {
-  const { localPort, boxedRemote } = createRevivableChannel<EventTargetMessage>(context)
-
-  // One forwarder per event type, installed on demand and torn down when the
-  // remote unsubscribes. Keyed by eventType so duplicate subscribes are no-ops.
-  const sourceListeners = new Map<string, EventListener>()
-
-  const tearDown = () => {
-    for (const [eventType, listener] of sourceListeners) {
-      value.removeEventListener(eventType, listener)
-    }
-    sourceListeners.clear()
-    localPort.removeEventListener('message', messageListener as EventListener)
-    localPort.close()
-  }
-
-  const messageListener = ({ data }: MessageEvent<EventTargetMessage>) => {
-    if (data.kind === 'close') {
-      tearDown()
-      return
-    }
-    if (data.kind === 'subscribe') {
-      if (sourceListeners.has(data.eventType)) return
-      const listener: EventListener = (event) => {
-        const message: EventTargetMessage = {
-          kind: 'event',
-          eventType: data.eventType,
-          bubbles: event.bubbles,
-          cancelable: event.cancelable,
-          composed: event.composed,
-        }
-        if (event instanceof CustomEvent) {
-          message.detail = event.detail as Capable
-        }
-        localPort.postMessage(message)
-      }
-      value.addEventListener(data.eventType, listener)
-      sourceListeners.set(data.eventType, listener)
-      return
-    }
-    if (data.kind === 'unsubscribe') {
-      const existing = sourceListeners.get(data.eventType)
-      if (!existing) return
-      value.removeEventListener(data.eventType, existing)
-      sourceListeners.delete(data.eventType)
-    }
-  }
-
-  localPort.addEventListener('message', messageListener as EventListener)
-  localPort.start()
-
-  return { ...BoxBase, type, port: boxedRemote } as BoxedEventTarget<T>
+// Stable EventListener per EventListenerObject so identity() yields the
+// same id on add and remove.
+const objectWrappers = new WeakMap<EventListenerObject, EventListener>()
+const toListener = (listerObject: EventListenerOrEventListenerObject): EventListener => {
+  if (typeof listerObject === 'function') return listerObject
+  let listener = objectWrappers.get(listerObject)
+  if (!listener) objectWrappers.set(listerObject, listener = (e) => listerObject.handleEvent(e))
+  return listener
 }
 
-const extractCapture = (
-  options?: boolean | EventListenerOptions | AddEventListenerOptions,
-): boolean => typeof options === 'boolean' ? options : !!options?.capture
+type Reg = { eventType: string, listener: EventListener, capture: boolean }
 
-const extractOnce = (options?: boolean | AddEventListenerOptions): boolean =>
-  typeof options === 'object' && options !== null && !!options.once
+const findReg = (regs: Reg[], eventType: string, listener: EventListener, capture: boolean): Reg | undefined =>
+  regs.find(r => r.eventType === eventType && r.listener === listener && r.capture === capture)
 
-type Subscriptions =
-  Map<string, Map<EventListenerOrEventListenerObject, Map<boolean, EventListenerOrEventListenerObject>>>
-
-// Removes one (listener, capture) registration; returns true iff the
-// event type went from non-empty to empty so the caller can post unsubscribe.
-const removeFromTracking = (
-  subscriptions: Subscriptions,
-  eventType: string,
-  listener: EventListenerOrEventListenerObject,
-  capture: boolean,
-): boolean => {
-  const byListener = subscriptions.get(eventType)
-  if (!byListener) return false
-  const byCapture = byListener.get(listener)
-  if (!byCapture) return false
-  if (!byCapture.delete(capture)) return false
-  if (byCapture.size === 0) byListener.delete(listener)
-  if (byListener.size > 0) return false
-  subscriptions.delete(eventType)
-  return true
-}
-
-// Attaches the port-dispatch listener inside a helper so V8's closure scope
-// record for the listener contains only `targetRef` + `port` — not the outer
-// revive frame (which has a strong `target` binding that would pin the
-// revived EventTarget and defeat the FinalizationRegistry-based cleanup).
-const wireMessageListener = (
-  port: AnyPort<EventTargetMessage>,
-  targetRef: WeakRef<EventTarget>,
-): void => {
-  port.addEventListener('message', ({ data }: MessageEvent<EventTargetMessage>) => {
-    if (data.kind !== 'event') return
-    const t = targetRef.deref()
-    if (!t) return
-    const eventInit = {
-      bubbles: data.bubbles,
-      cancelable: data.cancelable,
-      composed: data.composed,
-    }
-    const event = 'detail' in data
-      ? new CustomEvent(data.eventType, { ...eventInit, detail: data.detail })
-      : new Event(data.eventType, eventInit)
-    t.dispatchEvent(event)
-  })
-}
-
-// Builds the addEventListener/removeEventListener overrides inside a helper
-// so the closures they produce capture only the listed params — not `target`
-// from revive's scope (V8 retains whole context slots per closure, so leaving
-// `target` in the enclosing lexical scope would pin it alive indefinitely).
-const installOverrides = (
-  target: EventTarget,
-  port: AnyPort<EventTargetMessage>,
-  subscriptions: Subscriptions,
-): void => {
-  const nativeAdd = EventTarget.prototype.addEventListener.bind(target)
-  const nativeRemove = EventTarget.prototype.removeEventListener.bind(target)
+export const revive = <T extends ReturnType<typeof box>, T2 extends RevivableContext>(value: T, context: T2) => {
+  const addRpc = reviveFunction(value.addListener, context)
+  const removeRpc = reviveFunction(value.removeListener, context)
+  // Façade only — events never dispatch through it. Source-side EventTarget
+  // owns all semantics; we just track regs for trackGc cleanup.
+  const target = new EventTarget()
+  const regs: Reg[] = []
 
   Object.defineProperty(target, 'addEventListener', {
-    value: (
-      eventType: string,
-      listener: EventListenerOrEventListenerObject | null,
-      options?: boolean | AddEventListenerOptions,
-    ) => {
+    value: (eventType: string, listener: EventListenerOrEventListenerObject | null, options?: ListenerOpts) => {
       if (listener === null) return
-      const capture = extractCapture(options)
-      const once = extractOnce(options)
-
-      let byListener = subscriptions.get(eventType)
-      const isFirstForType = !byListener
-      if (!byListener) {
-        byListener = new Map()
-        subscriptions.set(eventType, byListener)
-      }
-      let byCapture = byListener.get(listener)
-      if (!byCapture) {
-        byCapture = new Map()
-        byListener.set(listener, byCapture)
-      }
-      if (byCapture.has(capture)) return
-
-      // `{ once: true }` auto-removes the native registration after first
-      // dispatch, but the DOM doesn't notify our override — so without a
-      // wrapper, our tracking would diverge and we'd never send unsubscribe.
-      const effective: EventListenerOrEventListenerObject = once
-        ? (event: Event) => {
-            const becameEmpty = removeFromTracking(subscriptions, eventType, listener, capture)
-            if (becameEmpty) port.postMessage({ kind: 'unsubscribe', eventType })
-            if (typeof listener === 'function') listener(event)
-            else listener.handleEvent(event)
-          }
-        : listener
-
-      byCapture.set(capture, effective)
-      if (isFirstForType) port.postMessage({ kind: 'subscribe', eventType })
-      nativeAdd(eventType, effective, options)
+      const fn = toListener(listener)
+      const capture = typeof options === 'boolean' ? options : !!options?.capture
+      if (findReg(regs, eventType, fn, capture)) return
+      regs.push({ eventType, listener: fn, capture })
+      addRpc(eventType, identity(fn), options).catch(() => {})
     },
   })
 
   Object.defineProperty(target, 'removeEventListener', {
-    value: (
-      eventType: string,
-      listener: EventListenerOrEventListenerObject | null,
-      options?: boolean | EventListenerOptions,
-    ) => {
+    value: (eventType: string, listener: EventListenerOrEventListenerObject | null, options?: ListenerOpts) => {
       if (listener === null) return
-      const capture = extractCapture(options)
-      const effective = subscriptions.get(eventType)?.get(listener)?.get(capture)
-      if (!effective) return
-      nativeRemove(eventType, effective, options)
-      const becameEmpty = removeFromTracking(subscriptions, eventType, listener, capture)
-      if (becameEmpty) port.postMessage({ kind: 'unsubscribe', eventType })
+      const fn = toListener(listener)
+      const capture = typeof options === 'boolean' ? options : !!options?.capture
+      const reg = findReg(regs, eventType, fn, capture)
+      if (!reg) return
+      regs.splice(regs.indexOf(reg), 1)
+      removeRpc(eventType, identity(fn), { capture }).catch(() => {})
     },
   })
-}
 
-export const revive = <T extends BoxedEventTarget, T2 extends RevivableContext>(
-  value: T,
-  context: T2,
-): T[UnderlyingType] => {
-  const port = reviveMessagePort(value.port, context)
-  port.start()
+  // Cleanup must NOT close over `target` — otherwise the FR can never fire.
+  trackGc(target, () => {
+    for (const { eventType, listener, capture } of regs) {
+      removeRpc(eventType, identity(listener), { capture }).catch(() => {})
+    }
+    regs.length = 0
+  })
 
-  const target = new EventTarget()
-  // Per-type registrations keyed by `(listener, capture)` because the DOM
-  // uniques on that tuple: the same listener with capture=true and capture=false
-  // are two distinct registrations and must be tracked independently. Tracking
-  // on listener identity alone would silently drop one registration when the
-  // other is removed, and miss `{ once: true }` self-removal.
-  const subscriptions: Subscriptions = new Map()
-
-  // WeakRef wrapping + helpers-with-tight-scope pattern: closures created
-  // inside wireMessageListener / installOverrides only capture their params,
-  // not `target` from this frame. That's what lets the FinalizationRegistry
-  // fire when the user drops their revived-target reference.
-  wireMessageListener(port, new WeakRef(target))
-  installOverrides(target, port, subscriptions)
-
-  eventTargetRegistry.register(target, { port }, target)
-
-  return target as T[UnderlyingType]
+  return target
 }
 
 const typeCheck = () => {
-  const et = new EventTarget()
-  const boxed = box(et, {} as RevivableContext)
-  const revived = revive(boxed, {} as RevivableContext)
-  const expected: EventTarget = revived
+  const r = revive(box(new EventTarget(), {} as RevivableContext), {} as RevivableContext)
+  const expected: EventTarget = r
   // @ts-expect-error - not a string
-  const notString: string = revived
+  const notString: string = r
   // @ts-expect-error - cannot box non-EventTarget
   box('not an event target', {} as RevivableContext)
 }
