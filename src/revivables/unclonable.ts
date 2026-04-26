@@ -2,9 +2,9 @@ import type { BoxBase as BoxBaseType, RevivableContext } from './utils'
 
 import { BoxBase } from './utils'
 
-export const type = 'untransferable' as const
+export const type = 'unclonable' as const
 
-export type BoxedUntransferable = BoxBaseType<typeof type>
+export type BoxedUnclonable = BoxBaseType<typeof type>
 
 /** True for plain objects whose own-property iteration via `Object.entries`
  *  is what `descend()` recurses into. We skip these in the unclonable
@@ -19,8 +19,8 @@ const isPlainObject = (value: unknown): boolean => {
 /** Decide if a value should be coerced to `{}` because the wire would
  *  otherwise blow up on it. The runtime is the source of truth — we
  *  hand the value to `structuredClone` and let the engine answer "is
- *  this transferable?" rather than maintaining a hand-rolled list of
- *  known unclonable types.
+ *  this clonable?" rather than maintaining a hand-rolled list of known
+ *  unclonable types.
  *
  *  Fast paths (primitives, arrays, plain objects, and anything earlier
  *  modules already claim via `findBoxModule`'s short-circuit) never
@@ -34,7 +34,7 @@ const isPlainObject = (value: unknown): boolean => {
  *  Symbols are special-cased because they're primitives (not objects)
  *  but `structuredClone(Symbol())` throws — caught by typeof so we
  *  don't have to construct a probe call for every symbol value. */
-const isUntransferable = (value: unknown): boolean => {
+const isUnclonable = (value: unknown): boolean => {
   if (value === null) return false
   const t = typeof value
   if (t === 'symbol') return true
@@ -51,21 +51,21 @@ const isUntransferable = (value: unknown): boolean => {
 
 /** Type-level lie: returns `value is never` so this module doesn't widen
  *  the `Capable` union. Coercion to `{}` is a best-effort runtime
- *  rescue — `WeakMap`, `Symbol` etc. aren't *meaningfully* transferable
+ *  rescue — `WeakMap`, `Symbol` etc. aren't *meaningfully* clonable
  *  and shouldn't show up in user-facing type APIs. The runtime
  *  predicate still matches at the `findBoxModule` iteration; the type
  *  system just pretends nothing matches so user code that tries to
  *  pass an unclonable value still gets a compile-time error. */
-export const isType = isUntransferable as (value: unknown) => value is never
+export const isType = isUnclonable as (value: unknown) => value is never
 
 // Boxing as an empty marker lets the receiver see `{}` on either
 // transport — matches what `JSON.stringify(new WeakMap())` returns
 // natively, and prevents the otherwise-fatal DataCloneError on a clone
 // transport.
-export const box = (_value: never, _context: RevivableContext): BoxedUntransferable => ({
+export const box = (_value: never, _context: RevivableContext): BoxedUnclonable => ({
   ...BoxBase,
   type,
 })
 
-export const revive = (_value: BoxedUntransferable, _context: RevivableContext): Record<string, never> =>
+export const revive = (_value: BoxedUnclonable, _context: RevivableContext): Record<string, never> =>
   ({})

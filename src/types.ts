@@ -1,8 +1,9 @@
 import type { ConnectionMessage } from './connections'
 import type { TypedEventTarget } from './utils'
+import type { IsJsonOnlyTransport } from './utils/type-guards'
 import type {
   DefaultRevivableModules, RevivableModule,
-  InferMessages, InferRevivables
+  InferMessages, InferRevivables, RevivableContext
 } from './revivables'
 
 export const OSRA_KEY = '__OSRA_KEY__' as const
@@ -47,13 +48,26 @@ export type StructurableTransferable =
   | Map<StructurableTransferable, StructurableTransferable>
   | Set<StructurableTransferable>
 
-export type Capable<TModules extends readonly RevivableModule[] = DefaultRevivableModules> =
-  | StructurableTransferable
-  | InferRevivables<TModules>
-  | { [key: string]: Capable<TModules> }
-  | Array<Capable<TModules>>
-  | Map<Capable<TModules>, Capable<TModules>>
-  | Set<Capable<TModules>>
+/** Base set of "free" types in `Capable` — narrows to `Jsonable` on a
+ *  JSON-only transport so the user can't type a message with a `Date`,
+ *  `Blob`, etc. that JSON.stringify would silently coerce. Modules
+ *  that *do* support JSON (date, map, set, bigint, …) put their type
+ *  back in via `InferRevivables`. */
+type CapableBase<Ctx extends RevivableContext> =
+  IsJsonOnlyTransport<Ctx['transport']> extends true
+    ? Jsonable | undefined | void
+    : StructurableTransferable
+
+export type Capable<
+  TModules extends readonly RevivableModule[] = DefaultRevivableModules,
+  Ctx extends RevivableContext = RevivableContext,
+> =
+  | CapableBase<Ctx>
+  | InferRevivables<TModules, Ctx>
+  | { [key: string]: Capable<TModules, Ctx> }
+  | Array<Capable<TModules, Ctx>>
+  | Map<Capable<TModules, Ctx>, Capable<TModules, Ctx>>
+  | Set<Capable<TModules, Ctx>>
 
 export type MessageFields = {
   type: string

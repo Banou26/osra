@@ -72,6 +72,11 @@ export const instanceOfAny = (value: unknown, ctors: readonly (AnyConstructor | 
 export const isClonable = (value: unknown): boolean =>
   instanceOfAny(value, [globalThis.SharedArrayBuffer])
 
+// Types eligible for transfer (move semantics) when the user opts in via
+// `transfer()`. Source: HTML transferable-objects list. Some entries are
+// also clonable (ArrayBuffer, ImageBitmap, AudioData, VideoFrame) — when
+// not inside a `transfer` box they fall back to clone. Constructors
+// absent on the running platform are tolerated by `instanceOfAny`.
 export const isTransferable = (value: unknown): value is Transferable =>
   instanceOfAny(value, [
     globalThis.ArrayBuffer,
@@ -80,6 +85,15 @@ export const isTransferable = (value: unknown): value is Transferable =>
     globalThis.WritableStream,
     globalThis.TransformStream,
     globalThis.ImageBitmap,
+    globalThis.OffscreenCanvas,
+    (globalThis as { AudioData?: abstract new (...args: any[]) => unknown }).AudioData,
+    (globalThis as { VideoFrame?: abstract new (...args: any[]) => unknown }).VideoFrame,
+    (globalThis as { MediaSourceHandle?: abstract new (...args: any[]) => unknown }).MediaSourceHandle,
+    (globalThis as { MediaStreamTrack?: abstract new (...args: any[]) => unknown }).MediaStreamTrack,
+    (globalThis as { MIDIAccess?: abstract new (...args: any[]) => unknown }).MIDIAccess,
+    (globalThis as { RTCDataChannel?: abstract new (...args: any[]) => unknown }).RTCDataChannel,
+    (globalThis as { WebTransportReceiveStream?: abstract new (...args: any[]) => unknown }).WebTransportReceiveStream,
+    (globalThis as { WebTransportSendStream?: abstract new (...args: any[]) => unknown }).WebTransportSendStream,
   ])
 
 export type WebExtRuntime = typeof browser.runtime

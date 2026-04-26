@@ -22,7 +22,9 @@ import * as set from './set'
 import * as bigInt from './bigint'
 import * as event from './event'
 import * as eventTarget from './event-target'
-import * as untransferable from './untransferable'
+import * as clonable from './clonable'
+import * as transferable from './transferable'
+import * as unclonable from './unclonable'
 
 export { identity } from './identity'
 export { transfer } from './transfer'
@@ -72,10 +74,16 @@ export const defaultRevivableModules = [
   // EventTarget; the more specific revivables (messagePort/abortSignal) need
   // first dibs via findBoxModule's iteration order.
   eventTarget,
-  // Catch-all for known-untransferable values (WeakMap/WeakSet/WeakRef).
-  // Coerces them to `{}` on revive so they can't crash the wire — same
-  // effective behavior as `JSON.stringify(new WeakMap())` returning "{}".
-  untransferable,
+  // Pass-through modules for known wire-safe types not handled above —
+  // they short-circuit `findBoxModule` so `unclonable`'s
+  // `structuredClone` probe never fires on values we already know are
+  // safe (Blob, ImageBitmap, OffscreenCanvas, …).
+  clonable,
+  transferable,
+  // Catch-all for everything else: probes via `structuredClone` and
+  // coerces unclonables to `{}` on revive — same effective behavior as
+  // `JSON.stringify(new WeakMap())` returning "{}".
+  unclonable,
 ] as const
 
 export type DefaultRevivableModules = typeof defaultRevivableModules

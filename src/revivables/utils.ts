@@ -34,10 +34,23 @@ export type RevivableContext<
   eventTarget: MessageEventTarget<TModules>
 }
 
-export type ExtractType<T> =
-  T extends { isType: (value: unknown) => value is infer S }
-    ? S
-    : never
+/** Extract the type a module's `isType` narrows to, given the context
+ *  it'll run under. Modules tagged `capableOnly: true` (currently
+ *  `clonable` and `transferable`) contribute `never` when the
+ *  transport is in JSON mode — their types only meaningfully
+ *  round-trip via structured clone, so user code shouldn't be able to
+ *  type a message that JSON would silently drop.
+ *
+ *  Generic-`isType<Ctx>` would have been the cleaner expression, but
+ *  TS's `infer S` over a generic function instantiates with the
+ *  declared constraint, not the conditional's `Ctx`, so the narrowing
+ *  never propagates. The marker flag is the practical alternative. */
+export type ExtractType<T, Ctx extends RevivableContext = RevivableContext> =
+  T extends { capableOnly: true }
+    ? IsJsonOnlyTransport<Ctx['transport']> extends true
+      ? never
+      : T extends { isType: (value: unknown) => value is infer S } ? S : never
+    : T extends { isType: (value: unknown) => value is infer S } ? S : never
 
 export type ExtractBox<T> =
   T extends { box: (...args: any[]) => infer B }
@@ -54,8 +67,11 @@ export type ExtractMessages<T> =
 export type InferMessages<TModules extends readonly unknown[]> =
   ExtractMessages<TModules[number]>
 
-export type InferRevivables<TModules extends readonly unknown[]> =
-  ExtractType<TModules[number]>
+export type InferRevivables<
+  TModules extends readonly unknown[],
+  Ctx extends RevivableContext = RevivableContext,
+> =
+  ExtractType<TModules[number], Ctx>
 
 export type InferRevivableBox<TModules extends readonly unknown[]> =
   ExtractBox<TModules[number]>

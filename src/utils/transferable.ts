@@ -8,6 +8,10 @@ export { transfer }
 // in the outgoing message has to go on the transfer list regardless of whether
 // the user opted in with `transfer()`. MessagePort is the canonical case —
 // cloning one would leave the remote side unable to respond.
+//
+// Source: HTML transferable-objects list, restricted to types that have
+// no clone semantics (i.e. transfer-only). Constructors absent on the
+// running platform are tolerated by `instanceOfAny`.
 const isMustTransfer = (value: unknown): value is Transferable =>
   instanceOfAny(value, [
     globalThis.MessagePort,
@@ -15,6 +19,12 @@ const isMustTransfer = (value: unknown): value is Transferable =>
     globalThis.WritableStream,
     globalThis.TransformStream,
     globalThis.OffscreenCanvas,
+    (globalThis as { MediaSourceHandle?: abstract new (...args: any[]) => unknown }).MediaSourceHandle,
+    (globalThis as { MediaStreamTrack?: abstract new (...args: any[]) => unknown }).MediaStreamTrack,
+    (globalThis as { MIDIAccess?: abstract new (...args: any[]) => unknown }).MIDIAccess,
+    (globalThis as { RTCDataChannel?: abstract new (...args: any[]) => unknown }).RTCDataChannel,
+    (globalThis as { WebTransportReceiveStream?: abstract new (...args: any[]) => unknown }).WebTransportReceiveStream,
+    (globalThis as { WebTransportSendStream?: abstract new (...args: any[]) => unknown }).WebTransportSendStream,
   ])
 
 // Structural check for a transfer revivable box. Uses the 'transfer' string
