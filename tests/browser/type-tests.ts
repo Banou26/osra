@@ -66,6 +66,50 @@ type _CapableNegatives = [
   Expect<Equals<symbol extends Capable ? true : false, false>>,
 ]
 
+// --- Transport-aware Capable narrowing -----------------------------------
+//
+// On a JSON-only transport, `Capable<modules, JsonCtx>` excludes the
+// types that would silently coerce to `"{}"` via JSON.stringify (Blob,
+// File, RegExp, ImageBitmap, OffscreenCanvas, …). Modules that *do*
+// support JSON encoding (Date / Map / Set / BigInt / Function / etc.)
+// keep their types in via `InferRevivables`.
+//
+// On a clone-capable transport (or the broad-Transport default),
+// nothing changes.
+
+type JsonCtx = RevivableContext & { transport: { isJson: true; emit: any; receive: any } }
+type CloneCtx = RevivableContext & { transport: typeof window }
+
+// On a clone transport, Blob / OffscreenCanvas / RegExp / ImageBitmap
+// are all assignable to Capable.
+type _CapableCloneCtxPositives = [
+  Expect<Assignable<Blob, Capable<DefaultRevivableModule[], CloneCtx>>>,
+  Expect<Assignable<File, Capable<DefaultRevivableModule[], CloneCtx>>>,
+  Expect<Assignable<RegExp, Capable<DefaultRevivableModule[], CloneCtx>>>,
+  Expect<Assignable<ImageData, Capable<DefaultRevivableModule[], CloneCtx>>>,
+]
+
+// On a JSON-only transport, those same types are NOT assignable —
+// the type system rejects them at the `expose()` call site.
+type _CapableJsonCtxNegatives = [
+  Expect<Equals<Blob extends Capable<DefaultRevivableModule[], JsonCtx> ? true : false, false>>,
+  Expect<Equals<File extends Capable<DefaultRevivableModule[], JsonCtx> ? true : false, false>>,
+  Expect<Equals<RegExp extends Capable<DefaultRevivableModule[], JsonCtx> ? true : false, false>>,
+  Expect<Equals<ImageData extends Capable<DefaultRevivableModule[], JsonCtx> ? true : false, false>>,
+]
+
+// Module-handled types stay Capable on JSON transports — their boxes
+// produce JSON-clonable shapes (date → ISO string, map/set → entries,
+// etc).
+type _CapableJsonCtxPositives = [
+  Expect<Assignable<bigint, Capable<DefaultRevivableModule[], JsonCtx>>>,
+  Expect<Assignable<Date, Capable<DefaultRevivableModule[], JsonCtx>>>,
+  Expect<Assignable<Map<string, number>, Capable<DefaultRevivableModule[], JsonCtx>>>,
+  Expect<Assignable<Set<number>, Capable<DefaultRevivableModule[], JsonCtx>>>,
+  Expect<Assignable<Promise<number>, Capable<DefaultRevivableModule[], JsonCtx>>>,
+  Expect<Assignable<() => number, Capable<DefaultRevivableModule[], JsonCtx>>>,
+]
+
 // --- ReplaceWithBox: confirm value-shape revivables transform correctly ---
 //
 // Function & Promise box-replacement aren't asserted here: TS's inference of

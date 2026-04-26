@@ -1,8 +1,9 @@
 import type { ConnectionMessage } from './connections'
 import type { TypedEventTarget } from './utils'
+import type { IsJsonOnlyTransport } from './utils/type-guards'
 import type {
   DefaultRevivableModules, RevivableModule,
-  InferMessages, InferRevivables
+  InferMessages, InferRevivables, RevivableContext
 } from './revivables'
 
 export const OSRA_KEY = '__OSRA_KEY__' as const
@@ -47,13 +48,25 @@ export type StructurableTransferable =
   | Map<StructurableTransferable, StructurableTransferable>
   | Set<StructurableTransferable>
 
-export type Capable<TModules extends readonly RevivableModule[] = DefaultRevivableModules> =
-  | StructurableTransferable
-  | InferRevivables<TModules>
-  | { [key: string]: Capable<TModules> }
-  | Array<Capable<TModules>>
-  | Map<Capable<TModules>, Capable<TModules>>
-  | Set<Capable<TModules>>
+/** "Free" types in `Capable` — narrows to `Jsonable` on JSON transports so
+ *  user code can't type a `Date`/`Blob`/etc. that JSON would silently coerce.
+ *  Modules that DO support JSON (date, map, set, bigint, …) put their type
+ *  back via `InferRevivables`. */
+type CapableBase<Ctx extends RevivableContext> =
+  IsJsonOnlyTransport<Ctx['transport']> extends true
+    ? Jsonable | undefined | void
+    : StructurableTransferable
+
+export type Capable<
+  TModules extends readonly RevivableModule[] = DefaultRevivableModules,
+  Ctx extends RevivableContext = RevivableContext,
+> =
+  | CapableBase<Ctx>
+  | InferRevivables<TModules, Ctx>
+  | { [key: string]: Capable<TModules, Ctx> }
+  | Array<Capable<TModules, Ctx>>
+  | Map<Capable<TModules, Ctx>, Capable<TModules, Ctx>>
+  | Set<Capable<TModules, Ctx>>
 
 export type MessageFields = {
   type: string
@@ -68,15 +81,8 @@ export type MessageBase = {
 }
 
 export type ProtocolMessage =
-  | {
-    type: 'announce'
-    /** Only set when acknowledging a remote announcement */
-    remoteUuid?: Uuid
-  }
-  | {
-    type: 'close'
-    remoteUuid: Uuid
-  }
+  | { type: 'announce', remoteUuid?: Uuid }
+  | { type: 'close', remoteUuid: Uuid }
 
 export type MessageVariant<
   TModules extends readonly RevivableModule[] = DefaultRevivableModules
