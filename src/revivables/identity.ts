@@ -31,6 +31,16 @@ export type BoxedIdentity<T extends Capable = Capable> = BoxBaseType<typeof type
 const isObjectOrFunction = (value: unknown): value is object =>
   value !== null && (typeof value === 'object' || typeof value === 'function')
 
+/** Anything we can hand to WeakMap/WeakRef/FinalizationRegistry. Excludes
+ *  registered symbols (Symbol.for) — those throw at runtime. */
+const isWeakKeyable = (value: unknown): value is WeakKey => {
+  if (value === null) return false
+  const t = typeof value
+  if (t === 'object' || t === 'function') return true
+  if (t === 'symbol') return Symbol.keyFor(value as symbol) === undefined
+  return false
+}
+
 const isIdentityWrapper = (value: unknown): value is IdentityWrapper =>
   isObjectOrFunction(value) && IDENTITY_MARKER in value && value[IDENTITY_MARKER] === true
 
@@ -52,15 +62,15 @@ export const identity = <T>(value: T): T =>
   (isObjectOrFunction(value) ? wrap(value) : value) as T
 
 type IdentityState = {
-  readonly sendIds: WeakMap<object, string>
+  readonly sendIds: WeakMap<WeakKey, string>
   /** id → ref to the value we sent, so a round-trip resolves to the
    *  original reference instead of building a fresh proxy. */
-  readonly idToSent: Map<string, WeakRef<object>>
+  readonly idToSent: Map<string, WeakRef<WeakKey>>
   readonly sendRegistry: FinalizationRegistry<string>
   readonly receiveCache: Map<string, unknown>
   /** Revived value → id, so user code passing a revived value back to
    *  its origin replays the peer's id and short-circuits to the real ref. */
-  readonly revivedToId: WeakMap<object, string>
+  readonly revivedToId: WeakMap<WeakKey, string>
   listenerInstalled: boolean
 }
 
@@ -69,10 +79,10 @@ const connectionStates = new WeakMap<RevivableContext, IdentityState>()
 const getOrCreateState = (context: RevivableContext): IdentityState => {
   const existing = connectionStates.get(context)
   if (existing) return existing
-  const sendIds = new WeakMap<object, string>()
-  const idToSent = new Map<string, WeakRef<object>>()
+  const sendIds = new WeakMap<WeakKey, string>()
+  const idToSent = new Map<string, WeakRef<WeakKey>>()
   const receiveCache = new Map<string, unknown>()
-  const revivedToId = new WeakMap<object, string>()
+  const revivedToId = new WeakMap<WeakKey, string>()
   const sendRegistry = new FinalizationRegistry<string>((id) => {
     idToSent.delete(id)
     try {
@@ -95,12 +105,30 @@ const installReceiveListener = (context: RevivableContext, state: IdentityState)
     if (detail?.type !== 'identity-dispose') return
     const revived = state.receiveCache.get(detail.id)
     state.receiveCache.delete(detail.id)
-    if (revived !== undefined && isObjectOrFunction(revived)) state.revivedToId.delete(revived)
+    if (revived !== undefined && isWeakKeyable(revived)) state.revivedToId.delete(revived)
   })
 }
 
 export const isType = (value: unknown): value is IdentityWrapper =>
   isIdentityWrapper(value)
+
+/** Look up or assign the id for a referenceable value. Returns whether
+ *  the id is already-known (resend or round-trip) so the caller can skip
+ *  shipping the inner payload. */
+const registerForReference = (
+  value: WeakKey,
+  state: IdentityState,
+): { id: string, isExisting: boolean } => {
+  const existingId = state.sendIds.get(value)
+  if (existingId !== undefined) return { id: existingId, isExisting: true }
+  const receivedId = state.revivedToId.get(value)
+  if (receivedId !== undefined) return { id: receivedId, isExisting: true }
+  const id = globalThis.crypto.randomUUID()
+  state.sendIds.set(value, id)
+  state.idToSent.set(id, new WeakRef(value))
+  state.sendRegistry.register(value, id)
+  return { id, isExisting: false }
+}
 
 export const box = <T extends Capable, TContext extends RevivableContext>(
   wrapper: IdentityWrapper<T>,
@@ -108,25 +136,29 @@ export const box = <T extends Capable, TContext extends RevivableContext>(
 ): BoxedIdentity<T> => {
   const state = getOrCreateState(context)
   const inner = wrapper.value
-  const key = isObjectOrFunction(inner) ? inner : undefined
-  if (key !== undefined) {
-    const existingId = state.sendIds.get(key)
-    if (existingId !== undefined) {
-      return { ...BoxBase, type, id: existingId } as BoxedIdentity<T>
-    }
-    const receivedId = state.revivedToId.get(key)
-    if (receivedId !== undefined) {
-      return { ...BoxBase, type, id: receivedId } as BoxedIdentity<T>
-    }
-  }
-  const id = globalThis.crypto.randomUUID()
   const innerBox = recursiveBox(inner, context)
-  if (key !== undefined) {
-    state.sendIds.set(key, id)
-    state.idToSent.set(id, new WeakRef(key))
-    state.sendRegistry.register(key, id)
+  if (!isWeakKeyable(inner)) {
+    // Inner can't anchor a WeakMap key — emit fresh id+inner each time, no dedup.
+    return { ...BoxBase, type, id: globalThis.crypto.randomUUID(), inner: innerBox } as BoxedIdentity<T>
   }
+  const { id, isExisting } = registerForReference(inner, state)
+  if (isExisting) return { ...BoxBase, type, id } as BoxedIdentity<T>
   return { ...BoxBase, type, id, inner: innerBox } as BoxedIdentity<T>
+}
+
+/** Identity-box a referenceable value with a caller-supplied inner box,
+ *  bypassing the recursive-box step. Used by revivables (symbol with
+ *  description=undefined) where recursing back through their own box
+ *  would loop into this module again. */
+export const boxByReference = <T extends WeakKey, TContext extends RevivableContext>(
+  value: T,
+  innerBox: Capable,
+  context: TContext,
+): BoxedIdentity => {
+  const state = getOrCreateState(context)
+  const { id, isExisting } = registerForReference(value, state)
+  if (isExisting) return { ...BoxBase, type, id } as BoxedIdentity
+  return { ...BoxBase, type, id, inner: innerBox } as BoxedIdentity
 }
 
 export const revive = <T extends BoxedIdentity, TContext extends RevivableContext>(
@@ -143,7 +175,7 @@ export const revive = <T extends BoxedIdentity, TContext extends RevivableContex
   }
   const revived = recursiveRevive(value.inner, context)
   state.receiveCache.set(value.id, revived)
-  if (isObjectOrFunction(revived)) state.revivedToId.set(revived, value.id)
+  if (isWeakKeyable(revived)) state.revivedToId.set(revived, value.id)
   return revived as T[UnderlyingType]
 }
 
