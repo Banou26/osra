@@ -57,9 +57,9 @@ export type ConnectionContext<
 
 export const startConnections = <
   T = unknown,
-  const TUserModules extends readonly RevivableModule[] = readonly []
+  const TModules extends readonly RevivableModule[] = DefaultRevivableModules
 >(
-  value: Capable<[...DefaultRevivableModules, ...TUserModules]>,
+  value: Capable<TModules>,
   {
     transport: _transport,
     name,
@@ -67,13 +67,13 @@ export const startConnections = <
     key = OSRA_DEFAULT_KEY,
     origin = '*',
     unregisterSignal,
-    revivableModules: _userRevivableModules,
+    revivableModules: configureRevivableModules,
     uuid: _uuid,
     remoteUuid: presetRemoteUuid,
-  }: StartConnectionsOptions<TUserModules>
+  }: StartConnectionsOptions<TModules>
 ): Promise<T> => {
   const transport = normalizeTransport(_transport)
-  const mergedRevivableModules = mergeRevivableModules(_userRevivableModules)
+  const mergedRevivableModules = mergeRevivableModules<TModules>(configureRevivableModules)
   type MergedModules = typeof mergedRevivableModules
   const connectionContexts = new Map<string, ConnectionContext<MergedModules>>()
 
@@ -104,11 +104,11 @@ export const startConnections = <
     createConnectionEventTarget: createTypedEventTarget,
   }
 
-  const listener = (message: Message<MergedModules>, _: MessageContext) => {
+  const listener = (message: Message, _: MessageContext) => {
     // own message looped back on the channel
     if (message.uuid === uuid) return
     protocolEventTarget.dispatchEvent(
-      new CustomEvent('message', { detail: message }),
+      new CustomEvent('message', { detail: message as Message<MergedModules> }),
     )
   }
 

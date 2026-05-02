@@ -22,14 +22,18 @@ export const normalizeTransport = (transport: Transport): Transport => {
   return { isJson, ...ports } satisfies Transport
 }
 
+/** Resolves the final revivable module list. The user supplies a function
+ *  that takes the defaults and returns whatever ordering/composition they
+ *  want — add modules, drop defaults, reorder, override per-type. When
+ *  omitted, the defaults are used as-is. */
 export const mergeRevivableModules = <
-  TUserModules extends readonly RevivableModule[]
->(userModules: TUserModules | undefined) => [
-  ...defaultRevivableModules.filter(
-    d => !(userModules ?? []).some(u => u.type === d.type),
-  ),
-  ...(userModules ?? []),
-] as const
+  TModules extends readonly RevivableModule[] = DefaultRevivableModules
+>(
+  configure: ((defaults: DefaultRevivableModules) => TModules) | undefined,
+): TModules =>
+  configure
+    ? configure(defaultRevivableModules)
+    : defaultRevivableModules as unknown as TModules
 
 export type ProtocolEventMap<
   TModules extends readonly RevivableModule[] = DefaultRevivableModules
@@ -57,7 +61,7 @@ export type ProtocolContext<
 }
 
 export type StartConnectionsOptions<
-  TUserModules extends readonly RevivableModule[] = readonly []
+  TModules extends readonly RevivableModule[] = DefaultRevivableModules
 > = {
   transport: Transport
   name?: string
@@ -65,7 +69,10 @@ export type StartConnectionsOptions<
   key?: string
   origin?: string
   unregisterSignal?: AbortSignal
-  revivableModules?: TUserModules
+  /** Configure the revivable module list. Receives the defaults and
+   *  returns the final ordered list — add modules, drop defaults, reorder,
+   *  or override per-type as needed. */
+  revivableModules?: (defaults: DefaultRevivableModules) => TModules
   uuid?: Uuid
   remoteUuid?: Uuid
 }

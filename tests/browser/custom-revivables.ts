@@ -25,6 +25,9 @@ const pointModule = {
     new Point(value.x, value.y),
 } as const satisfies RevivableModule
 
+const withPoint = <TDefaults extends readonly RevivableModule[]>(defaults: TDefaults) =>
+  [pointModule, ...defaults] as const
+
 export const userPoint = async (transport: Transport) => {
   const value = async (p: Point) => {
     if (!(p instanceof Point)) {
@@ -32,11 +35,11 @@ export const userPoint = async (transport: Transport) => {
     }
     return new Point(p.x * 2, p.y * 2)
   }
-  expose(value, { transport, revivableModules: [pointModule] })
+  expose(value, { transport, revivableModules: withPoint })
 
-  const test = await expose<typeof value, [typeof pointModule]>(
+  const test = await expose<typeof value, ReturnType<typeof withPoint>>(
     {},
-    { transport, revivableModules: [pointModule] },
+    { transport, revivableModules: withPoint },
   )
 
   const result = await test(new Point(3, 4))
@@ -48,11 +51,11 @@ export const userPoint = async (transport: Transport) => {
 
 export const userPointReturn = async (transport: Transport) => {
   const value = async () => new Point(1, 2)
-  expose(value, { transport, revivableModules: [pointModule] })
+  expose(value, { transport, revivableModules: withPoint })
 
-  const test = await expose<typeof value, [typeof pointModule]>(
+  const test = await expose<typeof value, ReturnType<typeof withPoint>>(
     {},
-    { transport, revivableModules: [pointModule] },
+    { transport, revivableModules: withPoint },
   )
 
   const result = await test()
@@ -63,11 +66,11 @@ export const userPointReturn = async (transport: Transport) => {
 
 export const userPointDefaultsStillWork = async (transport: Transport) => {
   const value = async () => new Date('2026-04-08T00:00:00.000Z')
-  expose(value, { transport, revivableModules: [pointModule] })
+  expose(value, { transport, revivableModules: withPoint })
 
-  const test = await expose<typeof value, [typeof pointModule]>(
+  const test = await expose<typeof value, ReturnType<typeof withPoint>>(
     {},
-    { transport, revivableModules: [pointModule] },
+    { transport, revivableModules: withPoint },
   )
 
   const result = await test()

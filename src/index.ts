@@ -36,14 +36,14 @@ type CapableCheck<
 
 export const expose = async <
   T = unknown,
-  const TUserModules extends readonly RevivableModule[] = readonly [],
+  const TModules extends readonly RevivableModule[] = DefaultRevivableModules,
   const TTransport extends Transport = Transport,
-  const TValue = Capable<[...DefaultRevivableModules, ...TUserModules], ContextOf<TTransport>>
+  const TValue = Capable<TModules, ContextOf<TTransport>>
 >(
-  value: CapableCheck<TValue, [...DefaultRevivableModules, ...TUserModules], ContextOf<TTransport>>,
-  options: StartConnectionsOptions<TUserModules> & { transport: TTransport }
+  value: CapableCheck<TValue, TModules, ContextOf<TTransport>>,
+  options: StartConnectionsOptions<TModules> & { transport: TTransport }
 ): Promise<T> =>
-  startConnections<T, TUserModules>(
-    value as Capable<[...DefaultRevivableModules, ...TUserModules]>,
+  startConnections<T, TModules>(
+    value as Capable<TModules>,
     options
   )
