@@ -12,20 +12,16 @@ export const box = <T extends symbol, T2 extends RevivableContext>(
   value: T,
   context: T2,
 ) => {
-  // Anonymous symbols can't round-trip via description — pass by reference
-  // through identity so the same symbol on either side resolves to one ref.
-  if (value.description === undefined) {
-    return boxByReference(
-      value,
-      { ...BoxBase, type, description: undefined },
-      context,
-    )
-  }
-  return {
+  const box = {
     ...BoxBase,
     type,
     description: value.description,
   }
+  return (
+    value.description === undefined
+      ? boxByReference(value, box, context)
+      : box
+  )
 }
 
 export const revive = <T extends { description: string | undefined }, T2 extends RevivableContext>(
