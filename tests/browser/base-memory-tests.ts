@@ -33,11 +33,15 @@ export const callbackAsArgNoLeak = async (transport: Transport, iterations = DEF
 }
 
 export const promiseValuesNoLeak = async (transport: Transport, iterations = DEFAULT_ITERATIONS) => {
-  const value = { promise: Promise.resolve(42) }
+  // Each call returns an object containing a fresh inner Promise so the
+  // promise revivable boxes/revives per iteration — awaiting a singleton
+  // from a single expose() doesn't exercise the box/revive churn.
+  const value = async (n: number) => ({ inner: Promise.resolve(n) })
   expose(value, { transport })
-  const { promise } = await expose<typeof value>({}, { transport })
+  const remote = await expose<typeof value>({}, { transport })
   for (let i = 0; i < iterations; i++) {
-    await promise
+    const { inner } = await remote(i)
+    await inner
   }
 }
 

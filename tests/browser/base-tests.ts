@@ -19,7 +19,7 @@ export const argsAndResponse = async (transport: Transport) => {
   const test = await expose<typeof value>({}, { transport })
 
   await expect(test({ foo: 1 }, 'bar')).to.eventually.equal(1)
-  await expect(test({ foo: 0 }, 'baz')).to.be.rejected
+  await expect(test({ foo: 0 }, 'baz')).to.be.rejectedWith(/foo is not 1/)
 }
 
 export const callback = async (transport: Transport) => {
@@ -59,7 +59,7 @@ export const objectBaseArgsAndResponse = async (transport: Transport) => {
   const { test } = await expose<typeof value>({}, { transport })
 
   await expect(test({ foo: 1 }, 'bar')).to.eventually.equal(1)
-  await expect(test({ foo: 0 }, 'baz')).to.be.rejected
+  await expect(test({ foo: 0 }, 'baz')).to.be.rejectedWith(/foo is not 1/)
 }
 
 export const objectCallback = async (transport: Transport) => {
@@ -280,18 +280,16 @@ export const userAbortSignal = async (transport: Transport) => {
   expect(signal).to.be.instanceOf(AbortSignal)
   expect(signal.aborted).to.be.false
 
-  let abortedReason: unknown
-  signal.addEventListener('abort', () => {
-    abortedReason = signal.reason
+  // Event-driven instead of timed: the listener resolves when abort lands.
+  const aborted = new Promise<unknown>(resolve => {
+    signal.addEventListener('abort', () => resolve(signal.reason), { once: true })
   })
 
   controller.abort('test reason')
 
-  // Wait for the abort to propagate
-  await new Promise(resolve => setTimeout(resolve, 50))
-
+  const reason = await aborted
   expect(signal.aborted).to.be.true
-  expect(abortedReason).to.equal('test reason')
+  expect(reason).to.equal('test reason')
 }
 
 export const userAbortSignalAlreadyAborted = async (transport: Transport) => {
@@ -627,7 +625,12 @@ export const userPromiseRejected = async (transport: Transport) => {
 
   const { failing } = await expose<typeof value>({}, { transport })
 
-  await expect(failing).to.be.rejected
+  // Promise rejections cross the wire as serialized strings (see
+  // src/revivables/promise.ts) — assert the contract, not just "rejected".
+  let caught: unknown
+  try { await failing } catch (e) { caught = e }
+  expect(typeof caught).to.equal('string')
+  expect(caught as string).to.match(/boom/)
 }
 
 export const userPromiseRejectedWithString = async (transport: Transport) => {
@@ -639,8 +642,7 @@ export const userPromiseRejectedWithString = async (transport: Transport) => {
 
   let caught: unknown
   try { await failing } catch (e) { caught = e }
-  expect(typeof caught).to.equal('string')
-  expect(caught).to.contain('plain string reason')
+  expect(caught).to.equal('plain string reason')
 }
 
 export const userAbortSignalErrorReason = async (transport: Transport) => {
@@ -752,6 +754,8 @@ export const userErrorWithCause = async (transport: Transport) => {
 
   expect(error).to.be.instanceOf(Error)
   expect(error.message).to.equal('outer message')
+  expect(error.cause).to.be.instanceOf(Error)
+  expect((error.cause as Error).message).to.equal('inner reason')
 }
 
 export const userPromiseOfMap = async (transport: Transport) => {
@@ -769,10 +773,11 @@ export const userPromiseOfMap = async (transport: Transport) => {
 }
 
 export const userCallbackReturningSet = async (transport: Transport) => {
-  const value = async () => new Set<Date>([
-    new Date('2026-01-01T00:00:00.000Z'),
-    new Date('2026-12-31T00:00:00.000Z'),
-  ])
+  const expected = [
+    '2026-01-01T00:00:00.000Z',
+    '2026-12-31T00:00:00.000Z',
+  ] as const
+  const value = async () => new Set<Date>(expected.map(s => new Date(s)))
   expose(value, { transport })
 
   const remote = await expose<typeof value>({}, { transport })
@@ -780,7 +785,11 @@ export const userCallbackReturningSet = async (transport: Transport) => {
   const s = await remote()
   expect(s).to.be.instanceOf(Set)
   expect(s.size).to.equal(2)
-  for (const d of s) expect(d).to.be.instanceOf(Date)
+  const isoStrings = [...s].map(d => {
+    expect(d).to.be.instanceOf(Date)
+    return d.toISOString()
+  }).sort()
+  expect(isoStrings).to.deep.equal([...expected].sort())
 }
 
 export const userMapInsideArray = async (transport: Transport) => {
