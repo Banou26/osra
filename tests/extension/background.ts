@@ -1,4 +1,5 @@
-import { Resolvers as ContentScriptResolvers } from './background'
+import type { Resolvers as ContentScriptResolvers } from './content'
+import type { ContentAPI } from './types'
 
 import { expose } from '../../src/index'
 

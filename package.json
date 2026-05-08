@@ -23,8 +23,7 @@
     "clean-coverage": "rimraf .nyc_output coverage",
     "type-check": "tsgo --noEmit && tsgo --noEmit -p tsconfig.tests.json",
     "start-server": "http-server -p 3000",
-    "build-extension-test": "vite build --config vite.extension-test.config.ts",
-    "build-extension-test-watch": "vite build --config vite.extension-test.config.ts --watch",
+    "build-extension-test": "node build-extension-test.mjs",
     "test-extension": "npm run build-extension-test && npx playwright test -c playwright.extension.config.ts"
   },
   "repository": {

@@ -40,7 +40,7 @@ export const getError = async (api: TestAPI) => {
 }
 
 export const throwError = async (api: TestAPI) => {
-  await expect(api.throwError()).to.be.rejected
+  await expect(api.throwError()).to.be.rejectedWith(/Thrown error/)
 }
 
 export const processBuffer = async (api: TestAPI) => {
@@ -56,8 +56,10 @@ export const getBuffer = async (api: TestAPI) => {
 }
 
 export const getPromise = async (api: TestAPI) => {
+  // The resolver returns Promise.resolve(123); JS flattens nested promises,
+  // so awaiting once already yields the number.
   const result = await api.getPromise()
-  expect(result instanceof Promise ? await result : result).to.equal(123)
+  expect(result).to.equal(123)
 }
 
 export const getStream = async (api: TestAPI) => {
@@ -71,8 +73,8 @@ export const getStream = async (api: TestAPI) => {
     chunks.push(value)
   }
   expect(chunks.length).to.equal(2)
-  expect(Array.from(chunks[0])).to.deep.equal([1, 2, 3])
-  expect(Array.from(chunks[1])).to.deep.equal([4, 5, 6])
+  expect(Array.from(chunks[0]!)).to.deep.equal([1, 2, 3])
+  expect(Array.from(chunks[1]!)).to.deep.equal([4, 5, 6])
 }
 
 // Background -> Content tests (via content-initiated connection)
@@ -105,7 +107,7 @@ export const bgToContentGetError = async (api: TestAPI) => {
 }
 
 export const bgToContentThrowError = async (api: TestAPI) => {
-  await expect(api.bgToContent.throwError()).to.be.rejected
+  await expect(api.bgToContent.throwError()).to.be.rejectedWith(/Content thrown/)
 }
 
 export const bgToContentProcessBuffer = async (api: TestAPI) => {
@@ -144,7 +146,7 @@ export const bgInitiatedGetError = async (api: TestAPI) => {
 }
 
 export const bgInitiatedThrowError = async (api: TestAPI) => {
-  await expect(api.bgInitiated.throwError()).to.be.rejected
+  await expect(api.bgInitiated.throwError()).to.be.rejectedWith(/Content thrown/)
 }
 
 export const bgInitiatedProcessBuffer = async (api: TestAPI) => {

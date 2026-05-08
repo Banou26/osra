@@ -15,5 +15,5 @@
       "@playwright/test"
     ]
   },
-  "include": ["src/**/*", "tests/browser/**/*"]
+  "include": ["src/**/*", "tests/browser/**/*", "tests/extension/**/*"]
 }
