@@ -10,6 +10,8 @@
   "scripts": {
     "build": "vite build && tsgo --declaration --emitDeclarationOnly",
     "build-watch": "vite build --watch",
+    "clean": "rimraf build",
+    "prepublishOnly": "npm run clean && npm run build",
     "build-test": "vite build --config vite.test.config.ts",
     "build-test-watch": "vite build --config vite.test.config.ts --watch",
     "dev": "concurrently \"npm run build-test-watch\"",
