@@ -11,6 +11,11 @@ import type {
 import { OSRA_KEY } from '../types'
 import { getWebExtensionRuntime } from './transport'
 
+// Pulled from globalThis so module evaluation doesn't crash on platforms
+// that haven't shipped Float16Array yet (Node ≤ 23, Chrome ≤ 134, Firefox
+// ≤ 132). Platforms without it just don't round-trip Float16 values.
+const Float16ArrayCtor = (globalThis as { Float16Array?: typeof Float16Array }).Float16Array
+
 const typedArrayConstructorsByName = {
   Int8Array,
   Uint8Array,
@@ -19,7 +24,7 @@ const typedArrayConstructorsByName = {
   Uint16Array,
   Int32Array,
   Uint32Array,
-  Float16Array,
+  Float16Array: Float16ArrayCtor,
   Float32Array,
   Float64Array,
   BigInt64Array,
@@ -27,7 +32,7 @@ const typedArrayConstructorsByName = {
 } as const
 
 export type TypedArrayType = keyof typeof typedArrayConstructorsByName
-export type TypedArrayConstructor = (typeof typedArrayConstructorsByName)[TypedArrayType]
+export type TypedArrayConstructor = NonNullable<(typeof typedArrayConstructorsByName)[TypedArrayType]>
 export type TypedArray = InstanceType<TypedArrayConstructor>
 
 const typedArrayConstructors = Object.values(typedArrayConstructorsByName)
@@ -45,7 +50,7 @@ export const typedArrayTypeToTypedArrayConstructor = (value: TypedArrayType): Ty
 }
 
 export const isTypedArray = (value: unknown): value is TypedArray =>
-  typedArrayConstructors.some(ctor => value instanceof ctor)
+  typedArrayConstructors.some(ctor => !!ctor && value instanceof ctor)
 export const isWebSocket = (value: unknown): value is WebSocket => value instanceof WebSocket
 export const isServiceWorkerContainer = (value: unknown): value is ServiceWorkerContainer => !!globalThis.ServiceWorkerContainer && value instanceof ServiceWorkerContainer
 export const isWorker = (value: unknown): value is Worker => !!globalThis.Worker && value instanceof Worker
