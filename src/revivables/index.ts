@@ -12,6 +12,7 @@ import * as promise from './promise'
 import * as func from './function'
 import * as messagePort from './message-port'
 import * as readableStream from './readable-stream'
+import * as writableStream from './writable-stream'
 import * as abortSignal from './abort-signal'
 import * as response from './response'
 import * as request from './request'
@@ -64,6 +65,7 @@ export const defaultRevivableModules = [
   func,
   messagePort,
   readableStream,
+  writableStream,
   abortSignal,
   response,
   request,
