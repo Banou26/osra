@@ -39,8 +39,13 @@ const typedArrayConstructors = Object.values(typedArrayConstructorsByName)
 
 export const typedArrayToType = (value: TypedArray): TypedArrayType => {
   const name = value.constructor.name as TypedArrayType
-  if (!(name in typedArrayConstructorsByName)) throw new Error('Unknown typed array type')
-  return name
+  if (name in typedArrayConstructorsByName) return name
+  // Subclasses (e.g. Node's Buffer extends Uint8Array). Find the nearest
+  // TypedArray ancestor by walking the prototype chain.
+  for (const [ancestorName, ctor] of Object.entries(typedArrayConstructorsByName)) {
+    if (ctor && value instanceof ctor) return ancestorName as TypedArrayType
+  }
+  throw new Error('Unknown typed array type')
 }
 
 export const typedArrayTypeToTypedArrayConstructor = (value: TypedArrayType): TypedArrayConstructor => {
