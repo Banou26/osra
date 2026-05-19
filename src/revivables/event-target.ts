@@ -2,6 +2,7 @@ import { BoxBase, type RevivableContext } from './utils'
 import { identity } from './identity'
 import { box as boxFunction, revive as reviveFunction } from './function'
 import { trackGc } from '../utils/gc-tracker'
+import { inheritPort } from '../utils/stale'
 
 export const type = 'eventTarget' as const
 
@@ -47,6 +48,7 @@ export const revive = <T extends ReturnType<typeof box>, T2 extends RevivableCon
   // Façade only — events never dispatch through it. Source-side EventTarget
   // owns all semantics; we just track regs for trackGc cleanup.
   const target = new EventTarget()
+  inheritPort(target, addRpc, context)
   const regs: Reg[] = []
 
   Object.defineProperty(target, 'addEventListener', {

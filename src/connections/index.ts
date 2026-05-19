@@ -18,7 +18,8 @@ import {
 } from '../utils/type-guards'
 import { createTypedEventTarget } from '../utils/typed-event-target'
 import { getTransferableObjects } from '../utils/transferable'
-import { registerOsraMessageListener, sendOsraMessage } from '../utils/transport'
+import { attachTransportCloseDetection, onAbort, registerOsraMessageListener, sendOsraMessage } from '../utils/transport'
+import { markConnStale } from '../utils/stale'
 import { mergeRevivableModules, normalizeTransport } from './utils'
 
 export * from './bidirectional'
@@ -70,6 +71,7 @@ export const startConnections = <
     revivableModules: configureRevivableModules,
     uuid: _uuid,
     remoteUuid: presetRemoteUuid,
+    heartbeat,
   }: StartConnectionsOptions<TModules>
 ): Promise<T> => {
   const transport = normalizeTransport(_transport)
@@ -102,6 +104,8 @@ export const startConnections = <
     protocolEventTarget,
     resolveRemoteValue,
     createConnectionEventTarget: createTypedEventTarget,
+    heartbeat,
+    unregisterSignal,
   }
 
   const listener = (message: Message, _: MessageContext) => {
@@ -122,9 +126,38 @@ export const startConnections = <
     })
   }
 
+  const markAllConnStale = () => {
+    const canEmit = isEmitTransport(transport)
+    for (const conn of connectionContexts.values()) {
+      const { revivableContext } = conn.connection
+      // Sent directly (not via sendMessage) so the abort guard doesn't drop
+      // it — we run from inside the abort handler. Tells peer we're going
+      // away so its side flips stale too.
+      if (canEmit) {
+        try {
+          const envelope = { [OSRA_KEY]: key, name, uuid, type: 'close' as const, remoteUuid: revivableContext.remoteUuid }
+          sendOsraMessage(transport, envelope, origin, getTransferableObjects(envelope))
+        } catch {}
+      }
+      markConnStale(revivableContext)
+    }
+  }
+
+  onAbort(unregisterSignal, markAllConnStale)
+
+  const detachClose = attachTransportCloseDetection(transport, markAllConnStale)
+  onAbort(unregisterSignal, detachClose)
+
+  // Without this race, expose() hangs forever if the transport dies before handshake.
+  const { promise: preHandshakeStale, reject: rejectPreHandshake } = Promise.withResolvers<never>()
+  const onPreHandshakeDeath = () => rejectPreHandshake(new Error('osra: connection became stale before handshake completed'))
+  onAbort(unregisterSignal, onPreHandshakeDeath)
+  const detachPreHandshakeClose = attachTransportCloseDetection(transport, onPreHandshakeDeath)
+  remoteValuePromise.finally(() => detachPreHandshakeClose())
+
   for (const connectionModule of connections) {
     connectionModule.init(ctx)
   }
 
-  return remoteValuePromise as Promise<T>
+  return Promise.race([remoteValuePromise, preHandshakeStale]) as Promise<T>
 }

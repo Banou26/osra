@@ -85,8 +85,33 @@ export const checkOsraMessageKey = (message: any, key: string): message is Messa
   isOsraMessage(message)
   && message[OSRA_KEY] === key
 
-const onAbort = (signal: AbortSignal | undefined, fn: () => void) =>
+export const onAbort = (signal: AbortSignal | undefined, fn: () => void) =>
   signal?.addEventListener('abort', fn, { once: true })
+
+/** Attach a peer-disconnect listener to a transport where the platform
+ *  exposes one. WebSocket → 'close'/'error'. WebExtPort.onDisconnect.
+ *  Returns an unsubscribe function. No-ops on transports without a
+ *  native disconnect signal (Window, Worker, MessagePort, custom). */
+export const attachTransportCloseDetection = (
+  transport: Transport,
+  onClose: () => void,
+): (() => void) => {
+  if (isWebSocket(transport)) {
+    const handler = () => onClose()
+    transport.addEventListener('close', handler)
+    transport.addEventListener('error', handler)
+    return () => {
+      transport.removeEventListener('close', handler)
+      transport.removeEventListener('error', handler)
+    }
+  }
+  if (isWebExtensionPort(transport, true)) {
+    const handler = () => onClose()
+    transport.onDisconnect.addListener(handler)
+    return () => transport.onDisconnect.removeListener(handler)
+  }
+  return () => {}
+}
 
 export const registerOsraMessageListener = (
   { listener, transport, remoteName, key = OSRA_KEY, unregisterSignal }:

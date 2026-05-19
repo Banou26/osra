@@ -13,6 +13,7 @@ import {
   BoxedMessagePort,
   AnyPort,
 } from './message-port'
+import { associatePort } from '../utils/stale'
 
 export const type = 'promise' as const
 
@@ -83,7 +84,7 @@ export const revive = <T extends BoxedPromise, T2 extends RevivableContext>(
 ) => {
   const port = reviveMessagePort(value.port, context)
   inFlightPromisePorts.add(port)
-  return new Promise<T[UnderlyingType]>((resolve, reject) => {
+  const promise = new Promise<T[UnderlyingType]>((resolve, reject) => {
     port.addEventListener('message', ({ data: result }) => {
       if (result.type === 'resolve') resolve(result.data as T[UnderlyingType])
       else reject(result.error)
@@ -92,6 +93,8 @@ export const revive = <T extends BoxedPromise, T2 extends RevivableContext>(
     }, { once: true })
     port.start()
   })
+  associatePort(promise, port, context)
+  return promise
 }
 
 const typeCheck = () => {

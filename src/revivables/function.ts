@@ -6,6 +6,7 @@ import { recursiveBox } from '.'
 import { getTransferableObjects } from '../utils'
 import { EventChannel, type EventPort } from '../utils/event-channel'
 import { box as boxMessagePort, revive as reviveMessagePort, BoxedMessagePort } from './message-port'
+import { associatePort } from '../utils/stale'
 
 export const type = 'function' as const
 
@@ -78,7 +79,7 @@ export const revive = <T extends BoxedFunction, T2 extends RevivableContext>(
 ): T[UnderlyingType] => {
   const port = reviveMessagePort(value.port, context) as unknown as MessagePort
 
-  return ((...args: Capable[]) =>
+  const fn = ((...args: Capable[]) =>
     new Promise((resolve, reject) => {
       const { port1: returnLocal, port2: returnRemote } = new EventChannel<Capable, Capable>()
       inFlightReturnPorts.add(returnLocal)
@@ -95,6 +96,11 @@ export const revive = <T extends BoxedFunction, T2 extends RevivableContext>(
       const callContext = recursiveBox([returnRemote, args] as unknown as Capable, context)
       port.postMessage(callContext, getTransferableObjects(callContext))
     })) as T[UnderlyingType]
+
+  // Outer gate keeps the hot per-call path branch-free; the inner
+  // associatePort would short-circuit on the same flag.
+  if (context.revivingHandshake) associatePort(fn, port, context)
+  return fn
 }
 
 const typeCheck = () => {

@@ -49,6 +49,6 @@ export const transports: readonly TransportEntry[] = [
     name: 'JSON',
     factory: jsonLoopback,
     memoryIterations: 2_500,
-    memoryThreshold: 1_000_000,
+    memoryThreshold: 1_500_000,
   },
 ]

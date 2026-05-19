@@ -3,6 +3,7 @@ import type { RevivableContext } from './utils'
 import { BoxBase } from './utils'
 import { box as boxHeaders, revive as reviveHeaders } from './headers'
 import { box as boxReadableStream, revive as reviveReadableStream } from './readable-stream'
+import { inheritPort } from '../utils/stale'
 
 export const type = 'response' as const
 
@@ -30,11 +31,13 @@ export const revive = <T extends ReturnType<typeof box>, T2 extends RevivableCon
   const headers = reviveHeaders(value.headers, context)
   const body = value.body ? reviveReadableStream(value.body, context) : null
 
-  return new Response(body, {
+  const response = new Response(body, {
     status: value.status,
     statusText: value.statusText,
     headers
   })
+  if (body) inheritPort(response, body, context)
+  return response
 }
 
 const typeCheck = () => {

@@ -83,6 +83,8 @@ export type MessageBase = {
 export type ProtocolMessage =
   | { type: 'announce', remoteUuid?: Uuid }
   | { type: 'close', remoteUuid: Uuid }
+  | { type: 'ping', remoteUuid: Uuid, nonce: Uuid }
+  | { type: 'pong', remoteUuid: Uuid, nonce: Uuid }
 
 export type MessageVariant<
   TModules extends readonly RevivableModule[] = DefaultRevivableModules

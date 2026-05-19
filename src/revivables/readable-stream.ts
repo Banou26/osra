@@ -5,8 +5,9 @@ import { BoxBase } from './utils'
 import {
   createRevivableChannel,
   revive as reviveMessagePort,
-  BoxedMessagePort
+  BoxedMessagePort,
 } from './message-port'
+import { associatePort } from '../utils/stale'
 
 export const type = 'readableStream' as const
 
@@ -54,7 +55,7 @@ export const revive = <T extends BoxedReadableStream, T2 extends RevivableContex
   const port = reviveMessagePort(value.port, context)
   port.start()
 
-  return new ReadableStream({
+  const stream = new ReadableStream({
     pull: (controller) => new Promise<void>((resolve, reject) => {
       port.addEventListener('message', ({ data }) => {
         if (!(data instanceof Promise)) return
@@ -74,6 +75,8 @@ export const revive = <T extends BoxedReadableStream, T2 extends RevivableContex
       queueMicrotask(() => port.close())
     },
   }) as T[UnderlyingType]
+  associatePort(stream, port, context)
+  return stream
 }
 
 const typeCheck = () => {

@@ -58,6 +58,16 @@ export type ProtocolContext<
   protocolEventTarget: ProtocolEventTarget<TModules>
   resolveRemoteValue: (value: Capable<TModules>) => void
   createConnectionEventTarget: () => TypedEventTarget<MessageEventMap<TModules>>
+  heartbeat?: HeartbeatOptions
+  unregisterSignal?: AbortSignal
+}
+
+export type HeartbeatOptions = {
+  /** How often to send a ping (ms). Default 5000. */
+  intervalMs?: number
+  /** How long to wait for the matching pong before marking the connection
+   *  stale (ms). Default 10000. */
+  timeoutMs?: number
 }
 
 export type StartConnectionsOptions<
@@ -75,4 +85,8 @@ export type StartConnectionsOptions<
   revivableModules?: (defaults: DefaultRevivableModules) => TModules
   uuid?: Uuid
   remoteUuid?: Uuid
+  /** Opt-in peer-liveness probe. Off by default (no extra traffic). When
+   *  set, after handshake completes, each peer pings the other and marks
+   *  the connection stale if no pong arrives within `timeoutMs`. */
+  heartbeat?: HeartbeatOptions
 }

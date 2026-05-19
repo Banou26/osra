@@ -3,6 +3,7 @@ import type { RevivableContext } from './utils'
 import { BoxBase } from './utils'
 import { box as boxHeaders, revive as reviveHeaders } from './headers'
 import { box as boxReadableStream, revive as reviveReadableStream } from './readable-stream'
+import { inheritPort } from '../utils/stale'
 
 export const type = 'request' as const
 
@@ -35,7 +36,7 @@ export const revive = <T extends ReturnType<typeof box>, T2 extends RevivableCon
   const headers = reviveHeaders(value.headers, context)
   const body = value.body ? reviveReadableStream(value.body, context) : null
 
-  return new Request(value.url, {
+  const request = new Request(value.url, {
     method: value.method,
     headers,
     body,
@@ -49,6 +50,8 @@ export const revive = <T extends ReturnType<typeof box>, T2 extends RevivableCon
     // @ts-expect-error - duplex is needed for streaming bodies
     duplex: 'half',
   })
+  if (body) inheritPort(request, body, context)
+  return request
 }
 
 const typeCheck = () => {

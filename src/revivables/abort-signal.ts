@@ -8,6 +8,7 @@ import {
   createRevivableChannel,
   revive as reviveMessagePort,
 } from './message-port'
+import { associatePort, markTerminalStale } from '../utils/stale'
 
 export const type = 'abortSignal' as const
 
@@ -61,6 +62,7 @@ export const revive = <T extends BoxedAbortSignal, T2 extends RevivableContext>(
 
   if (value.aborted) {
     controller.abort(recursiveRevive(value.reason as Capable, context))
+    markTerminalStale(controller.signal)
     return controller.signal
   }
 
@@ -74,6 +76,7 @@ export const revive = <T extends BoxedAbortSignal, T2 extends RevivableContext>(
     }
   })
 
+  associatePort(controller.signal, port, context)
   return controller.signal
 }
 

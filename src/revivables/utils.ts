@@ -32,6 +32,8 @@ export type RevivableContext<
   sendMessage: (message: MessageFields & Record<string, unknown>) => void
   revivableModules: TModules
   eventTarget: MessageEventTarget<TModules>
+  /** True only during the top-level handshake revival. */
+  revivingHandshake?: boolean
 }
 
 /** Extract the type a module's `isType` narrows to. Modules marked

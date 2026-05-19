@@ -9,6 +9,7 @@ import * as transferTests from './transfer'
 import * as lifecycle from './lifecycle'
 import * as messageChannel from './message-channel-transport'
 import * as typeGuards from './type-guards'
+import { stale, staleStandalone } from './stale'
 
 // Filter helper: collect functions only, drop constants like
 // baseMemory.DEFAULT_ITERATIONS that share the same module namespace.
@@ -29,6 +30,7 @@ export const transportTests: Readonly<Record<string, Readonly<Record<string, (tr
     userPointReturn: customRevivables.userPointReturn,
     userPointDefaultsStillWork: customRevivables.userPointDefaultsStillWork,
   },
+  Stale: stale,
 }
 
 // Memory tests take (transport, iterations) — the runner pulls iterations
@@ -46,4 +48,5 @@ export const standaloneTests: Readonly<Record<string, Readonly<Record<string, ()
   Lifecycle: fns(lifecycle),
   MessageChannelTransport: fns(messageChannel),
   TypeGuards: fns(typeGuards),
+  StaleStandalone: staleStandalone,
 }

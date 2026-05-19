@@ -1,7 +1,7 @@
 import type { Transport } from '../utils/transport'
 import type { DefaultRevivableModules, RevivableModule } from '../revivables'
 import type { DeepReplaceWithBox } from '../utils/replace'
-import type { ProtocolContext } from './utils'
+import type { HeartbeatOptions, ProtocolContext } from './utils'
 import type {
   Capable, MessageEventTarget, MessageFields,
   MessageVariant, Uuid,
@@ -9,6 +9,8 @@ import type {
 
 import { recursiveBox, recursiveRevive } from '../revivables'
 import { isEmitTransport, isReceiveTransport } from '../utils/type-guards'
+import { onAbort } from '../utils/transport'
+import { connStaleSignal, markConnStale } from '../utils/stale'
 
 export const type = 'bidirectional' as const
 
@@ -48,12 +50,13 @@ export type ConnectionRevivableContext<
   sendMessage: (message: MessageFields & Record<string, unknown>) => void
   revivableModules: TModules
   eventTarget: MessageEventTarget<TModules>
+  revivingHandshake?: boolean
 }
 
 export const startBidirectionalConnection = <
   TModules extends readonly RevivableModule[] = DefaultRevivableModules,
 >(
-  { transport, value, remoteUuid, eventTarget, send, revivableModules }:
+  { transport, value, remoteUuid, eventTarget, send, revivableModules, heartbeat, unregisterSignal }:
   {
     transport: Transport
     value: Capable<TModules>
@@ -61,15 +64,18 @@ export const startBidirectionalConnection = <
     eventTarget: MessageEventTarget<TModules>
     send: (message: MessageFields & Record<string, unknown>) => void
     revivableModules: TModules
+    heartbeat?: HeartbeatOptions
+    unregisterSignal?: AbortSignal
   },
 ) => {
-  const revivableContext = {
+  const revivableContext: ConnectionRevivableContext<TModules> = {
     transport,
     remoteUuid,
     sendMessage: send,
     eventTarget,
-    revivableModules
-  } satisfies ConnectionRevivableContext<TModules>
+    revivableModules,
+    revivingHandshake: false,
+  }
 
   for (const module of revivableModules) {
     module.init?.(revivableContext)
@@ -84,6 +90,48 @@ export const startBidirectionalConnection = <
     }
   })
 
+  if (heartbeat) {
+    const intervalMs = heartbeat.intervalMs ?? 5_000
+    const timeoutMs = heartbeat.timeoutMs ?? 10_000
+    let intervalHandle: ReturnType<typeof setInterval> | undefined
+    const pendingTimers = new Map<Uuid, ReturnType<typeof setTimeout>>()
+
+    const stop = () => {
+      if (intervalHandle !== undefined) {
+        clearInterval(intervalHandle)
+        intervalHandle = undefined
+      }
+      for (const t of pendingTimers.values()) clearTimeout(t)
+      pendingTimers.clear()
+    }
+
+    eventTarget.addEventListener('message', ({ detail }) => {
+      if (detail.type !== 'pong') return
+      const timer = pendingTimers.get(detail.nonce)
+      if (timer) {
+        clearTimeout(timer)
+        pendingTimers.delete(detail.nonce)
+      }
+    })
+
+    // Start pings only after peer's init — pinging during handshake
+    // false-positives every slow link.
+    promise.then(() => {
+      intervalHandle = setInterval(() => {
+        const nonce = globalThis.crypto.randomUUID()
+        const timer = setTimeout(() => {
+          markConnStale(revivableContext)
+          stop()
+        }, timeoutMs)
+        pendingTimers.set(nonce, timer)
+        send({ type: 'ping', remoteUuid, nonce })
+      }, intervalMs)
+    })
+
+    onAbort(connStaleSignal(revivableContext), stop)
+    onAbort(unregisterSignal, stop)
+  }
+
   send({
     type: 'init',
     remoteUuid,
@@ -94,7 +142,14 @@ export const startBidirectionalConnection = <
     revivableContext,
     remoteValue:
       promise
-        .then(initData => recursiveRevive(initData, revivableContext) as Capable),
+        .then(initData => {
+          revivableContext.revivingHandshake = true
+          try {
+            return recursiveRevive(initData, revivableContext) as Capable
+          } finally {
+            revivableContext.revivingHandshake = false
+          }
+        }),
   }
 }
 
@@ -135,7 +190,9 @@ export const init = <TModules extends readonly RevivableModule[]>(
             remoteUuid: message.uuid,
             eventTarget,
             send: (m) => ctx.sendMessage(m as MessageVariant),
-            revivableModules: ctx.revivableModules
+            revivableModules: ctx.revivableModules,
+            heartbeat: ctx.heartbeat,
+            unregisterSignal: ctx.unregisterSignal,
           })
       } satisfies ConnectionContext<TModules>
       ctx.connectionContexts.set(message.uuid, connectionContext)
@@ -146,10 +203,18 @@ export const init = <TModules extends readonly RevivableModule[]>(
     }
     if (message.type === 'close') {
       if (message.remoteUuid !== ctx.getUuid()) return
+      const closing = ctx.connectionContexts.get(message.uuid)
+      if (closing) markConnStale(closing.connection.revivableContext)
       ctx.connectionContexts.delete(message.uuid)
       return
     }
-    // "init" | "message" | "message-port-close"
+    // Peer-liveness ping: reply unconditionally so one-sided heartbeats work.
+    if (message.type === 'ping') {
+      if (message.remoteUuid !== ctx.getUuid()) return
+      ctx.sendMessage({ type: 'pong', remoteUuid: message.uuid, nonce: message.nonce })
+      return
+    }
+    // "init" | "message" | "message-port-close" | "pong"
     if (message.remoteUuid !== ctx.getUuid()) return
     const connection = ctx.connectionContexts.get(message.uuid)
     // drop messages from peers we haven't tracked (pre-announce or post-close)
@@ -171,7 +236,9 @@ export const init = <TModules extends readonly RevivableModule[]>(
           remoteUuid: ctx.presetRemoteUuid,
           eventTarget,
           send: (m) => ctx.sendMessage(m as MessageVariant),
-          revivableModules: ctx.revivableModules
+          revivableModules: ctx.revivableModules,
+          heartbeat: ctx.heartbeat,
+          unregisterSignal: ctx.unregisterSignal,
         })
     } satisfies ConnectionContext<TModules>
     ctx.connectionContexts.set(ctx.presetRemoteUuid, connectionContext)

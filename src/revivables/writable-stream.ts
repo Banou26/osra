@@ -8,6 +8,7 @@ import {
   revive as reviveMessagePort,
   BoxedMessagePort,
 } from './message-port'
+import { associatePort } from '../utils/stale'
 
 export const type = 'writableStream' as const
 
@@ -84,11 +85,13 @@ export const revive = <T extends BoxedWritableStream, T2 extends RevivableContex
     return next
   }
 
-  return new WritableStream({
+  const stream = new WritableStream({
     write: (chunk) => request({ type: 'write', chunk: chunk as Capable }),
     close: () => request({ type: 'close' }),
     abort: (reason) => request({ type: 'abort', reason: reason as Capable }),
   }) as T[UnderlyingType]
+  associatePort(stream, port, context)
+  return stream
 }
 
 const typeCheck = () => {

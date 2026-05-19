@@ -12,6 +12,7 @@ import { recursiveBox, recursiveRevive } from '.'
 import { getTransferableObjects, isJsonOnlyTransport } from '../utils'
 import { EventChannel, EventPort } from '../utils/event-channel'
 import { trackGc } from '../utils/gc-tracker'
+import { associatePort, markPortStale } from '../utils/stale'
 
 export const type = 'messagePort' as const
 
@@ -161,6 +162,8 @@ export const revive = <T extends Capable, T2 extends RevivableContext>(
 ): TypedMessagePort<T> => {
   if ('port' in value) {
     if (value.autoBox) return createProtocolPort<T>(value.port as TypedMessagePort<Capable>, context)
+    // MessagePort has no close event; only conn-level stale fires here.
+    associatePort(value.port, value.port, context)
     return value.port
   }
   return reviveViaPortId<T>(value.portId, context, value.synthetic)
@@ -186,9 +189,11 @@ const createProtocolPort = <T>(
   }
   target.start = () => port.start()
   target.close = () => {
+    markPortStale(target)
     port.removeEventListener('message', onMessage)
     port.close()
   }
+  associatePort(target, target, ctx)
   return target
 }
 
