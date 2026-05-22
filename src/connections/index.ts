@@ -22,6 +22,7 @@ import { registerOsraMessageListener, sendOsraMessage } from '../utils/transport
 import { mergeRevivableModules, normalizeTransport } from './utils'
 
 export * from './bidirectional'
+export * from './relay'
 export * from './utils'
 
 export type ConnectionModule<T> = {
