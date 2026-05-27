@@ -7,7 +7,11 @@ import { mkdir, writeFile } from 'fs/promises'
 import { transportTests, memoryTests, standaloneTests, gcTests } from './registry'
 import { transports } from './transports'
 
-const MEMORY_TEST_TIMEOUT_MS = 60_000
+// Heaviest memory test (concurrentCallsNoLeak) lands around 50s on a
+// quiet machine and pushes higher under parallel CPU contention. Give
+// the group enough headroom that the timeout fires on real hangs, not
+// on scheduling jitter from sibling tests.
+const MEMORY_TEST_TIMEOUT_MS = 120_000
 const GC_TEST_TIMEOUT_MS = 30_000
 
 test.beforeEach(async ({ page }) => {

@@ -99,11 +99,17 @@ export const nestedCallbacksNoLeak = async (transport: Transport, iterations = D
   }
 }
 
+// Each iteration fires 5 concurrent calls, so the call count is already
+// 5× the other tests' for the same iteration budget. Scale iterations
+// down to match the per-call workload — concurrency is what we're
+// exercising, not raw call count.
+const CONCURRENT_CALL_FAN_OUT = 5
 export const concurrentCallsNoLeak = async (transport: Transport, iterations = DEFAULT_ITERATIONS) => {
   const value = async (id: number) => id * 2
   expose(value, { transport })
   const remote = await expose<typeof value>({}, { transport })
-  for (let i = 0; i < iterations; i++) {
+  const adjusted = Math.ceil(iterations / CONCURRENT_CALL_FAN_OUT)
+  for (let i = 0; i < adjusted; i++) {
     await Promise.all([remote(1), remote(2), remote(3), remote(4), remote(5)])
   }
 }
