@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test'
 
 import { test } from '@playwright/test'
 import path from 'path'
+import { fileURLToPath } from 'url'
 import { mkdir, writeFile } from 'fs/promises'
 
 import { transportTests, memoryTests, standaloneTests, gcTests } from './registry'
@@ -14,9 +15,21 @@ import { transports } from './transports'
 const MEMORY_TEST_TIMEOUT_MS = 120_000
 const GC_TEST_TIMEOUT_MS = 30_000
 
+// Resolve the test bundle's absolute path from this file's location so
+// page.addScriptTag works regardless of which cwd the per-browser
+// Playwright worker is launched from (WebKit's worker resolves relative
+// paths from a different directory and fails ENOENT on './build/...').
+const TEST_BUNDLE_PATH = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '..',
+  '..',
+  'build',
+  'test.js',
+)
+
 test.beforeEach(async ({ page }) => {
   await page.goto('http://localhost:3000')
-  await page.addScriptTag({ path: './build/test.js', type: 'module' })
+  await page.addScriptTag({ path: TEST_BUNDLE_PATH, type: 'module' })
   // The bundle exposes globalThis.__osraRun once side-effect imports settle.
   await page.waitForFunction(() => '__osraRun' in globalThis)
 })
@@ -92,31 +105,20 @@ for (const t of transports) {
       }
     })
 
-    // GC tests need deterministic collection — page.evaluate can't force GC
-    // by itself, so we expose __osraForceGc which drives both the in-page
-    // V8 gc() (via --expose-gc) and CDP's HeapProfiler.collectGarbage. We
-    // need both: V8 gc() is reliable in-process, CDP's version is broader
-    // (sweeps non-main realms), and a macrotask sleep lets
-    // FinalizationRegistry callbacks (queued as jobs, not sync) actually fire.
-    // GC tests depend on CDP's HeapProfiler.collectGarbage, which only
-    // exists on Chromium. Firefox/WebKit have no Playwright-exposed
-    // equivalent — skip the group there rather than report 10 failures
-    // for a platform gap.
+    // page.requestGC() triggers GC across Chromium, Firefox, and WebKit
+    // (added in Playwright 1.48 via PR microsoft/playwright#32383). We
+    // still need to drain macrotasks between collections so
+    // FinalizationRegistry callbacks (queued as jobs, not sync) actually
+    // fire. The macrotask sleep is what makes the WeakRef-based assertions
+    // observe the post-GC state.
     test.describe('GcTests', () => {
-      test.skip(({ browserName }) => browserName !== 'chromium', 'CDP required')
       for (const name of Object.keys(gcTests)) {
         test(name, async ({ page }) => {
           test.setTimeout(GC_TEST_TIMEOUT_MS)
-          const client = await page.context().newCDPSession(page)
-          await client.send('HeapProfiler.enable')
           await page.exposeFunction('__osraForceGc', async () => {
             for (let i = 0; i < 10; i++) {
-              await client.send('HeapProfiler.collectGarbage')
-              await page.evaluate(() => {
-                const gc = (globalThis as unknown as { gc?: () => void }).gc
-                gc?.()
-                return new Promise(r => setTimeout(r, 50))
-              })
+              await page.requestGC()
+              await page.evaluate(() => new Promise(r => setTimeout(r, 50)))
             }
           })
           await page.evaluate(

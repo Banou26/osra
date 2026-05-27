@@ -5,9 +5,10 @@ import { expect } from 'chai'
 import { expose } from '../../src/index'
 
 // __osraForceGc is wired up by the spec runner via page.exposeFunction:
-// it drives CDP HeapProfiler.collectGarbage from the Node side and waits
-// between collections so FinalizationRegistry callbacks (which run on the
-// macrotask queue) actually fire before control returns to the test.
+// it drives page.requestGC (cross-browser, Playwright 1.48+) from the
+// Node side and waits between collections so FinalizationRegistry
+// callbacks (which run on the macrotask queue) actually fire before
+// control returns to the test.
 declare const __osraForceGc: () => Promise<void>
 
 // Proves bug_004: when the revived EventTarget is collected, the box side

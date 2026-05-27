@@ -9,14 +9,6 @@ export default defineConfig({
     command: 'npm run start-server',
     url: 'http://localhost:3000'
   },
-  use: {
-    launchOptions: {
-      devtools: true,
-      // --js-flags=--expose-gc exposes globalThis.gc() for tests that need
-      // deterministic collection to exercise FinalizationRegistry callbacks.
-      args: ['--js-flags=--expose-gc'],
-    },
-  },
   projects: [
     {
       name: 'chromium',
@@ -26,9 +18,9 @@ export default defineConfig({
       name: 'firefox',
       use: { ...devices['Desktop Firefox'] },
     },
-    // {
-    //   name: 'webkit',
-    //   use: { ...devices['Desktop Safari'] },
-    // },
+    {
+      name: 'webkit',
+      use: { ...devices['Desktop Safari'] },
+    },
   ]
 })
