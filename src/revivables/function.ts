@@ -10,8 +10,8 @@ import { box as boxMessagePort, revive as reviveMessagePort, BoxedMessagePort } 
 export const type = 'function' as const
 
 type ResultMessage =
-  | { __osra_ok__: true, value: Capable }
-  | { __osra_err__: true, error: Capable }
+  | { type: 'return', value: Capable }
+  | { type: 'throw', error: Capable }
 
 type CallContext = [EventPort<Capable>, Capable[]]
 
@@ -49,9 +49,9 @@ export const box = <T extends (...args: any[]) => any, T2 extends RevivableConte
       let message: ResultMessage
       try {
         const resolved = await value(...(args as Parameters<T>))
-        message = { __osra_ok__: true, value: resolved as Capable }
+        message = { type: 'return', value: resolved as Capable }
       } catch (error) {
-        message = { __osra_err__: true, error: error as Capable }
+        message = { type: 'throw', error: error as Capable }
       }
       const boxedResult = recursiveBox(message as Capable, context)
       returnPort.postMessage(boxedResult, getTransferableObjects(boxedResult))
@@ -85,7 +85,7 @@ export const revive = <T extends BoxedFunction, T2 extends RevivableContext>(
 
       returnLocal.addEventListener('message', ({ data }) => {
         const message = data as ResultMessage
-        if ('__osra_ok__' in message) resolve(message.value)
+        if (message.type === 'return') resolve(message.value)
         else reject(message.error)
         returnLocal.close()
         inFlightReturnPorts.delete(returnLocal)
