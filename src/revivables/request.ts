@@ -33,12 +33,14 @@ export const revive = <T extends ReturnType<typeof box>, T2 extends RevivableCon
   context: T2
 ): Request => {
   const headers = reviveHeaders(value.headers, context)
-  const body = value.body ? reviveReadableStream(value.body, context) : null
 
-  return new Request(value.url, {
+  // Firefox normalizes `body: null` in the constructor to a Request whose
+  // `.body` getter returns `undefined` instead of `null`. Only pass `body`
+  // when there's an actual stream so a bodyless source round-trips to a
+  // bodyless Request on every browser.
+  const init: RequestInit & { duplex?: 'half' } = {
     method: value.method,
     headers,
-    body,
     credentials: value.credentials,
     cache: value.cache,
     redirect: value.redirect,
@@ -46,9 +48,13 @@ export const revive = <T extends ReturnType<typeof box>, T2 extends RevivableCon
     referrerPolicy: value.referrerPolicy,
     integrity: value.integrity,
     keepalive: value.keepalive,
-    // @ts-expect-error - duplex is needed for streaming bodies
-    duplex: 'half',
-  })
+  }
+  if (value.body) {
+    init.body = reviveReadableStream(value.body, context)
+    init.duplex = 'half'
+  }
+
+  return new Request(value.url, init)
 }
 
 const typeCheck = () => {

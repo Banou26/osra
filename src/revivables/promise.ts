@@ -6,7 +6,7 @@ import type {
   ErrorMessage, BadValue, Path, ParentObject
 } from '../utils/capable-check'
 
-import { BoxBase, serializeError } from './utils'
+import { BoxBase } from './utils'
 import {
   createRevivableChannel,
   revive as reviveMessagePort,
@@ -18,7 +18,7 @@ export const type = 'promise' as const
 
 export type Context =
   | { type: 'resolve', data: Capable }
-  | { type: 'reject', error: string }
+  | { type: 'reject', error: Capable }
 
 // Error branches intersect with T so the user's own keys land on the target —
 // otherwise TS's excess-property check flags a user key instead of the failure.
@@ -72,7 +72,7 @@ export const box = <T, T2 extends RevivableContext>(
 
   value
     .then((data: ExtractCapable<T>) => sendResult({ type: 'resolve', data }))
-    .catch((error: unknown) => sendResult({ type: 'reject', error: serializeError(error) }))
+    .catch((error: unknown) => sendResult({ type: 'reject', error: error as Capable }))
 
   return { ...BoxBase, type, port: boxedRemote } as BoxedPromise<ExtractCapable<T>>
 }

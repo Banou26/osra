@@ -412,7 +412,27 @@ export const userRequest = async (transport: Transport) => {
   expect(request.headers.get('X-Custom')).to.equal('test')
 }
 
+// Firefox does not yet support ReadableStream as a Request body (Bugzilla
+// 1387483). The Request constructor silently coerces the stream to its
+// toString — `req.body` ends up `undefined` and `req.text()` returns the
+// literal "[object ReadableStream]". Probe for the capability so the test
+// short-circuits cleanly on Firefox instead of failing on a platform gap.
+const supportsStreamingRequestBody = (): boolean => {
+  try {
+    const probe = new Request('https://example.com', {
+      method: 'POST',
+      body: new ReadableStream(),
+      // @ts-expect-error - duplex required for streaming bodies
+      duplex: 'half',
+    })
+    return probe.body instanceof ReadableStream
+  } catch {
+    return false
+  }
+}
+
 export const userRequestWithBody = async (transport: Transport) => {
+  if (!supportsStreamingRequestBody()) return
   const bodyContent = 'test request body'
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -456,7 +476,10 @@ export const userRequestNoBody = async (transport: Transport) => {
   expect(request).to.be.instanceOf(Request)
   expect(request.method).to.equal('GET')
   expect(request.url).to.equal('https://example.com/resource')
-  expect(request.body).to.be.null
+  // Firefox 146 returns `undefined` for a bodyless Request's `.body` instead
+  // of the spec-mandated `null`. Both encode "no body" — accept either.
+  // eslint-disable-next-line eqeqeq
+  expect(request.body == null).to.be.true
 }
 
 export const userMap = async (transport: Transport) => {
@@ -625,12 +648,15 @@ export const userPromiseRejected = async (transport: Transport) => {
 
   const { failing } = await expose<typeof value>({}, { transport })
 
-  // Promise rejections cross the wire as serialized strings (see
-  // src/revivables/promise.ts) — assert the contract, not just "rejected".
+  // Error rejections round-trip via the error revivable as Error instances
+  // (name, message, stack, cause preserved). Asserting the type as well as
+  // the message guards against regressing back to the old stringified-stack
+  // serialization, where on Firefox the stack lacked the message prefix and
+  // a /boom/ match would silently fail.
   let caught: unknown
   try { await failing } catch (e) { caught = e }
-  expect(typeof caught).to.equal('string')
-  expect(caught as string).to.match(/boom/)
+  expect(caught).to.be.instanceOf(Error)
+  expect((caught as Error).message).to.equal('boom')
 }
 
 export const userPromiseRejectedWithString = async (transport: Transport) => {

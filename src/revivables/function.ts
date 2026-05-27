@@ -1,7 +1,7 @@
 import type { Capable } from '../types'
 import type { UnderlyingType, RevivableContext, BoxBase as BoxBaseType } from './utils'
 
-import { BoxBase, serializeError } from './utils'
+import { BoxBase } from './utils'
 import { recursiveBox } from '.'
 import { getTransferableObjects } from '../utils'
 import { EventChannel, type EventPort } from '../utils/event-channel'
@@ -11,7 +11,7 @@ export const type = 'function' as const
 
 type ResultMessage =
   | { __osra_ok__: true, value: Capable }
-  | { __osra_err__: true, error: string }
+  | { __osra_err__: true, error: Capable }
 
 type CallContext = [EventPort<Capable>, Capable[]]
 
@@ -51,7 +51,7 @@ export const box = <T extends (...args: any[]) => any, T2 extends RevivableConte
         const resolved = await value(...(args as Parameters<T>))
         message = { __osra_ok__: true, value: resolved as Capable }
       } catch (error) {
-        message = { __osra_err__: true, error: serializeError(error) }
+        message = { __osra_err__: true, error: error as Capable }
       }
       const boxedResult = recursiveBox(message as Capable, context)
       returnPort.postMessage(boxedResult, getTransferableObjects(boxedResult))

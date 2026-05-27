@@ -74,9 +74,6 @@ export const isRevivableBox = (value: unknown): value is BoxBase =>
   && OSRA_BOX in value
   && value[OSRA_BOX] === 'revivable'
 
-export const serializeError = (error: unknown): string =>
-  error instanceof Error ? (error.stack ?? String(error)) : String(error)
-
 /** Wire shape for an ArrayBuffer: base64 on JSON, raw on clone. */
 export type BoxedBuffer<TCtx extends RevivableContext = RevivableContext> =
   IsJsonOnlyTransport<TCtx['transport']> extends true ? { base64Buffer: string }
