@@ -10,6 +10,7 @@ import * as lifecycle from './lifecycle'
 import * as messageChannel from './message-channel-transport'
 import * as relayTests from './relay'
 import * as typeGuards from './type-guards'
+import * as workerHandshake from './worker-handshake'
 
 // Filter helper: collect functions only, drop constants like
 // baseMemory.DEFAULT_ITERATIONS that share the same module namespace.
@@ -48,4 +49,5 @@ export const standaloneTests: Readonly<Record<string, Readonly<Record<string, ()
   MessageChannelTransport: fns(messageChannel),
   Relay: fns(relayTests),
   TypeGuards: fns(typeGuards),
+  WorkerHandshake: fns(workerHandshake),
 }

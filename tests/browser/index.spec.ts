@@ -70,7 +70,11 @@ for (const t of transports) {
       })
     }
 
+    // measureHeapGrowth uses CDP's Performance.getMetrics +
+    // HeapProfiler.collectGarbage to take deterministic heap snapshots.
+    // Both are Chromium-only; skip on other browsers.
     test.describe('MemoryLeaks', () => {
+      test.skip(({ browserName }) => browserName !== 'chromium', 'CDP required')
       for (const name of Object.keys(memoryTests)) {
         test(name, async ({ page }) => {
           test.setTimeout(MEMORY_TEST_TIMEOUT_MS)
@@ -90,7 +94,12 @@ for (const t of transports) {
     // need both: V8 gc() is reliable in-process, CDP's version is broader
     // (sweeps non-main realms), and a macrotask sleep lets
     // FinalizationRegistry callbacks (queued as jobs, not sync) actually fire.
+    // GC tests depend on CDP's HeapProfiler.collectGarbage, which only
+    // exists on Chromium. Firefox/WebKit have no Playwright-exposed
+    // equivalent — skip the group there rather than report 10 failures
+    // for a platform gap.
     test.describe('GcTests', () => {
+      test.skip(({ browserName }) => browserName !== 'chromium', 'CDP required')
       for (const name of Object.keys(gcTests)) {
         test(name, async ({ page }) => {
           test.setTimeout(GC_TEST_TIMEOUT_MS)
