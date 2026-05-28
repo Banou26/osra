@@ -74,14 +74,14 @@ export const defaultRevivableModules = [
   bigInt,
   symbol,
   event,
+  // clonable/transferable before eventTarget: OffscreenCanvas & co. are Transferables
+  // that also extend EventTarget, which eventTarget would otherwise box as façade husks.
+  clonable,
+  transferable,
   // eventTarget MUST be last among instanceof-EventTarget revivables —
   // MessagePort/AbortSignal/Window/Worker all extend EventTarget; the
   // specific ones need first dibs via findBoxModule iteration order.
   eventTarget,
-  // Pass-through fast paths for wire-safe types — short-circuit findBoxModule
-  // before unclonable's structuredClone probe runs on a known-safe value.
-  clonable,
-  transferable,
   // Catch-all: structuredClone-probes and coerces unclonables to `{}`,
   // matching JSON.stringify(new WeakMap()) === "{}".
   unclonable,

@@ -217,6 +217,31 @@ export const transferredBufferDataRoundTrips = async (transport: Transport) => {
   expect(receivedHex).to.equal(expectedHex)
 }
 
+// Behavior 9: OffscreenCanvas is a Transferable that also extends EventTarget — it must
+// transfer as a real canvas, not get boxed into an eventTarget husk. (Skipped on JSON.)
+export const offscreenCanvasTransfersAsCanvas = async (transport: Transport) => {
+  if ('isJson' in transport && transport.isJson === true) return
+
+  // Draw receiver-side: a canvas with a context can't be transferred, so the real use case
+  // (and this test) transfers a fresh canvas and draws in the worker.
+  const value = async (canvas: OffscreenCanvas) => {
+    const ctx = canvas.getContext('2d')!
+    ctx.fillStyle = 'rgb(10, 20, 30)'
+    ctx.fillRect(0, 0, 1, 1)
+    const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data
+    return { isCanvas: canvas instanceof OffscreenCanvas, width: canvas.width, height: canvas.height, r, g, b, a }
+  }
+  expose(value, { transport })
+  const remote = await expose<typeof value>({}, { transport })
+
+  const canvas = new OffscreenCanvas(48, 24)
+  const result = await remote(transfer(canvas))
+  expect(result.isCanvas).to.equal(true)
+  expect(result.width).to.equal(48)
+  expect(result.height).to.equal(24)
+  expect([result.r, result.g, result.b, result.a]).to.deep.equal([10, 20, 30, 255])
+}
+
 export const tests = {
   unwrappedBufferIsCopied,
   transferredBufferIsDetached,
@@ -230,4 +255,5 @@ export const tests = {
   transferDoesNotCrashNonTransferable,
   messagePortStillTransfersWithoutWrapper,
   transferredBufferDataRoundTrips,
+  offscreenCanvasTransfersAsCanvas,
 }
