@@ -45,6 +45,9 @@
     "url": "https://github.com/Banou26/osra/issues"
   },
   "homepage": "https://github.com/Banou26/osra#readme",
+  "dependencies": {
+    "@types/webextension-polyfill": "^0.12.4"
+  },
   "devDependencies": {
     "@istanbuljs/nyc-config-typescript": "^1.0.2",
     "@playwright/test": "^1.58.2",
@@ -53,7 +56,6 @@
     "@types/chrome": "^0.1.27",
     "@types/firefox-webext-browser": "^143.0.0",
     "@types/node": "^25.0.2",
-    "@types/webextension-polyfill": "^0.12.4",
     "@typescript/native-preview": "7.0.0-dev.20260404.1",
     "chai": "^5.3.3",
     "chai-as-promised": "^8.0.1",
