@@ -6,6 +6,13 @@
     "build"
   ],
   "main": "build/index.js",
+  "types": "./build/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./build/index.d.ts",
+      "import": "./build/index.js"
+    }
+  },
   "type": "module",
   "scripts": {
     "build": "vite build && tsgo --declaration --emitDeclarationOnly",
@@ -47,7 +54,7 @@
     "@types/firefox-webext-browser": "^143.0.0",
     "@types/node": "^25.0.2",
     "@types/webextension-polyfill": "^0.12.4",
-    "@typescript/native-preview": "^7.0.0-dev.20260404.1",
+    "@typescript/native-preview": "7.0.0-dev.20260404.1",
     "chai": "^5.3.3",
     "chai-as-promised": "^8.0.1",
     "concurrently": "^9.1.0",
