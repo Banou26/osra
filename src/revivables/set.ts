@@ -1,8 +1,8 @@
-import type { Capable } from '../types'
-import type { RevivableContext, UnderlyingType, BoxBase as BoxBaseType } from './utils'
+import type { Capable } from '../types.js'
+import type { RevivableContext, UnderlyingType, BoxBase as BoxBaseType } from './utils.js'
 
-import { BoxBase } from './utils'
-import { recursiveBox, recursiveRevive } from '.'
+import { BoxBase } from './utils.js'
+import { recursiveBox, recursiveRevive } from './index.js'
 
 export const type = 'set' as const
 

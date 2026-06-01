@@ -1,13 +1,13 @@
-import type { Transport } from '../utils/transport'
+import type { Transport } from '../utils/transport.js'
 
-import { OSRA_DEFAULT_KEY } from '../types'
-import { isEmitTransport, isReceiveTransport } from '../utils/type-guards'
-import { getTransferableObjects } from '../utils/transferable'
+import { OSRA_DEFAULT_KEY } from '../types.js'
+import { isEmitTransport, isReceiveTransport } from '../utils/type-guards.js'
+import { getTransferableObjects } from '../utils/transferable.js'
 import {
   registerOsraMessageListener,
   sendOsraMessage,
-} from '../utils/transport'
-import { normalizeTransport } from './utils'
+} from '../utils/transport.js'
+import { normalizeTransport } from './utils.js'
 
 export type RelayOptions = {
   key?: string

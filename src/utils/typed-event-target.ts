@@ -1,4 +1,4 @@
-import type { UnderlyingType } from './type'
+import type { UnderlyingType } from './type.js'
 
 export type EventMap = Record<string, Event>
 

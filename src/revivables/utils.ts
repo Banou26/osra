@@ -1,16 +1,16 @@
-import type { DefaultRevivableModules, RevivableModule } from '.'
+import type { DefaultRevivableModules, RevivableModule } from './index.js'
 import type {
   MessageEventTarget,
   MessageFields,
   Uuid,
-} from '../types'
-import type { Transport } from '../utils/transport'
-import type { IsJsonOnlyTransport } from '../utils/type-guards'
+} from '../types.js'
+import type { Transport } from '../utils/transport.js'
+import type { IsJsonOnlyTransport } from '../utils/type-guards.js'
 
-import { OSRA_BOX } from '../types'
-import { isJsonOnlyTransport } from '../utils/type-guards'
+import { OSRA_BOX } from '../types.js'
+import { isJsonOnlyTransport } from '../utils/type-guards.js'
 
-export type { UnderlyingType } from '../utils/type'
+export type { UnderlyingType } from '../utils/type.js'
 
 export const BoxBase = {
   [OSRA_BOX]: 'revivable',

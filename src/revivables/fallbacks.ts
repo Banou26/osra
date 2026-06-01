@@ -1,7 +1,7 @@
-import type { BoxBase as BoxBaseType, RevivableContext } from './utils'
+import type { BoxBase as BoxBaseType, RevivableContext } from './utils.js'
 
-import { BoxBase } from './utils'
-import { instanceOfAny } from '../utils/type-guards'
+import { BoxBase } from './utils.js'
+import { instanceOfAny } from '../utils/type-guards.js'
 
 type AnyCtor = abstract new (...args: any[]) => unknown
 

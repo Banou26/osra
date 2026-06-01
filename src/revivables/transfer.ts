@@ -1,9 +1,9 @@
-import type { Capable } from '../types'
-import type { BoxBase as BoxBaseType, RevivableContext, UnderlyingType } from './utils'
+import type { Capable } from '../types.js'
+import type { BoxBase as BoxBaseType, RevivableContext, UnderlyingType } from './utils.js'
 
-import { BoxBase } from './utils'
-import { instanceOfAny, isJsonOnlyTransport } from '../utils'
-import { recursiveBox, recursiveRevive } from '.'
+import { BoxBase } from './utils.js'
+import { instanceOfAny, isJsonOnlyTransport } from '../utils/index.js'
+import { recursiveBox, recursiveRevive } from './index.js'
 
 export const type = 'transfer' as const
 

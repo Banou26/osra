@@ -1,8 +1,8 @@
-import type { RevivableContext } from './utils'
+import type { RevivableContext } from './utils.js'
 
-import { BoxBase } from './utils'
-import { box as boxHeaders, revive as reviveHeaders } from './headers'
-import { box as boxReadableStream, revive as reviveReadableStream } from './readable-stream'
+import { BoxBase } from './utils.js'
+import { box as boxHeaders, revive as reviveHeaders } from './headers.js'
+import { box as boxReadableStream, revive as reviveReadableStream } from './readable-stream.js'
 
 export const type = 'response' as const
 

@@ -1,29 +1,29 @@
-import type { DefaultRevivableModules, RevivableModule } from '../revivables'
-import type { ConnectionContext as BidirectionalConnectionContext } from './bidirectional'
+import type { DefaultRevivableModules, RevivableModule } from '../revivables/index.js'
+import type { ConnectionContext as BidirectionalConnectionContext } from './bidirectional.js'
 import type {
   ProtocolContext,
   StartConnectionsOptions,
-} from '../utils'
+} from '../utils/index.js'
 import type {
   Message, MessageVariant, Uuid,
   Capable,
-} from '../types'
-import type { MessageContext } from '../utils/transport'
+} from '../types.js'
+import type { MessageContext } from '../utils/transport.js'
 
-import { OSRA_DEFAULT_KEY, OSRA_KEY } from '../types'
-import * as bidirectional from './bidirectional'
+import { OSRA_DEFAULT_KEY, OSRA_KEY } from '../types.js'
+import * as bidirectional from './bidirectional.js'
 import {
   isEmitTransport,
   isReceiveTransport,
-} from '../utils/type-guards'
-import { createTypedEventTarget } from '../utils/typed-event-target'
-import { getTransferableObjects } from '../utils/transferable'
-import { registerOsraMessageListener, sendOsraMessage } from '../utils/transport'
-import { mergeRevivableModules, normalizeTransport } from './utils'
+} from '../utils/type-guards.js'
+import { createTypedEventTarget } from '../utils/typed-event-target.js'
+import { getTransferableObjects } from '../utils/transferable.js'
+import { registerOsraMessageListener, sendOsraMessage } from '../utils/transport.js'
+import { mergeRevivableModules, normalizeTransport } from './utils.js'
 
-export * from './bidirectional'
-export * from './relay'
-export * from './utils'
+export * from './bidirectional.js'
+export * from './relay.js'
+export * from './utils.js'
 
 export type ConnectionModule<T> = {
   readonly type: string

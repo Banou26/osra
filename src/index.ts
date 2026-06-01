@@ -1,19 +1,19 @@
-import type { Capable } from './types'
-import type { DefaultRevivableModules, RevivableContext } from './revivables'
-import type { RevivableModule } from './revivables'
-import type { StartConnectionsOptions } from './connections/utils'
-import type { Transport } from './utils/transport'
+import type { Capable } from './types.js'
+import type { DefaultRevivableModules, RevivableContext } from './revivables/index.js'
+import type { RevivableModule } from './revivables/index.js'
+import type { StartConnectionsOptions } from './connections/utils.js'
+import type { Transport } from './utils/transport.js'
 import type {
   BadFieldValue, BadFieldPath, BadFieldParent,
   ErrorMessage, BadValue, Path, ParentObject
-} from './utils/capable-check'
+} from './utils/capable-check.js'
 
-import { startConnections } from './utils'
+import { startConnections } from './utils/index.js'
 
-export * from './types'
-export * from './revivables'
-export * from './connections'
-export * from './utils'
+export * from './types.js'
+export * from './revivables/index.js'
+export * from './connections/index.js'
+export * from './utils/index.js'
 
 /** Synthetic context so `Capable` can narrow on the inferred transport
  *  without an actual context object at the call site. Only `transport`

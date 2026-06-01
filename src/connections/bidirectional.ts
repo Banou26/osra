@@ -1,14 +1,14 @@
-import type { Transport } from '../utils/transport'
-import type { DefaultRevivableModules, RevivableModule } from '../revivables'
-import type { DeepReplaceWithBox } from '../utils/replace'
-import type { ProtocolContext } from './utils'
+import type { Transport } from '../utils/transport.js'
+import type { DefaultRevivableModules, RevivableModule } from '../revivables/index.js'
+import type { DeepReplaceWithBox } from '../utils/replace.js'
+import type { ProtocolContext } from './utils.js'
 import type {
   Capable, MessageEventTarget, MessageFields,
   MessageVariant, Uuid,
-} from '../types'
+} from '../types.js'
 
-import { recursiveBox, recursiveRevive } from '../revivables'
-import { isEmitTransport, isReceiveTransport } from '../utils/type-guards'
+import { recursiveBox, recursiveRevive } from '../revivables/index.js'
+import { isEmitTransport, isReceiveTransport } from '../utils/type-guards.js'
 
 export const type = 'bidirectional' as const
 

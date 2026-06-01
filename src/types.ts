@@ -1,10 +1,10 @@
-import type { ConnectionMessage } from './connections'
-import type { TypedEventTarget } from './utils'
-import type { IsJsonOnlyTransport } from './utils/type-guards'
+import type { ConnectionMessage } from './connections/index.js'
+import type { TypedEventTarget } from './utils/index.js'
+import type { IsJsonOnlyTransport } from './utils/type-guards.js'
 import type {
   DefaultRevivableModules, RevivableModule,
   InferMessages, InferRevivables, RevivableContext
-} from './revivables'
+} from './revivables/index.js'
 
 export const OSRA_KEY = '__OSRA_KEY__' as const
 export const OSRA_DEFAULT_KEY = '__OSRA_DEFAULT_KEY__' as const

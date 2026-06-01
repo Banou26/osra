@@ -1,7 +1,7 @@
-import type { RevivableContext } from './utils'
+import type { RevivableContext } from './utils.js'
 
-import { BoxBase } from './utils'
-import { boxByReference } from './identity'
+import { BoxBase } from './utils.js'
+import { boxByReference } from './identity.js'
 
 export const type = 'symbol' as const
 

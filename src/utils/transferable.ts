@@ -1,6 +1,6 @@
-import { transfer } from '../revivables/transfer'
-import { isRevivableBox } from '../revivables/utils'
-import { instanceOfAny, isClonable, isTransferable } from './type-guards'
+import { transfer } from '../revivables/transfer.js'
+import { isRevivableBox } from '../revivables/utils.js'
+import { instanceOfAny, isClonable, isTransferable } from './type-guards.js'
 
 export { transfer }
 

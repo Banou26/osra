@@ -1,11 +1,11 @@
-import type { Capable } from '../types'
-import type { UnderlyingType, RevivableContext, BoxBase as BoxBaseType } from './utils'
+import type { Capable } from '../types.js'
+import type { UnderlyingType, RevivableContext, BoxBase as BoxBaseType } from './utils.js'
 
-import { BoxBase } from './utils'
-import { recursiveBox } from '.'
-import { getTransferableObjects } from '../utils'
-import { EventChannel, type EventPort } from '../utils/event-channel'
-import { box as boxMessagePort, revive as reviveMessagePort, BoxedMessagePort } from './message-port'
+import { BoxBase } from './utils.js'
+import { recursiveBox } from './index.js'
+import { getTransferableObjects } from '../utils/index.js'
+import { EventChannel, type EventPort } from '../utils/event-channel.js'
+import { box as boxMessagePort, revive as reviveMessagePort, BoxedMessagePort } from './message-port.js'
 
 export const type = 'function' as const
 

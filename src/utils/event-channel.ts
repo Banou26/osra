@@ -1,4 +1,4 @@
-import type { TypedMessagePort, TypedMessagePortEventMap } from './typed-message-channel'
+import type { TypedMessagePort, TypedMessagePortEventMap } from './typed-message-channel.js'
 
 export class EventPort<T> extends EventTarget {
   addEventListener<K extends keyof TypedMessagePortEventMap<T> & string>(

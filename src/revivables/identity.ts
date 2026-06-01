@@ -1,9 +1,9 @@
-import type { Capable, Uuid } from '../types'
-import type { RevivableContext, BoxBase as BoxBaseType } from './utils'
-import type { UnderlyingType } from '../utils/type'
+import type { Capable, Uuid } from '../types.js'
+import type { RevivableContext, BoxBase as BoxBaseType } from './utils.js'
+import type { UnderlyingType } from '../utils/type.js'
 
-import { BoxBase } from './utils'
-import { recursiveBox, recursiveRevive } from '.'
+import { BoxBase } from './utils.js'
+import { recursiveBox, recursiveRevive } from './index.js'
 
 export const type = 'identity' as const
 

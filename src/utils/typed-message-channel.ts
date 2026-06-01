@@ -1,5 +1,5 @@
-import type { UnderlyingType } from './type'
-import type { TypedEventTarget } from './typed-event-target'
+import type { UnderlyingType } from './type.js'
+import type { TypedEventTarget } from './typed-event-target.js'
 
 export type TypedMessagePortEventMap<T = unknown> = {
   'message': MessageEvent<T>

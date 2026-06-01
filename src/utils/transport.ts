@@ -1,15 +1,15 @@
-import type { Message} from '../types'
+import type { Message} from '../types.js'
 import type {
   WebExtOnConnect, WebExtOnMessage,
   WebExtPort, WebExtRuntime, WebExtSender
-} from './type-guards'
+} from './type-guards.js'
 
-import { OSRA_KEY } from '../types'
+import { OSRA_KEY } from '../types.js'
 import {
   isOsraMessage, isCustomTransport,
   isWebExtensionOnConnect, isWebExtensionOnMessage,
   isWebExtensionPort, isWebExtensionRuntime, isWebSocket, isWindow, isSharedWorker
-} from './type-guards'
+} from './type-guards.js'
 
 export type MessageContext = {
   port?: MessagePort | WebExtPort // WebExtension

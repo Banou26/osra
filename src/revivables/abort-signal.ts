@@ -1,13 +1,13 @@
-import type { Capable } from '../types'
-import type { RevivableContext, BoxBase as BoxBaseType } from './utils'
-import type { BoxedMessagePort } from './message-port'
+import type { Capable } from '../types.js'
+import type { RevivableContext, BoxBase as BoxBaseType } from './utils.js'
+import type { BoxedMessagePort } from './message-port.js'
 
-import { BoxBase } from './utils'
-import { recursiveBox, recursiveRevive } from '.'
+import { BoxBase } from './utils.js'
+import { recursiveBox, recursiveRevive } from './index.js'
 import {
   createRevivableChannel,
   revive as reviveMessagePort,
-} from './message-port'
+} from './message-port.js'
 
 export const type = 'abortSignal' as const
 

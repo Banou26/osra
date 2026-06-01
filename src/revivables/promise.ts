@@ -1,18 +1,18 @@
-import type { Capable } from '../types'
-import type { RevivableContext, BoxBase as BoxBaseType } from './utils'
-import type { UnderlyingType } from '.'
+import type { Capable } from '../types.js'
+import type { RevivableContext, BoxBase as BoxBaseType } from './utils.js'
+import type { UnderlyingType } from './index.js'
 import type {
   BadFieldValue, BadFieldPath, BadFieldParent,
   ErrorMessage, BadValue, Path, ParentObject
-} from '../utils/capable-check'
+} from '../utils/capable-check.js'
 
-import { BoxBase } from './utils'
+import { BoxBase } from './utils.js'
 import {
   createRevivableChannel,
   revive as reviveMessagePort,
   BoxedMessagePort,
   AnyPort,
-} from './message-port'
+} from './message-port.js'
 
 export const type = 'promise' as const
 

@@ -1,15 +1,15 @@
 import type { Runtime } from 'webextension-polyfill'
-import type { Message } from '../types'
+import type { Message } from '../types.js'
 import type {
   CustomEmitTransport, CustomReceiveTransport,
   CustomTransport, EmitJsonPlatformTransport,
   EmitTransport, JsonPlatformTransport,
   ReceiveJsonPlatformTransport,
   ReceiveTransport, Transport
-} from './transport'
+} from './transport.js'
 
-import { OSRA_KEY } from '../types'
-import { getWebExtensionRuntime } from './transport'
+import { OSRA_KEY } from '../types.js'
+import { getWebExtensionRuntime } from './transport.js'
 
 // Pulled from globalThis so module evaluation doesn't crash on platforms
 // that haven't shipped Float16Array yet (Node ≤ 23, Chrome ≤ 134, Firefox

@@ -1,14 +1,14 @@
 import type {
   Message, MessageVariant, Uuid,
   Capable, MessageEventMap
-} from '../types'
-import type { DefaultRevivableModules, RevivableModule } from '../revivables'
-import type { Transport } from '../utils/transport'
-import type { ConnectionContext } from '.'
-import type { TypedEventTarget } from '../utils/typed-event-target'
+} from '../types.js'
+import type { DefaultRevivableModules, RevivableModule } from '../revivables/index.js'
+import type { Transport } from '../utils/transport.js'
+import type { ConnectionContext } from './index.js'
+import type { TypedEventTarget } from '../utils/typed-event-target.js'
 
-import { defaultRevivableModules } from '../revivables'
-import { isJsonOnlyTransport, isCustomTransport } from '../utils/type-guards'
+import { defaultRevivableModules } from '../revivables/index.js'
+import { isJsonOnlyTransport, isCustomTransport } from '../utils/type-guards.js'
 
 export const normalizeTransport = (transport: Transport): Transport => {
   const isJson =

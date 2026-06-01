@@ -1,17 +1,17 @@
-import type { Capable, StructurableTransferable, Uuid } from '../types'
-import type { TypedMessagePort } from '../utils/typed-message-channel'
-import type { RevivableContext, BoxBase as BoxBaseType } from './utils'
-import type { UnderlyingType } from '../utils/type'
+import type { Capable, StructurableTransferable, Uuid } from '../types.js'
+import type { TypedMessagePort } from '../utils/typed-message-channel.js'
+import type { RevivableContext, BoxBase as BoxBaseType } from './utils.js'
+import type { UnderlyingType } from '../utils/type.js'
 import type {
   BadFieldValue, BadFieldPath, BadFieldParent,
   ErrorMessage, BadValue, Path, ParentObject
-} from '../utils/capable-check'
+} from '../utils/capable-check.js'
 
-import { BoxBase } from './utils'
-import { recursiveBox, recursiveRevive } from '.'
-import { getTransferableObjects, isJsonOnlyTransport } from '../utils'
-import { EventChannel, EventPort } from '../utils/event-channel'
-import { trackGc } from '../utils/gc-tracker'
+import { BoxBase } from './utils.js'
+import { recursiveBox, recursiveRevive } from './index.js'
+import { getTransferableObjects, isJsonOnlyTransport } from '../utils/index.js'
+import { EventChannel, EventPort } from '../utils/event-channel.js'
+import { trackGc } from '../utils/gc-tracker.js'
 
 export const type = 'messagePort' as const
 

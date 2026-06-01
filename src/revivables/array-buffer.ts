@@ -1,6 +1,6 @@
-import type { RevivableContext } from './utils'
+import type { RevivableContext } from './utils.js'
 
-import { BoxBase, boxBuffer, reviveBuffer } from './utils'
+import { BoxBase, boxBuffer, reviveBuffer } from './utils.js'
 
 export const type = 'arrayBuffer' as const
 

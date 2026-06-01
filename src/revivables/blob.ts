@@ -1,9 +1,9 @@
-import type { RevivableContext, BoxBase as BoxBaseType } from './utils'
-import type { UnderlyingType } from '../utils/type'
-import type { BoxedPromise } from './promise'
+import type { RevivableContext, BoxBase as BoxBaseType } from './utils.js'
+import type { UnderlyingType } from '../utils/type.js'
+import type { BoxedPromise } from './promise.js'
 
-import { BoxBase } from './utils'
-import { box as boxPromise, revive as revivePromise } from './promise'
+import { BoxBase } from './utils.js'
+import { box as boxPromise, revive as revivePromise } from './promise.js'
 
 export const type = 'blob' as const
 

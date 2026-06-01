@@ -1,12 +1,12 @@
-import type { RevivableContext, BoxBase as BoxBaseType } from './utils'
-import type { UnderlyingType } from '.'
+import type { RevivableContext, BoxBase as BoxBaseType } from './utils.js'
+import type { UnderlyingType } from './index.js'
 
-import { BoxBase } from './utils'
+import { BoxBase } from './utils.js'
 import {
   createRevivableChannel,
   revive as reviveMessagePort,
   BoxedMessagePort
-} from './message-port'
+} from './message-port.js'
 
 export const type = 'readableStream' as const
 

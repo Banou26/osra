@@ -1,12 +1,12 @@
-import type { RevivableContext, UnderlyingType, BoxedBuffer } from './utils'
-import type { TypedArray, TypedArrayType } from '../utils/type-guards'
+import type { RevivableContext, UnderlyingType, BoxedBuffer } from './utils.js'
+import type { TypedArray, TypedArrayType } from '../utils/type-guards.js'
 
-import { BoxBase, boxBuffer, reviveBuffer } from './utils'
+import { BoxBase, boxBuffer, reviveBuffer } from './utils.js'
 import {
   isTypedArray,
   typedArrayToType,
   typedArrayTypeToTypedArrayConstructor,
-} from '../utils/type-guards'
+} from '../utils/type-guards.js'
 
 export const type = 'typedArray' as const
 

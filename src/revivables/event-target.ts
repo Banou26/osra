@@ -1,7 +1,7 @@
-import { BoxBase, type RevivableContext } from './utils'
-import { identity } from './identity'
-import { box as boxFunction, revive as reviveFunction } from './function'
-import { trackGc } from '../utils/gc-tracker'
+import { BoxBase, type RevivableContext } from './utils.js'
+import { identity } from './identity.js'
+import { box as boxFunction, revive as reviveFunction } from './function.js'
+import { trackGc } from '../utils/gc-tracker.js'
 
 export const type = 'eventTarget' as const
 

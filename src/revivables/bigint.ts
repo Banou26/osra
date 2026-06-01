@@ -1,6 +1,6 @@
-import type { RevivableContext } from './utils'
+import type { RevivableContext } from './utils.js'
 
-import { BoxBase } from './utils'
+import { BoxBase } from './utils.js'
 
 export const type = 'bigint' as const
 
