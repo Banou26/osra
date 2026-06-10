@@ -1,6 +1,6 @@
 import { transfer } from '../revivables/transfer.js'
 import { isRevivableBox } from '../revivables/utils.js'
-import { instanceOfAny, isClonable, isTransferable } from './type-guards.js'
+import { instanceOfAny, isSharedArrayBuffer, isTransferable } from './type-guards.js'
 
 export { transfer }
 
@@ -42,7 +42,7 @@ export const getTransferableObjects = (value: unknown): Transferable[] => {
     if (seen.has(value)) return
     seen.add(value)
 
-    if (isClonable(value)) return
+    if (isSharedArrayBuffer(value)) return
 
     if (isTransferBox(value)) {
       // Non-degraded box flips into transfer mode for everything below.

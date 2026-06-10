@@ -25,7 +25,6 @@ export type RevivableContext<
 > = {
   transport: Transport
   remoteUuid: Uuid
-  unregisterSignal?: AbortSignal
   /** Typed as a broad dispatcher so revivables can post their own message
    *  variants without triggering contravariant function-parameter mismatches
    *  across modules. The shape is enforced structurally via `MessageFields`. */
@@ -44,11 +43,6 @@ export type ExtractType<T, Ctx extends RevivableContext = RevivableContext> =
       : T extends { isType: (value: unknown) => value is infer S } ? S : never
     : T extends { isType: (value: unknown) => value is infer S } ? S : never
 
-export type ExtractBox<T> =
-  T extends { box: (...args: any[]) => infer B }
-    ? B
-    : never
-
 export type ExtractMessages<T> =
   T extends { Messages?: infer B }
     ? B extends { type: string }
@@ -64,9 +58,6 @@ export type InferRevivables<
   Ctx extends RevivableContext = RevivableContext,
 > =
   ExtractType<TModules[number], Ctx>
-
-export type InferRevivableBox<TModules extends readonly unknown[]> =
-  ExtractBox<TModules[number]>
 
 export const isRevivableBox = (value: unknown): value is BoxBase =>
   !!value

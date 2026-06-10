@@ -1,5 +1,5 @@
 import type { BoxBase, RevivableContext } from './utils.js'
-import type { DeepReplaceWithBox, DeepReplaceWithRevive, ReplaceWithBox, ReplaceWithRevive } from '../utils/replace.js'
+import type { DeepReplaceWithBox, DeepReplaceWithRevive } from '../utils/replace.js'
 import type { MessageFields, Capable } from '../types.js'
 
 import { isRevivableBox } from './utils.js'
@@ -124,20 +124,6 @@ const descend = <TOut>(value: unknown, transform: (v: Capable) => unknown): TOut
   return value as TOut
 }
 
-export const box = <
-  T extends Capable,
-  TModules extends readonly RevivableModule[]
->(
-  value: T,
-  context: RevivableContext<TModules>
-): ReplaceWithBox<T, TModules[number]> => {
-  const handledByModule = findBoxModule(value, context.revivableModules)
-  if (handledByModule) {
-    return handledByModule.box(value, context) as ReplaceWithBox<T, TModules[number]>
-  }
-  return value as ReplaceWithBox<T, TModules[number]>
-}
-
 // Walk path for cycle detection. Box/revive are fully synchronous, so a
 // module-global set with balanced enter/exit is safe; tracking the *path*
 // (not all visited values) keeps sibling aliasing working — only a true
@@ -175,21 +161,6 @@ export const recursiveBox = <
   } finally {
     if (track) boxPath.delete(value)
   }
-}
-
-export const revive = <
-  T extends ReturnType<typeof box>,
-  TModules extends readonly RevivableModule[]
->(
-  value: T,
-  context: RevivableContext<TModules>
-): ReplaceWithRevive<T, TModules[number]> => {
-  if (!isRevivableBox(value)) return value as ReplaceWithRevive<T, TModules[number]>
-  const handledByModule = findReviveModule(value, context.revivableModules)
-  if (handledByModule) {
-    return handledByModule.revive(value, context) as ReplaceWithRevive<T, TModules[number]>
-  }
-  return value as ReplaceWithRevive<T, TModules[number]>
 }
 
 export const recursiveRevive = <

@@ -3,7 +3,7 @@ import type { UnderlyingType, RevivableContext, BoxBase as BoxBaseType } from '.
 
 import { BoxBase } from './utils.js'
 import { recursiveBox } from './index.js'
-import { getTransferableObjects } from '../utils/index.js'
+import { getTransferableObjects } from '../utils/transferable.js'
 import { EventChannel, type EventPort } from '../utils/event-channel.js'
 import { onTeardown } from '../utils/teardown.js'
 import { box as boxMessagePort, revive as reviveMessagePort, BoxedMessagePort } from './message-port.js'

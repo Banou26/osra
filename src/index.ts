@@ -8,7 +8,7 @@ import type {
   ErrorMessage, BadValue, Path, ParentObject
 } from './utils/capable-check.js'
 
-import { startConnections } from './utils/index.js'
+import { startConnections } from './connections/index.js'
 
 export * from './types.js'
 export * from './revivables/index.js'

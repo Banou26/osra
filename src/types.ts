@@ -1,5 +1,5 @@
 import type { ConnectionMessage } from './connections/index.js'
-import type { TypedEventTarget } from './utils/index.js'
+import type { TypedEventTarget } from './utils/typed-event-target.js'
 import type { IsJsonOnlyTransport } from './utils/type-guards.js'
 import type {
   DefaultRevivableModules, RevivableModule,

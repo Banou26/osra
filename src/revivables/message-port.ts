@@ -1,5 +1,5 @@
 import type { Capable, StructurableTransferable, Uuid } from '../types.js'
-import type { TypedMessagePort } from '../utils/typed-message-channel.js'
+import type { TypedMessageChannel, TypedMessagePort } from '../utils/typed-message-channel.js'
 import type { RevivableContext, BoxBase as BoxBaseType } from './utils.js'
 import type { UnderlyingType } from '../utils/type.js'
 import type {
@@ -9,7 +9,8 @@ import type {
 
 import { BoxBase } from './utils.js'
 import { recursiveBox, recursiveRevive } from './index.js'
-import { getTransferableObjects, isJsonOnlyTransport } from '../utils/index.js'
+import { getTransferableObjects } from '../utils/transferable.js'
+import { isJsonOnlyTransport } from '../utils/type-guards.js'
 import { EventChannel, EventPort } from '../utils/event-channel.js'
 import { trackGc } from '../utils/gc-tracker.js'
 import { onTeardown } from '../utils/teardown.js'
@@ -234,10 +235,7 @@ export const createRevivableChannel = <T extends Capable>(
       boxedRemote: box(port2 as StructurableTransferablePort<T>, context),
     }
   }
-  const { port1, port2 } = new MessageChannel() as unknown as {
-    port1: TypedMessagePort<Capable>
-    port2: TypedMessagePort<Capable>
-  }
+  const { port1, port2 } = new MessageChannel() as unknown as TypedMessageChannel<Capable, Capable>
   return {
     localPort: createProtocolPort<T>(port1, context) as unknown as AnyPort<T>,
     boxedRemote: box(port2 as unknown as StructurableTransferablePort<T>, context, { autoBox: true }),
@@ -253,7 +251,7 @@ const reviveViaPortId = <T extends Capable>(
   const { port1: userPort, port2: internalPort } =
     synthetic
       ? new EventChannel<T, T>()
-      : new MessageChannel() as { port1: TypedMessagePort<T>, port2: TypedMessagePort<T> }
+      : new MessageChannel() as unknown as TypedMessageChannel<T, T>
   const userPortRef = new WeakRef(userPort)
   // For synthetic EventChannels, internalPort._peer === userPort — holding
   // internalPort strongly from the trackGc cleanup would re-pin userPort.

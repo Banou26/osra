@@ -1,7 +1,5 @@
 export * from './transport.js'
-export * from '../revivables/index.js'
 export * from './replace.js'
-export * from '../connections/index.js'
 export * from './transferable.js'
 export * from './type-guards.js'
 export * from './typed-event-target.js'

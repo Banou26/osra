@@ -27,14 +27,8 @@ type FindMatchingRevive<T, M> =
     ? T extends S ? R : never
     : never
 
-// If T matches a module's box output, return the module's revive return type.
-// Otherwise, return T unchanged.
-export type ReplaceWithRevive<T, M> =
-  [FindMatchingRevive<T, M>] extends [never]
-    ? T
-    : FindMatchingRevive<T, M>
-
-// Recursive variant of ReplaceWithRevive.
+// Recursive variant: if T matches a module's box output, replace with the
+// module's revive return type; descend into arrays and objects otherwise.
 export type DeepReplaceWithRevive<T, M> =
   [FindMatchingRevive<T, M>] extends [never]
     ? T extends Array<infer U> ? Array<DeepReplaceWithRevive<U, M>>

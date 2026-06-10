@@ -1,13 +1,13 @@
 import type { DefaultRevivableModules, RevivableModule } from '../revivables/index.js'
 import type { ConnectionContext as BidirectionalConnectionContext } from './bidirectional.js'
 import type {
-  ProtocolContext,
-  StartConnectionsOptions,
-} from '../utils/index.js'
-import type {
   Message, MessageVariant, Uuid,
   Capable,
 } from '../types.js'
+import type {
+  ProtocolContext,
+  StartConnectionsOptions,
+} from './utils.js'
 import type { MessageContext } from '../utils/transport.js'
 
 import { OSRA_DEFAULT_KEY, OSRA_KEY } from '../types.js'
