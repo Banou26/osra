@@ -1,183 +1,136 @@
-// TypeScript Example with Full Type Safety
-// This example demonstrates Osra's TypeScript support
+// Typed RPC with osra — Remote<T>, the Capable compile-time check,
+// AbortSignal cancellation, error subclass round-trips, and a custom
+// { emit, receive } transport.
+//
+// Both peers live in the same JS context here, connected through a custom
+// in-memory transport pair, so this file runs as-is — no worker needed.
+// The same typings apply unchanged over Worker/Window/WebSocket/… transports.
 
-// === types.ts ===
-export interface User {
-  id: string
-  name: string
-  email: string
-  createdAt: Date
-  lastLogin: Date | null
-}
+import type { Message, MessageContext, Remote, Transport } from 'osra'
 
-export interface TodoItem {
-  id: string
-  userId: string
-  title: string
-  completed: boolean
-  dueDate: Date | null
-  tags: string[]
-}
-
-// === worker.ts ===
 import { expose } from 'osra'
-import type { User, TodoItem } from './types'
 
-class UserService {
-  private users = new Map<string, User>()
-  private todos = new Map<string, TodoItem[]>()
+// --- Custom transport --------------------------------------------------------
+// emit/receive can be plain functions on a PLAIN object literal — osra
+// deliberately does not detect prototype-based objects (class instances,
+// Node EventEmitters) as custom transports. `isJson: true` declares that the
+// wire only carries JSON: binary payloads are base64-encoded, ports become
+// synthetic, and transfer() degrades to a copy. `receive` may return an
+// unsubscribe function — osra calls it when the `unregisterSignal` option
+// aborts.
 
-  async createUser(name: string, email: string): Promise<User> {
-    const user: User = {
-      id: crypto.randomUUID(),
-      name,
-      email,
-      createdAt: new Date(),
-      lastLogin: null
-    }
+type Listener = (message: Message, context: MessageContext) => void
 
-    this.users.set(user.id, user)
-    this.todos.set(user.id, [])
-
-    return user
+const createTransportPair = (): [Transport, Transport] => {
+  const aListeners = new Set<Listener>()
+  const bListeners = new Set<Listener>()
+  const deliver = (listeners: Set<Listener>, message: Message) => {
+    const wire = JSON.stringify(message)
+    queueMicrotask(() => {
+      for (const listener of listeners) listener(JSON.parse(wire) as Message, {})
+    })
   }
-
-  async getUser(userId: string): Promise<User | null> {
-    return this.users.get(userId) || null
-  }
-
-  async updateLastLogin(userId: string): Promise<void> {
-    const user = this.users.get(userId)
-    if (user) {
-      user.lastLogin = new Date()
-    }
-  }
-
-  async addTodo(userId: string, title: string, tags: string[] = []): Promise<TodoItem> {
-    const userTodos = this.todos.get(userId) || []
-
-    const todo: TodoItem = {
-      id: crypto.randomUUID(),
-      userId,
-      title,
-      completed: false,
-      dueDate: null,
-      tags
-    }
-
-    userTodos.push(todo)
-    this.todos.set(userId, userTodos)
-
-    return todo
-  }
-
-  async getTodos(userId: string): Promise<TodoItem[]> {
-    return this.todos.get(userId) || []
-  }
-
-  async completeTodo(todoId: string): Promise<boolean> {
-    for (const [, todos] of this.todos) {
-      const todo = todos.find(t => t.id === todoId)
-      if (todo) {
-        todo.completed = true
-        return true
-      }
-    }
-    return false
-  }
-
-  // Return a function that filters todos
-  async createTodoFilter(userId: string) {
-    const todos = this.todos.get(userId) || []
-
-    return {
-      byTag: async (tag: string) => todos.filter(t => t.tags.includes(tag)),
-      byCompleted: async (completed: boolean) => todos.filter(t => t.completed === completed),
-      byOverdue: async () => {
-        const now = new Date()
-        return todos.filter(t => t.dueDate && t.dueDate < now && !t.completed)
-      }
-    }
-  }
-
-  // Stream todos as they're added (generator function)
-  async *streamTodos(userId: string) {
-    const todos = this.todos.get(userId) || []
-    for (const todo of todos) {
-      yield todo
-      // Simulate some async processing
-      await new Promise(resolve => setTimeout(resolve, 100))
-    }
-  }
+  return [
+    {
+      isJson: true,
+      emit: (message: Message) => deliver(bListeners, message),
+      receive: (listener: Listener) => {
+        aListeners.add(listener)
+        return () => { aListeners.delete(listener) }
+      },
+    },
+    {
+      isJson: true,
+      emit: (message: Message) => deliver(aListeners, message),
+      receive: (listener: Listener) => {
+        bListeners.add(listener)
+        return () => { bListeners.delete(listener) }
+      },
+    },
+  ]
 }
 
-// Create an instance and expose it
-const userService = new UserService()
+// --- API -----------------------------------------------------------------------
+// Plain objects and arrow functions only. Class instances do NOT survive the
+// boundary — prototypes aren't preserved, so an instance's methods would be
+// lost. Expose plain data and functions instead.
 
-// Export the type for use in main thread
-export type UserServiceAPI = typeof userService
+const api = {
+  // Sync here, async over there: every call crosses the wire, so the remote
+  // sees (a: number, b: number) => Promise<number>.
+  add: (a: number, b: number) => a + b,
 
-// Expose the service
-expose(userService, { transport: self })
+  parse: (input: string): { [key: string]: number } => {
+    if (!input.trimStart().startsWith('{')) throw new TypeError('expected a JSON object literal')
+    return JSON.parse(input)
+  },
 
+  // The AbortSignal argument revives as a live signal — aborting on the
+  // caller side fires this listener, reason included.
+  longTask: (durationMs: number, signal: AbortSignal) =>
+    new Promise<string>((resolve, reject) => {
+      const timer = setTimeout(() => resolve('finished'), durationMs)
+      signal.addEventListener('abort', () => {
+        clearTimeout(timer)
+        reject(signal.reason)
+      }, { once: true })
+    }),
+}
 
-// === main.ts ===
-import { expose } from 'osra'
-import type { UserServiceAPI } from './worker'
-import type { User, TodoItem } from './types'
+const main = async () => {
+  const [hostSide, clientSide] = createTransportPair()
 
-async function main() {
-  // Create worker
-  const worker = new Worker('./worker.js', { type: 'module' })
+  // Both peers call expose(). Each hands over its own value and receives the
+  // peer's; the client shares nothing, so it passes {}.
+  expose(api, { transport: hostSide })
+  const remote: Remote<typeof api> = await expose<typeof api>({}, { transport: clientSide })
 
-  // Connect with full type safety
-  const userService = await expose<UserServiceAPI>({}, { transport: worker })
+  // The Capable check rejects non-serializable values at the expose() call
+  // site, at compile time, pinpointing the offending path. Uncommenting:
+  //
+  //   expose({ ...api, cache: new WeakMap<object, string>() }, { transport: hostSide })
+  //
+  // produces (abridged):
+  //
+  //   error TS2345: Argument of type '{ add: ...; parse: ...; longTask: ...; cache: WeakMap<object, string>; }'
+  //   is not assignable to parameter of type '... & {
+  //     [ErrorMessage]: "Value type must resolve to a Capable";
+  //     [BadValue]: WeakMap<object, string>;
+  //     [Path]: "cache";
+  //     [ParentObject]: { add: ...; parse: ...; longTask: ...; cache: WeakMap<object, string>; };
+  //   }'
+  //
+  // CAVEAT: with the published package's types alone this error does NOT fire.
+  // lib.dom declares `interface MediaSourceHandle {}` empty, it is a member of
+  // the `Transferable` union Capable accepts, and an empty interface matches
+  // every object type — so the check collapses to accepting anything. Restore
+  // it by declaring this one-line shim in an ambient .d.ts of your project
+  // (it's what this repo does internally in src/global-types.d.ts):
+  //
+  //   interface MediaSourceHandle { __dummy__: never }
 
-  // All methods are fully typed!
+  // Remote<T> in action: add returns number on the host, Promise<number> here.
+  const pending: Promise<number> = remote.add(2, 3)
+  console.log(await pending) // 5
 
-  // Create a user - return type is inferred as Promise<User>
-  const user: User = await userService.createUser('John Doe', 'john@example.com')
-  console.log('Created user:', user)
-  console.log('Created at is a Date:', user.createdAt instanceof Date) // true!
-
-  // Update last login
-  await userService.updateLastLogin(user.id)
-
-  // Add some todos - return type is inferred as Promise<TodoItem>
-  const todo1 = await userService.addTodo(user.id, 'Learn OSRA', ['programming', 'typescript'])
-  const todo2 = await userService.addTodo(user.id, 'Build something cool', ['project'])
-  const todo3 = await userService.addTodo(user.id, 'Write documentation', ['docs'])
-
-  // Get todos - return type is inferred as Promise<TodoItem[]>
-  const todos: TodoItem[] = await userService.getTodos(user.id)
-  console.log(`User has ${todos.length} todos`)
-
-  // Complete a todo
-  const completed = await userService.completeTodo(todo1.id)
-  console.log('Todo completed:', completed)
-
-  // Get a filter function - this returns functions that can be called!
-  const filter = await userService.createTodoFilter(user.id)
-
-  // Use the filter functions
-  const programmingTodos = await filter.byTag('programming')
-  console.log('Programming todos:', programmingTodos)
-
-  const incompleteTodos = await filter.byCompleted(false)
-  console.log('Incomplete todos:', incompleteTodos.length)
-
-  // Stream todos using async generator
-  console.log('Streaming todos:')
-  for await (const todo of userService.streamTodos(user.id)) {
-    console.log(`  - ${todo.title} (${todo.completed ? '✓' : '○'})`)
+  // Error subclasses round-trip — a thrown TypeError is still a TypeError.
+  try {
+    await remote.parse('not json')
+  } catch (error) {
+    console.log(error instanceof TypeError) // true
+    console.log((error as TypeError).message) // 'expected a JSON object literal'
   }
 
-  // TypeScript will catch errors at compile time:
-  // await userService.nonExistentMethod() // Error: Property 'nonExistentMethod' does not exist
-  // await userService.createUser(123, true) // Error: Argument of type 'number' is not assignable to parameter of type 'string'
-
-  // Clean up
-  worker.terminate()
+  // Cancellation across the boundary: abort locally, the host's signal fires
+  // with the same reason, and its rejection travels back.
+  const controller = new AbortController()
+  const task = remote.longTask(60_000, controller.signal)
+  controller.abort(new Error('user cancelled'))
+  try {
+    await task
+  } catch (reason) {
+    console.log(reason instanceof Error && reason.message) // 'user cancelled'
+  }
 }
 
 main().catch(console.error)

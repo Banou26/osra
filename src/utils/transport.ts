@@ -165,6 +165,10 @@ export const registerOsraMessageListener = (
   // Window, Worker, WebSocket, ServiceWorkerContainer, MessagePort, SharedWorker, …
   // SharedWorker dispatches messages on its .port, not on the worker object.
   const target = isSharedWorker(receiveTransport) ? receiveTransport.port : receiveTransport
+  // Inbound origin filtering is a cross-origin *window* concern — WebSocket
+  // and ServiceWorkerContainer events carry their own unrelated origins and
+  // a page-origin value would silently drop all their traffic.
+  const filterByOrigin = origin !== '*' && isWindow(receiveTransport)
   const messageListener = (event: MessageEvent<Message | string>) => {
     // JSON transports (WebSocket) deliver strings — parse before the key check.
     let data = event.data
@@ -173,7 +177,7 @@ export const registerOsraMessageListener = (
     }
     if (!checkOsraMessageKey(data, key)) return
     if (remoteName && data.name !== remoteName) return
-    if (origin !== '*' && event.origin && event.origin !== origin) return
+    if (filterByOrigin && event.origin && event.origin !== origin) return
     listener(data, { receiveTransport, source: event.source, origin: event.origin })
   }
   target.addEventListener('message', messageListener as EventListener)

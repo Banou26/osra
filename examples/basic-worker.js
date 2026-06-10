@@ -1,72 +1,61 @@
-// Basic Worker Example
-// This example shows the simplest use case for Osra with Web Workers
+// Basic worker example — main thread <-> module worker over osra.
+//
+// Two files are shown in one for readability: split at the section markers
+// into worker.js and main.js to run. Both sides call expose() — each side
+// hands osra its own value and receives the other side's value, with live
+// semantics: functions stay callable, generators stay iterable.
 
-// === worker.js ===
+// ============================== worker.js ===================================
+
 import { expose } from 'osra'
 
-// Define your API
-const workerAPI = {
-  // Simple calculation
-  add: async (a, b) => {
-    console.log(`Worker: Adding ${a} + ${b}`)
-    return a + b
+let hits = 0
+
+const api = {
+  add: (a, b) => a + b,
+
+  // Nested objects keep their shape — nested functions are proxied too.
+  counter: {
+    hit: () => ++hits,
+    current: () => hits,
   },
 
-  // Async operation
-  fetchData: async (url) => {
-    console.log(`Worker: Fetching ${url}`)
-    const response = await fetch(url)
-    return response.json()
+  // Async generators are proxied: next/return/throw cross the wire, so
+  // for-await works on the main thread, and an early `break` over there
+  // propagates return() back into this generator.
+  countdown: async function* (from) {
+    for (let i = from; i > 0; i--) yield i
+    yield 'liftoff'
   },
-
-  // Return complex object with functions
-  createCounter: async (initialValue = 0) => {
-    let count = initialValue
-
-    return {
-      increment: async () => ++count,
-      decrement: async () => --count,
-      getValue: async () => count,
-      reset: async () => { count = initialValue; return count }
-    }
-  }
 }
 
-// Expose the API through the worker
-expose(workerAPI, { transport: self })
+expose(api, { transport: self })
 
-console.log('Worker: Ready to receive messages')
+// ============================== main.js =====================================
 
-
-// === main.js ===
 import { expose } from 'osra'
 
-async function main() {
-  // Create a worker
-  const worker = new Worker('./worker.js', { type: 'module' })
+const main = async () => {
+  const worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' })
 
-  // Connect to the worker - note the empty object as first parameter
+  // This side shares nothing, so it passes {}. The returned promise resolves
+  // with the worker's value once the handshake completes.
   const api = await expose({}, { transport: worker })
 
-  // Now you can call worker functions as if they were local!
+  // Every remote function returns a Promise — even ones that are sync on the
+  // worker side, since the call crosses the wire.
+  console.log(await api.add(2, 3)) // 5
 
-  // Simple function call
-  const sum = await api.add(5, 3)
-  console.log(`Main: 5 + 3 = ${sum}`) // 8
+  console.log(await api.counter.hit()) // 1
+  console.log(await api.counter.hit()) // 2
+  console.log(await api.counter.current()) // 2
 
-  // Async operation
-  const data = await api.fetchData('https://jsonplaceholder.typicode.com/posts/1')
-  console.log('Main: Fetched data:', data)
+  // Calling a remote async generator returns a Promise of the iterator —
+  // await the call, then for-await the result.
+  for await (const tick of await api.countdown(3)) {
+    console.log(tick) // 3, 2, 1, 'liftoff'
+  }
 
-  // Complex object with methods
-  const counter = await api.createCounter(10)
-  console.log('Main: Initial value:', await counter.getValue()) // 10
-  console.log('Main: After increment:', await counter.increment()) // 11
-  console.log('Main: After increment:', await counter.increment()) // 12
-  console.log('Main: After decrement:', await counter.decrement()) // 11
-  console.log('Main: After reset:', await counter.reset()) // 10
-
-  // Clean up when done
   worker.terminate()
 }
 

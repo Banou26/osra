@@ -1,258 +1,124 @@
-// Binary Data and Transfer Example
-// This example shows how to efficiently handle binary data with Osra
+// Binary data over osra — TypedArrays, ArrayBuffers, Blobs, transfer(),
+// and a ReadableStream of binary chunks.
+//
+// Two files are shown in one for readability: split at the section markers
+// into worker.js and main.js to run.
 
-// === worker.js ===
-import { expose, transfer } from 'osra'
+// ============================== worker.js ===================================
 
-const imageProcessor = {
-  // Process image data - receives ImageData or ArrayBuffer
-  async applyGrayscale(imageData) {
-    console.log('Worker: Applying grayscale filter')
+import { expose } from 'osra'
 
-    // If it's an ArrayBuffer, assume it's raw RGBA data
-    const data = imageData.data || new Uint8ClampedArray(imageData)
+const api = {
+  // TypedArrays arrive as the same concrete type (Uint8Array stays a
+  // Uint8Array, Float64Array a Float64Array, …).
+  echo: (view) => view,
 
-    // Apply grayscale filter
-    for (let i = 0; i < data.length; i += 4) {
-      const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114
-      data[i] = gray     // Red
-      data[i + 1] = gray // Green
-      data[i + 2] = gray // Blue
-      // Alpha stays the same
-    }
+  sum: (view) => view.reduce((total, byte) => total + byte, 0),
 
-    // Transfer the data back instead of cloning
-    // This is more efficient for large binary data
-    if (imageData.data) {
-      // Return as ImageData
-      return transfer(imageData)
-    } else {
-      // Return as ArrayBuffer
-      return transfer(data.buffer)
-    }
+  describe: (view) => ({
+    constructorName: view.constructor.name,
+    byteLength: view.byteLength,
+    values: [...view],
+  }),
+
+  byteLength: (buffer) => buffer.byteLength,
+
+  // ArrayBuffers round-trip as ArrayBuffers.
+  double: (buffer) => {
+    const input = new Uint8Array(buffer)
+    const out = new Uint8Array(input.length)
+    for (let i = 0; i < input.length; i++) out[i] = input[i] * 2
+    return out.buffer
   },
 
-  // Generate large binary data
-  async generateNoise(width, height) {
-    console.log(`Worker: Generating ${width}x${height} noise`)
+  // Blobs revive on the receiving side as Promise<Blob> — the bytes are
+  // fetched asynchronously, so the receiver has to await them.
+  makeReport: () => ({
+    name: 'report.csv',
+    blob: new Blob(['id,value\n1,255\n'], { type: 'text/csv' }),
+  }),
 
-    const size = width * height * 4 // RGBA
-    const buffer = new ArrayBuffer(size)
-    const data = new Uint8ClampedArray(buffer)
-
-    // Fill with random noise
-    for (let i = 0; i < size; i++) {
-      data[i] = Math.random() * 255
-    }
-
-    // Transfer the buffer - it will be moved, not copied
-    return transfer(buffer)
+  // ReadableStream: chunks are pulled across the wire on demand. Backpressure
+  // is real but both ends queue with the default highWaterMark of 1, so up to
+  // ~2 chunks are produced eagerly before the consumer's first read; after
+  // that, production tracks reads. Cancelling on the consumer side propagates
+  // the cancel reason back to this source.
+  randomBytes: (chunkCount, chunkSize) => {
+    let sent = 0
+    return new ReadableStream({
+      pull: controller => {
+        if (sent === chunkCount) {
+          controller.close()
+          return
+        }
+        const chunk = new Uint8Array(chunkSize)
+        crypto.getRandomValues(chunk)
+        sent++
+        controller.enqueue(chunk)
+      },
+    })
   },
-
-  // Process multiple buffers
-  async concatenateBuffers(buffers) {
-    console.log(`Worker: Concatenating ${buffers.length} buffers`)
-
-    // Calculate total size
-    const totalSize = buffers.reduce((sum, buf) => sum + buf.byteLength, 0)
-
-    // Create new buffer
-    const result = new ArrayBuffer(totalSize)
-    const view = new Uint8Array(result)
-
-    // Copy all buffers
-    let offset = 0
-    for (const buffer of buffers) {
-      view.set(new Uint8Array(buffer), offset)
-      offset += buffer.byteLength
-    }
-
-    // Transfer the result
-    return transfer(result)
-  },
-
-  // Stream large amounts of data
-  async *streamChunks(totalSize, chunkSize = 1024 * 1024) { // 1MB chunks
-    console.log(`Worker: Streaming ${totalSize} bytes in ${chunkSize} byte chunks`)
-
-    let remaining = totalSize
-    let chunkNumber = 0
-
-    while (remaining > 0) {
-      const size = Math.min(remaining, chunkSize)
-      const buffer = new ArrayBuffer(size)
-      const view = new Uint8Array(buffer)
-
-      // Fill with some data (chunk number repeated)
-      view.fill(chunkNumber % 256)
-
-      remaining -= size
-      chunkNumber++
-
-      // Transfer each chunk
-      yield transfer(buffer)
-
-      // Simulate some processing time
-      await new Promise(resolve => setTimeout(resolve, 10))
-    }
-  },
-
-  // Work with TypedArrays
-  async processFloatData(floatArray) {
-    console.log(`Worker: Processing ${floatArray.length} float values`)
-
-    // OSRA preserves TypedArray types
-    if (!(floatArray instanceof Float32Array)) {
-      throw new Error('Expected Float32Array')
-    }
-
-    // Process the data
-    const result = new Float32Array(floatArray.length)
-    for (let i = 0; i < floatArray.length; i++) {
-      result[i] = Math.sin(floatArray[i]) * 2
-    }
-
-    // Transfer back
-    return transfer(result)
-  },
-
-  // Handle Blobs and Files
-  async readFileContent(file) {
-    console.log(`Worker: Reading file ${file.name} (${file.size} bytes)`)
-
-    // Files and Blobs are automatically handled by Osra
-    const text = await file.text()
-
-    return {
-      name: file.name,
-      size: file.size,
-      type: file.type,
-      lastModified: new Date(file.lastModified),
-      preview: text.substring(0, 1000),
-      lineCount: text.split('\n').length
-    }
-  }
 }
 
-expose(imageProcessor, { transport: self })
+expose(api, { transport: self })
 
+// ============================== main.js =====================================
 
-// === main.js ===
 import { expose, transfer } from 'osra'
 
-async function main() {
-  const worker = new Worker('./worker.js', { type: 'module' })
-  const processor = await expose({}, { transport: worker })
+const main = async () => {
+  const worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' })
+  const api = await expose({}, { transport: worker })
 
-  // Example 1: Process image data
-  console.log('\n=== Image Processing ===')
+  // --- TypedArrays, including subarray views --------------------------------
+  const backing = new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7])
+  console.log(await api.sum(backing)) // 28
 
-  // Create some image data
-  const canvas = document.createElement('canvas')
-  canvas.width = 100
-  canvas.height = 100
-  const ctx = canvas.getContext('2d')
+  // A subarray view sends exactly the view's window — the receiver sees the
+  // 3 bytes [2, 3, 4], not the 8-byte backing buffer.
+  console.log(await api.describe(backing.subarray(2, 5)))
+  // { constructorName: 'Uint8Array', byteLength: 3, values: [2, 3, 4] }
 
-  // Draw something
-  ctx.fillStyle = 'red'
-  ctx.fillRect(0, 0, 50, 100)
-  ctx.fillStyle = 'blue'
-  ctx.fillRect(50, 0, 50, 100)
+  // The concrete TypedArray type survives the round-trip.
+  const floats = new Float64Array([0.5, 1.5])
+  console.log((await api.echo(floats)) instanceof Float64Array) // true
 
-  // Get image data
-  const imageData = ctx.getImageData(0, 0, 100, 100)
-  console.log('Main: Original image data size:', imageData.data.byteLength, 'bytes')
+  // --- ArrayBuffer -----------------------------------------------------------
+  const buffer = new Uint8Array([10, 20, 30]).buffer
+  const doubled = await api.double(buffer)
+  console.log(doubled instanceof ArrayBuffer, [...new Uint8Array(doubled)]) // true [20, 40, 60]
+  // The default is COPY semantics — the local buffer is untouched after a send.
+  console.log(buffer.byteLength) // 3
 
-  // Process it in the worker - transfer for efficiency
-  const processed = await processor.applyGrayscale(transfer(imageData))
-  console.log('Main: Processed image data received')
-  // Note: original imageData is now detached and unusable
+  // --- Blob: revives as Promise<Blob> — await it explicitly ------------------
+  const report = await api.makeReport()
+  // report.blob is NOT a Blob yet, it is a Promise<Blob>.
+  const blob = await report.blob
+  console.log(blob instanceof Blob, blob.type) // true 'text/csv'
+  console.log(await blob.text()) // 'id,value\n1,255\n'
 
-  // Example 2: Generate binary data
-  console.log('\n=== Binary Data Generation ===')
+  // --- transfer(): opt-in move semantics -------------------------------------
+  const big = new ArrayBuffer(16 * 1024 * 1024)
+  console.log(await api.byteLength(transfer(big))) // 16777216
+  // The source buffer is detached after the send — but ONLY when the
+  // platform/transport actually supports transfer (structured-clone
+  // transports like this Worker). On JSON transports (WebSocket, web
+  // extension messaging) transfer() silently degrades to a copy and the
+  // source stays usable.
+  console.log(big.byteLength) // 0 — detached
 
-  const noise = await processor.generateNoise(512, 512)
-  console.log('Main: Generated noise buffer size:', noise.byteLength, 'bytes')
-
-  // Example 3: Concatenate buffers
-  console.log('\n=== Buffer Concatenation ===')
-
-  const buffers = [
-    new ArrayBuffer(1000),
-    new ArrayBuffer(2000),
-    new ArrayBuffer(3000)
-  ]
-
-  // Fill with some data
-  new Uint8Array(buffers[0]).fill(1)
-  new Uint8Array(buffers[1]).fill(2)
-  new Uint8Array(buffers[2]).fill(3)
-
-  // Transfer all buffers for processing
-  const concatenated = await processor.concatenateBuffers(buffers.map(transfer))
-  console.log('Main: Concatenated buffer size:', concatenated.byteLength, 'bytes')
-
-  // Example 4: Stream large data
-  console.log('\n=== Data Streaming ===')
-
-  const totalSize = 10 * 1024 * 1024 // 10MB
-  let receivedSize = 0
-  let chunkCount = 0
-
-  for await (const chunk of processor.streamChunks(totalSize)) {
-    receivedSize += chunk.byteLength
-    chunkCount++
-    console.log(`Main: Received chunk ${chunkCount}, total: ${receivedSize} bytes`)
+  // --- ReadableStream of binary chunks ---------------------------------------
+  const stream = await api.randomBytes(4, 1024)
+  const reader = stream.getReader()
+  let received = 0
+  while (true) {
+    const { value, done } = await reader.read()
+    if (done) break
+    received += value.byteLength
   }
-
-  console.log(`Main: Streaming complete, received ${receivedSize} bytes in ${chunkCount} chunks`)
-
-  // Example 5: TypedArrays
-  console.log('\n=== TypedArray Processing ===')
-
-  const floatData = new Float32Array([1.0, 2.0, 3.0, 4.0, 5.0])
-  console.log('Main: Original float data:', floatData)
-
-  const processedFloats = await processor.processFloatData(transfer(floatData))
-  console.log('Main: Processed float data:', processedFloats)
-  console.log('Main: Type preserved:', processedFloats instanceof Float32Array)
-
-  // Example 6: File handling
-  console.log('\n=== File Processing ===')
-
-  // Create a file
-  const content = 'Hello, Osra!\n'.repeat(100)
-  const file = new File([content], 'test.txt', { type: 'text/plain' })
-
-  const fileInfo = await processor.readFileContent(file)
-  console.log('Main: File info:', fileInfo)
-
-  // Performance comparison: Transfer vs Clone
-  console.log('\n=== Performance: Transfer vs Clone ===')
-
-  const largeBuffer = new ArrayBuffer(50 * 1024 * 1024) // 50MB
-
-  // Clone (default behavior)
-  console.time('Clone')
-  await processor.concatenateBuffers([largeBuffer])
-  console.timeEnd('Clone')
-
-  // Transfer (more efficient)
-  const largeBuffer2 = new ArrayBuffer(50 * 1024 * 1024) // 50MB
-  console.time('Transfer')
-  await processor.concatenateBuffers([transfer(largeBuffer2)])
-  console.timeEnd('Transfer')
-
-  console.log('Note: Transfer is typically much faster for large data')
+  console.log(received) // 4096
 
   worker.terminate()
 }
 
-// Run the example
-if (typeof document !== 'undefined') {
-  document.addEventListener('DOMContentLoaded', () => {
-    main().catch(console.error)
-  })
-} else {
-  console.log('This example requires a browser environment with document/canvas support')
-}
+main().catch(console.error)
