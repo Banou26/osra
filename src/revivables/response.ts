@@ -27,14 +27,22 @@ export const revive = <T extends ReturnType<typeof box>, T2 extends RevivableCon
   value: T,
   context: T2
 ): Response => {
+  // Opaque/error responses report status 0, which the constructor rejects.
+  if (value.status === 0) return Response.error()
+
   const headers = reviveHeaders(value.headers, context)
   const body = value.body ? reviveReadableStream(value.body, context) : null
 
-  return new Response(body, {
+  const response = new Response(body, {
     status: value.status,
     statusText: value.statusText,
     headers
   })
+  // url/redirected are read-only getters fed by internal state the
+  // constructor can't set — shadow them so the round trip is faithful.
+  if (value.url) Object.defineProperty(response, 'url', { value: value.url, configurable: true })
+  if (value.redirected) Object.defineProperty(response, 'redirected', { value: true, configurable: true })
+  return response
 }
 
 const typeCheck = () => {

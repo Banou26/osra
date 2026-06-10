@@ -22,13 +22,21 @@ export const isType = isTypedArray
 export const box = <T extends TypedArray, T2 extends RevivableContext>(
   value: T,
   context: T2,
-): BoxedTypedArray<T, T2> =>
-  ({
+): BoxedTypedArray<T, T2> => {
+  // Ship exactly the view's window — shipping the whole backing buffer
+  // loses byteOffset/length on revive (silent corruption for subarrays,
+  // RangeError for multi-byte views over odd-sized buffers).
+  const aligned = value.byteOffset === 0 && value.byteLength === value.buffer.byteLength
+  const buffer = aligned
+    ? value.buffer as ArrayBuffer
+    : (value.buffer as ArrayBuffer).slice(value.byteOffset, value.byteOffset + value.byteLength)
+  return {
     ...BoxBase,
     type,
     typedArrayType: typedArrayToType(value),
-    ...boxBuffer(value.buffer as ArrayBuffer, context),
-  }) as unknown as BoxedTypedArray<T, T2>
+    ...boxBuffer(buffer, context),
+  } as unknown as BoxedTypedArray<T, T2>
+}
 
 export const revive = <T extends BoxedTypedArray<TypedArray, RevivableContext>>(
   value: T,

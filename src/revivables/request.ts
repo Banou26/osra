@@ -3,6 +3,7 @@ import type { RevivableContext } from './utils.js'
 import { BoxBase } from './utils.js'
 import { box as boxHeaders, revive as reviveHeaders } from './headers.js'
 import { box as boxReadableStream, revive as reviveReadableStream } from './readable-stream.js'
+import { box as boxAbortSignal, revive as reviveAbortSignal } from './abort-signal.js'
 
 export const type = 'request' as const
 
@@ -21,11 +22,13 @@ export const box = <T extends Request, T2 extends RevivableContext>(
   body: value.body ? boxReadableStream(value.body, context) : null,
   credentials: value.credentials,
   cache: value.cache,
+  mode: value.mode,
   redirect: value.redirect,
   referrer: value.referrer,
   referrerPolicy: value.referrerPolicy,
   integrity: value.integrity,
-  keepalive: value.keepalive
+  keepalive: value.keepalive,
+  signal: boxAbortSignal(value.signal, context),
 })
 
 export const revive = <T extends ReturnType<typeof box>, T2 extends RevivableContext>(
@@ -48,7 +51,10 @@ export const revive = <T extends ReturnType<typeof box>, T2 extends RevivableCon
     referrerPolicy: value.referrerPolicy,
     integrity: value.integrity,
     keepalive: value.keepalive,
+    signal: reviveAbortSignal(value.signal, context),
   }
+  // 'navigate' is not constructible via RequestInit.
+  if (value.mode !== 'navigate') init.mode = value.mode
   if (value.body) {
     init.body = reviveReadableStream(value.body, context)
     init.duplex = 'half'

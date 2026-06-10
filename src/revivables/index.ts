@@ -25,7 +25,9 @@ import * as event from './event.js'
 import * as eventTarget from './event-target.js'
 import * as blob from './blob.js'
 import * as symbol from './symbol.js'
+import * as asyncIterator from './async-iterator.js'
 import { clonable, transferable, unclonable } from './fallbacks.js'
+import { nonFiniteNumber, undefinedValue } from './json-primitives.js'
 
 export { identity } from './identity.js'
 export { transfer } from './transfer.js'
@@ -74,6 +76,11 @@ export const defaultRevivableModules = [
   bigInt,
   symbol,
   event,
+  // After readableStream (some platforms make streams async-iterable),
+  // before the fallbacks so generators don't coerce to {}.
+  asyncIterator,
+  nonFiniteNumber,
+  undefinedValue,
   // clonable/transferable before eventTarget: OffscreenCanvas & co. are Transferables
   // that also extend EventTarget, which eventTarget would otherwise box as façade husks.
   clonable,
@@ -131,6 +138,16 @@ export const box = <
   return value as ReplaceWithBox<T, TModules[number]>
 }
 
+// Walk path for cycle detection. Box/revive are fully synchronous, so a
+// module-global set with balanced enter/exit is safe; tracking the *path*
+// (not all visited values) keeps sibling aliasing working — only a true
+// ancestor revisit, which would recurse forever, throws.
+const boxPath = new WeakSet<object>()
+const revivePath = new WeakSet<object>()
+
+const isTrackable = (value: unknown): value is object =>
+  value !== null && (typeof value === 'object' || typeof value === 'function')
+
 export const recursiveBox = <
   T extends Capable,
   TModules extends readonly RevivableModule[]
@@ -142,11 +159,22 @@ export const recursiveBox = <
   // Already-boxed values pass through — revivables may embed a pre-built
   // BoxedX in their outgoing payload; descending would re-box raw ports.
   if (isRevivableBox(value)) return value as ReturnCastType
-  const handledByModule = findBoxModule(value, context.revivableModules)
-  if (handledByModule) {
-    return handledByModule.box(value, context) as ReturnCastType
+  const track = isTrackable(value)
+  if (track) {
+    if (boxPath.has(value)) {
+      throw new TypeError('osra: cannot serialize a circular structure — break the cycle or send the container by reference')
+    }
+    boxPath.add(value)
   }
-  return descend<ReturnCastType>(value, v => recursiveBox(v, context))
+  try {
+    const handledByModule = findBoxModule(value, context.revivableModules)
+    if (handledByModule) {
+      return handledByModule.box(value, context) as ReturnCastType
+    }
+    return descend<ReturnCastType>(value, v => recursiveBox(v, context))
+  } finally {
+    if (track) boxPath.delete(value)
+  }
 }
 
 export const revive = <
@@ -172,11 +200,24 @@ export const recursiveRevive = <
   context: RevivableContext<TModules>
 ): DeepReplaceWithRevive<T, TModules[number]> => {
   type ReturnCastType = DeepReplaceWithRevive<T, TModules[number]>
-  if (isRevivableBox(value)) {
-    const handledByModule = findReviveModule(value, context.revivableModules)
-    if (handledByModule) {
-      return handledByModule.revive(value, context) as ReturnCastType
+  const track = isTrackable(value)
+  if (track) {
+    // Structured clone can deliver cyclic graphs a peer crafted — fail
+    // with a clear error instead of blowing the stack mid-dispatch.
+    if (revivePath.has(value)) {
+      throw new TypeError('osra: cannot revive a circular structure')
     }
+    revivePath.add(value)
   }
-  return descend<ReturnCastType>(value, v => recursiveRevive(v, context))
+  try {
+    if (isRevivableBox(value)) {
+      const handledByModule = findReviveModule(value, context.revivableModules)
+      if (handledByModule) {
+        return handledByModule.revive(value, context) as ReturnCastType
+      }
+    }
+    return descend<ReturnCastType>(value, v => recursiveRevive(v, context))
+  } finally {
+    if (track) revivePath.delete(value)
+  }
 }
