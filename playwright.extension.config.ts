@@ -2,7 +2,7 @@ import { defineConfig } from '@playwright/test'
 
 export default defineConfig({
   timeout: 5_000,
-  testDir: './tests',
+  testDir: './tests/extension',
   testMatch: '**/*.spec.ts',
   fullyParallel: false, // Extensions need sequential runs due to persistent context
   retries: 0,

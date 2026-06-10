@@ -23,7 +23,7 @@ const TEST_BUNDLE_PATH = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
   '..',
   '..',
-  'build',
+  'build-test',
   'test.js',
 )
 

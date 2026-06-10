@@ -13,8 +13,10 @@ export default defineConfig({
   ],
   build: {
     target: 'esnext',
-    outDir: 'build',
-    emptyOutDir: false,
+    // NOT build/ — that's the publish root (files: ["build"]), and `npm pack`
+    // doesn't run prepublishOnly, so a stray test bundle would ship.
+    outDir: 'build-test',
+    emptyOutDir: true,
     sourcemap: true,
     minify: false,
     lib: {
