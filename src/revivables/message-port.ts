@@ -12,6 +12,7 @@ import { recursiveBox, recursiveRevive } from './index.js'
 import { getTransferableObjects, isJsonOnlyTransport } from '../utils/index.js'
 import { EventChannel, EventPort } from '../utils/event-channel.js'
 import { trackGc } from '../utils/gc-tracker.js'
+import { onTeardown } from '../utils/teardown.js'
 
 export const type = 'messagePort' as const
 
@@ -68,6 +69,15 @@ export const init = (context: RevivableContext): void => {
   context.eventTarget.addEventListener('message', ({ detail }) => {
     if (detail.type !== 'message' && detail.type !== 'message-port-close') return
     state.portHandlers.get(detail.portId)?.(detail)
+  })
+
+  // Connection death = every routed port is dead: run each handler's close
+  // arm so user-facing ports close and routing entries clear.
+  onTeardown(context, () => {
+    for (const [portId, handler] of [...state.portHandlers]) {
+      handler({ type: 'message-port-close', remoteUuid: context.remoteUuid, portId: portId as Uuid })
+    }
+    state.portHandlers.clear()
   })
 }
 

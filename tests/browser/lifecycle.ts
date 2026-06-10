@@ -22,11 +22,10 @@ const spyTransport = (port: MessagePort, sink: Message[]): Transport => ({
   },
 })
 
-// unregisterSignal: aborting it removes the protocol-level transport listener.
-// Already-established function/promise ports keep working (they own their own
-// MessageChannel). What aborts is the ability to set up *new* connections.
-// We verify by aborting before any consumer attaches and confirming that a
-// later expose() call cannot complete its handshake.
+// unregisterSignal: aborting tears the side down — its transport listener is
+// removed, its own pending expose() rejects with the abort reason, and every
+// tracked peer is notified with a protocol 'close'. A peer that never managed
+// to connect (the exposer aborted first) is left with a pending handshake.
 export const unregisterSignalBlocksNewConnections = async () => {
   const { port1, port2 } = new MessageChannel()
   port1.start()
@@ -34,10 +33,13 @@ export const unregisterSignalBlocksNewConnections = async () => {
 
   const controller = new AbortController()
   const value = { ping: async () => 'pong' }
-  expose(value, { transport: port1, unregisterSignal: controller.signal })
+  const exposerPromise = expose(value, { transport: port1, unregisterSignal: controller.signal })
 
   // Abort before the remote side ever connects.
   controller.abort()
+
+  // The aborted side's own handshake must reject with the abort reason.
+  await expect(exposerPromise).to.eventually.be.rejected
 
   // The remote's expose() returns a promise that resolves when the handshake
   // completes. With the exposer's listener torn down, the handshake never

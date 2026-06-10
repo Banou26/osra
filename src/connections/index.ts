@@ -19,6 +19,7 @@ import {
 import { createTypedEventTarget } from '../utils/typed-event-target.js'
 import { getTransferableObjects } from '../utils/transferable.js'
 import { registerOsraMessageListener, sendOsraMessage } from '../utils/transport.js'
+import { runTeardown } from '../utils/teardown.js'
 import { mergeRevivableModules, normalizeTransport } from './utils.js'
 
 export * from './bidirectional.js'
@@ -74,20 +75,33 @@ export const startConnections = <
   }: StartConnectionsOptions<TModules>
 ): Promise<T> => {
   const transport = normalizeTransport(_transport)
+  if (!(isEmitTransport(transport) && isReceiveTransport(transport))) {
+    throw new Error(
+      'osra: transport must be able to both emit and receive to establish a connection'
+      + ' — pass a bidirectional platform transport or a custom { emit, receive } pair',
+    )
+  }
   const mergedRevivableModules = mergeRevivableModules<TModules>(configureRevivableModules)
   type MergedModules = typeof mergedRevivableModules
   const connectionContexts = new Map<string, ConnectionContext<MergedModules>>()
 
-  const { promise: remoteValuePromise, resolve: resolveRemoteValue } =
+  const { promise: remoteValuePromise, resolve: resolveRemoteValue, reject: rejectRemoteValue } =
     Promise.withResolvers<Capable<MergedModules>>()
+  // Keeps a fire-and-forget `expose(value, …)` (the documented server-side
+  // pattern) from surfacing an unhandled rejection on abort/close; awaiting
+  // callers still observe the rejection through the original promise.
+  remoteValuePromise.catch(() => {})
 
   const uuid: Uuid = _uuid ?? globalThis.crypto.randomUUID()
 
-  const sendMessage = (message: MessageVariant) => {
-    if (unregisterSignal?.aborted) return
-    if (!isEmitTransport(transport)) return
+  const sendEnvelope = (message: MessageVariant) => {
     const envelope = { [OSRA_KEY]: key, name, uuid, ...message }
     sendOsraMessage(transport, envelope, origin, getTransferableObjects(envelope))
+  }
+
+  const sendMessage = (message: MessageVariant) => {
+    if (unregisterSignal?.aborted) return
+    sendEnvelope(message)
   }
 
   const protocolEventTarget = createTypedEventTarget<{ message: CustomEvent<Message<MergedModules>> }>()
@@ -102,6 +116,7 @@ export const startConnections = <
     sendMessage,
     protocolEventTarget,
     resolveRemoteValue,
+    rejectRemoteValue,
     createConnectionEventTarget: createTypedEventTarget,
   }
 
@@ -113,16 +128,25 @@ export const startConnections = <
     )
   }
 
-  if (isReceiveTransport(transport)) {
-    registerOsraMessageListener({
-      listener,
-      transport,
-      remoteName,
-      key,
-      origin,
-      unregisterSignal
-    })
-  }
+  registerOsraMessageListener({
+    listener,
+    transport,
+    remoteName,
+    key,
+    origin,
+    unregisterSignal
+  })
+
+  // Abort = explicit local teardown: notify every tracked peer, dispose
+  // per-connection state, and reject the (possibly still pending) handshake.
+  unregisterSignal?.addEventListener('abort', () => {
+    for (const [peerUuid, connectionContext] of connectionContexts) {
+      sendEnvelope({ type: 'close', remoteUuid: peerUuid as Uuid })
+      runTeardown(connectionContext.connection.revivableContext)
+    }
+    connectionContexts.clear()
+    rejectRemoteValue(unregisterSignal.reason)
+  }, { once: true })
 
   for (const connectionModule of connections) {
     connectionModule.init(ctx)

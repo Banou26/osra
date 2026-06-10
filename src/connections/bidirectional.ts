@@ -9,6 +9,7 @@ import type {
 
 import { recursiveBox, recursiveRevive } from '../revivables/index.js'
 import { isEmitTransport, isReceiveTransport } from '../utils/type-guards.js'
+import { runTeardown } from '../utils/teardown.js'
 
 export const type = 'bidirectional' as const
 
@@ -125,28 +126,43 @@ export const init = <TModules extends readonly RevivableModule[]>(
       // Echo announce back in case the peer missed our initial one.
       ctx.sendMessage({ type: 'announce', remoteUuid: message.uuid })
       const eventTarget = ctx.createConnectionEventTarget()
+      let connection: ReturnType<typeof startBidirectionalConnection<TModules>>
+      try {
+        connection = startBidirectionalConnection<TModules>({
+          transport: ctx.transport,
+          value: ctx.value,
+          remoteUuid: message.uuid,
+          eventTarget,
+          send: (m) => ctx.sendMessage(m as MessageVariant),
+          revivableModules: ctx.revivableModules
+        })
+      } catch (error) {
+        // Boxing our own value failed (e.g. cyclic data) — surface it
+        // instead of swallowing inside EventTarget dispatch.
+        ctx.rejectRemoteValue(error)
+        return
+      }
       const connectionContext = {
         type: 'bidirectional',
         eventTarget,
-        connection:
-          startBidirectionalConnection<TModules>({
-            transport: ctx.transport,
-            value: ctx.value,
-            remoteUuid: message.uuid,
-            eventTarget,
-            send: (m) => ctx.sendMessage(m as MessageVariant),
-            revivableModules: ctx.revivableModules
-          })
+        connection,
       } satisfies ConnectionContext<TModules>
       ctx.connectionContexts.set(message.uuid, connectionContext)
-      connectionContext.connection.remoteValue.then((remoteValue) =>
-        ctx.resolveRemoteValue(remoteValue)
+      connectionContext.connection.remoteValue.then(
+        (remoteValue) => ctx.resolveRemoteValue(remoteValue),
+        (error) => ctx.rejectRemoteValue(error),
       )
       return
     }
     if (message.type === 'close') {
       if (message.remoteUuid !== ctx.getUuid()) return
+      const connectionContext = ctx.connectionContexts.get(message.uuid)
+      if (!connectionContext) return
       ctx.connectionContexts.delete(message.uuid)
+      runTeardown(connectionContext.connection.revivableContext)
+      // No-op when the handshake already resolved; a close that beats init
+      // must not leave the caller pending forever.
+      ctx.rejectRemoteValue(new Error('osra: peer closed the connection'))
       return
     }
     // "init" | "message" | "message-port-close"
@@ -161,22 +177,29 @@ export const init = <TModules extends readonly RevivableModule[]>(
 
   if (ctx.presetRemoteUuid !== undefined) {
     const eventTarget = ctx.createConnectionEventTarget()
+    let connection: ReturnType<typeof startBidirectionalConnection<TModules>>
+    try {
+      connection = startBidirectionalConnection<TModules>({
+        transport: ctx.transport,
+        value: ctx.value,
+        remoteUuid: ctx.presetRemoteUuid,
+        eventTarget,
+        send: (m) => ctx.sendMessage(m as MessageVariant),
+        revivableModules: ctx.revivableModules
+      })
+    } catch (error) {
+      ctx.rejectRemoteValue(error)
+      return
+    }
     const connectionContext = {
       type: 'bidirectional',
       eventTarget,
-      connection:
-        startBidirectionalConnection<TModules>({
-          transport: ctx.transport,
-          value: ctx.value,
-          remoteUuid: ctx.presetRemoteUuid,
-          eventTarget,
-          send: (m) => ctx.sendMessage(m as MessageVariant),
-          revivableModules: ctx.revivableModules
-        })
+      connection,
     } satisfies ConnectionContext<TModules>
     ctx.connectionContexts.set(ctx.presetRemoteUuid, connectionContext)
-    connectionContext.connection.remoteValue.then((remoteValue) =>
-      ctx.resolveRemoteValue(remoteValue)
+    connectionContext.connection.remoteValue.then(
+      (remoteValue) => ctx.resolveRemoteValue(remoteValue),
+      (error) => ctx.rejectRemoteValue(error),
     )
     return
   }

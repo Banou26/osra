@@ -7,6 +7,7 @@ import type {
 } from '../utils/capable-check.js'
 
 import { BoxBase } from './utils.js'
+import { onTeardown } from '../utils/teardown.js'
 import {
   createRevivableChannel,
   revive as reviveMessagePort,
@@ -83,12 +84,24 @@ export const revive = <T extends BoxedPromise, T2 extends RevivableContext>(
 ) => {
   const port = reviveMessagePort(value.port, context)
   inFlightPromisePorts.add(port)
+  // portId boxes route over the wire and die with the connection; real
+  // transferred MessagePorts (clone transports) keep working past protocol
+  // teardown, so those must stay pending rather than reject.
+  const wireRouted = 'portId' in value.port
   return new Promise<T[UnderlyingType]>((resolve, reject) => {
+    const settle = () => {
+      port.close()
+      inFlightPromisePorts.delete(port)
+      removeTeardown()
+    }
+    const removeTeardown = !wireRouted ? () => {} : onTeardown(context, () => {
+      reject(new Error('osra: connection closed'))
+      settle()
+    })
     port.addEventListener('message', ({ data: result }) => {
       if (result.type === 'resolve') resolve(result.data as T[UnderlyingType])
       else reject(result.error)
-      port.close()
-      inFlightPromisePorts.delete(port)
+      settle()
     }, { once: true })
     port.start()
   })

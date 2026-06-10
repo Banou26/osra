@@ -63,6 +63,7 @@ export type ProtocolContext<
   sendMessage: (message: MessageVariant) => void
   protocolEventTarget: ProtocolEventTarget<TModules>
   resolveRemoteValue: (value: Capable<TModules>) => void
+  rejectRemoteValue: (error: unknown) => void
   createConnectionEventTarget: () => TypedEventTarget<MessageEventMap<TModules>>
 }
 

@@ -4,6 +4,7 @@ import type { UnderlyingType } from '../utils/type.js'
 
 import { BoxBase } from './utils.js'
 import { recursiveBox, recursiveRevive } from './index.js'
+import { onTeardown } from '../utils/teardown.js'
 
 export const type = 'identity' as const
 
@@ -95,6 +96,10 @@ const getOrCreateState = (context: RevivableContext): IdentityState => {
   }
   connectionStates.set(context, state)
   installReceiveListener(context, state)
+  onTeardown(context, () => {
+    state.receiveCache.clear()
+    state.idToSent.clear()
+  })
   return state
 }
 

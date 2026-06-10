@@ -5,6 +5,7 @@ import { BoxBase } from './utils.js'
 import { recursiveBox } from './index.js'
 import { getTransferableObjects } from '../utils/index.js'
 import { EventChannel, type EventPort } from '../utils/event-channel.js'
+import { onTeardown } from '../utils/teardown.js'
 import { box as boxMessagePort, revive as reviveMessagePort, BoxedMessagePort } from './message-port.js'
 
 export const type = 'function' as const
@@ -83,12 +84,24 @@ export const revive = <T extends BoxedFunction, T2 extends RevivableContext>(
       const { port1: returnLocal, port2: returnRemote } = new EventChannel<Capable, Capable>()
       inFlightReturnPorts.add(returnLocal)
 
+      const settle = () => {
+        returnLocal.close()
+        inFlightReturnPorts.delete(returnLocal)
+        removeTeardown()
+      }
+      // Calls always route over the wire (EventPorts are synthetic on every
+      // transport), so connection death must reject them — GC-drop of the
+      // proxy intentionally does not (see funcDropDoesNotRejectPending).
+      const removeTeardown = onTeardown(context, () => {
+        reject(new Error('osra: connection closed'))
+        settle()
+      })
+
       returnLocal.addEventListener('message', ({ data }) => {
         const message = data as ResultMessage
         if (message.type === 'return') resolve(message.value)
         else reject(message.error)
-        returnLocal.close()
-        inFlightReturnPorts.delete(returnLocal)
+        settle()
       }, { once: true })
       returnLocal.start()
 
