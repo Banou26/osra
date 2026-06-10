@@ -192,7 +192,9 @@ export const isReceiveJsonOnlyTransport = (value: unknown): value is ReceiveJson
 
 export type IsJsonOnlyTransport<T extends Transport> = T extends JsonPlatformTransport ? true : false
 export const isJsonOnlyTransport = (value: unknown): value is Extract<Transport, JsonPlatformTransport> =>
-     (!!value && typeof value === 'object' && 'isJson' in value && value.isJson === true)
+  // `'isJson' in value` triggers SecurityError on a cross-origin Window (the iframe-broker
+  // `emit: window.parent` case) — exclude windows first; the marker only lives on normalized transports.
+     (!!value && typeof value === 'object' && !isWindow(value) && 'isJson' in value && value.isJson === true)
   || isEmitJsonOnlyTransport(value)
   || isReceiveJsonOnlyTransport(value)
 
