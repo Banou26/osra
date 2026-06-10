@@ -49,6 +49,9 @@ export const transports: readonly TransportEntry[] = [
     name: 'JSON',
     factory: jsonLoopback,
     memoryIterations: 2_500,
-    memoryThreshold: 1_000_000,
+    // Baseline growth sits near 980 kB for the heaviest test
+    // (nestedCallbacksNoLeak) — leave real headroom so constant overhead
+    // (instrumentation, module growth) doesn't masquerade as a leak.
+    memoryThreshold: 1_250_000,
   },
 ]

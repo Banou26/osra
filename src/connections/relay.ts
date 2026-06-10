@@ -38,6 +38,7 @@ export const relay = (
   const forward = (
     from: Transport,
     to: Transport,
+    fromOrigin: string,
     toOrigin: string,
     remoteName: string | undefined,
   ): void => {
@@ -46,6 +47,7 @@ export const relay = (
       transport: from,
       key,
       remoteName,
+      origin: fromOrigin,
       unregisterSignal,
       listener: (message) => {
         sendOsraMessage(to, message, toOrigin, getTransferableObjects(message))
@@ -53,6 +55,6 @@ export const relay = (
     })
   }
 
-  forward(a, b, originB, nameA)
-  forward(b, a, originA, nameB)
+  forward(a, b, originA, originB, nameA)
+  forward(b, a, originB, originA, nameB)
 }

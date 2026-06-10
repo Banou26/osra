@@ -58,6 +58,7 @@ export const isTypedArray = (value: unknown): value is TypedArray =>
   typedArrayConstructors.some(ctor => !!ctor && value instanceof ctor)
 export const isWebSocket = (value: unknown): value is WebSocket => value instanceof WebSocket
 export const isServiceWorkerContainer = (value: unknown): value is ServiceWorkerContainer => !!globalThis.ServiceWorkerContainer && value instanceof ServiceWorkerContainer
+export const isServiceWorker = (value: unknown): value is ServiceWorker => !!globalThis.ServiceWorker && value instanceof ServiceWorker
 export const isWorker = (value: unknown): value is Worker => !!globalThis.Worker && value instanceof Worker
 // @ts-expect-error DedicatedWorkerGlobalScope is only present in worker scopes
 export const isDedicatedWorker = (value: unknown): value is DedicatedWorkerGlobalScope => !!globalThis.DedicatedWorkerGlobalScope && value instanceof DedicatedWorkerGlobalScope
@@ -187,7 +188,8 @@ export const isJsonOnlyTransport = (value: unknown): value is Extract<Transport,
 export const isEmitTransport = (value: unknown): value is EmitTransport =>
      isWindow(value)
   || isEmitJsonOnlyTransport(value)
-  || isServiceWorkerContainer(value)
+  // ServiceWorker instances can postMessage; the container cannot — it only receives.
+  || isServiceWorker(value)
   || isWorker(value)
   || isDedicatedWorker(value)
   || isSharedWorker(value)
@@ -212,18 +214,26 @@ export function assertReceiveTransport(transport: Transport): asserts transport 
   if (!isReceiveTransport(transport)) throw new Error('Transport is not receiveable')
 }
 
-export const isCustomEmitTransport = (value: unknown): value is CustomEmitTransport => {
+// Custom transports must be plain objects: Node's worker_threads MessagePort
+// (an EventEmitter) has an inherited `emit` and would otherwise be
+// misclassified, then gutted by normalizeTransport's object spread.
+const isPlainObjectShape = (value: unknown): value is Record<string, unknown> => {
   if (!value || typeof value !== 'object') return false
-  // Prevent SecurityError when `value` is a cross-origin window.
+  // Prevent SecurityError when `value` is a cross-origin window — its
+  // [[GetPrototypeOf]] returns null, which would pass the proto check.
   if (isWindow(value)) return false
+  const proto = Object.getPrototypeOf(value)
+  return proto === Object.prototype || proto === null
+}
+
+export const isCustomEmitTransport = (value: unknown): value is CustomEmitTransport => {
+  if (!isPlainObjectShape(value)) return false
   if (!('emit' in value)) return false
   return isEmitTransport(value.emit) || typeof value.emit === 'function'
 }
 
 export const isCustomReceiveTransport = (value: unknown): value is CustomReceiveTransport => {
-  if (!value || typeof value !== 'object') return false
-  // Prevent SecurityError when `value` is a cross-origin window.
-  if (isWindow(value)) return false
+  if (!isPlainObjectShape(value)) return false
   if (!('receive' in value)) return false
   return isReceiveTransport(value.receive) || typeof value.receive === 'function'
 }

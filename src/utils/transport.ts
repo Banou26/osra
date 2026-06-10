@@ -4,7 +4,7 @@ import type {
   WebExtPort, WebExtRuntime, WebExtSender
 } from './type-guards.js'
 
-import { OSRA_KEY } from '../types.js'
+import { OSRA_DEFAULT_KEY, OSRA_KEY } from '../types.js'
 import {
   isOsraMessage, isCustomTransport,
   isWebExtensionOnConnect, isWebExtensionOnMessage,
@@ -16,9 +16,10 @@ export type MessageContext = {
   sender?: WebExtSender // WebExtension
   receiveTransport?: ReceivePlatformTransport
   source?: MessageEventSource | null // Window, Worker, WebSocket, ect...
+  origin?: string // Window
 }
 
-export type ReceiveHandler = (listener: (event: Message, messageContext: MessageContext) => void) => void
+export type ReceiveHandler = (listener: (event: Message, messageContext: MessageContext) => void) => void | (() => void)
 export type EmitHandler = (message: Message, transferables?: Transferable[]) => void
 
 type CustomReceive = ReceivePlatformTransport | ReceiveHandler
@@ -52,20 +53,21 @@ export type JsonPlatformTransport =
   | EmitJsonPlatformTransport
   | ReceiveJsonPlatformTransport
 
-type StructuredClonePlatformTransport =
+export type EmitPlatformTransport =
+  | EmitJsonPlatformTransport
   | Window
   | ServiceWorker
   | Worker
   | SharedWorker
   | MessagePort
 
-export type EmitPlatformTransport =
-  | EmitJsonPlatformTransport
-  | StructuredClonePlatformTransport
-
 export type ReceivePlatformTransport =
   | ReceiveJsonPlatformTransport
-  | StructuredClonePlatformTransport
+  | Window
+  | ServiceWorkerContainer
+  | Worker
+  | SharedWorker
+  | MessagePort
 
 export type PlatformTransport =
   | EmitPlatformTransport
@@ -85,29 +87,40 @@ export const checkOsraMessageKey = (message: any, key: string): message is Messa
   isOsraMessage(message)
   && message[OSRA_KEY] === key
 
-const onAbort = (signal: AbortSignal | undefined, fn: () => void) =>
-  signal?.addEventListener('abort', fn, { once: true })
+const onAbort = (signal: AbortSignal | undefined, fn: () => void) => {
+  if (!signal) return
+  if (signal.aborted) {
+    fn()
+    return
+  }
+  signal.addEventListener('abort', fn, { once: true })
+}
 
 export const registerOsraMessageListener = (
-  { listener, transport, remoteName, key = OSRA_KEY, unregisterSignal }:
+  { listener, transport, remoteName, key = OSRA_DEFAULT_KEY, origin = '*', unregisterSignal }:
   {
     listener: (message: Message, messageContext: MessageContext) => void
     transport: ReceiveTransport
     remoteName?: string
     key?: string
+    origin?: string
     unregisterSignal?: AbortSignal
   }
 ) => {
+  if (unregisterSignal?.aborted) return
+
   const receiveTransport: Extract<CustomTransport, { receive: any }>['receive'] =
     isCustomTransport(transport) ? transport.receive : transport
 
   // Custom function handler
   if (typeof receiveTransport === 'function') {
-    receiveTransport((message, ctx) => {
+    const unregister = receiveTransport((message, ctx) => {
+      if (unregisterSignal?.aborted) return
       if (!checkOsraMessageKey(message, key)) return
       if (remoteName && message.name !== remoteName) return
       listener(message, ctx)
     })
+    if (typeof unregister === 'function') onAbort(unregisterSignal, unregister)
     return
   }
 
@@ -143,15 +156,26 @@ export const registerOsraMessageListener = (
     return
   }
 
-  // Window, Worker, WebSocket, ServiceWorker, MessagePort, …
-  const messageListener = (event: MessageEvent<Message>) => {
-    if (!checkOsraMessageKey(event.data, key)) return
-    if (remoteName && event.data.name !== remoteName) return
-    listener(event.data, { receiveTransport, source: event.source })
+  // Window, Worker, WebSocket, ServiceWorkerContainer, MessagePort, SharedWorker, …
+  // SharedWorker dispatches messages on its .port, not on the worker object.
+  const target = isSharedWorker(receiveTransport) ? receiveTransport.port : receiveTransport
+  const messageListener = (event: MessageEvent<Message | string>) => {
+    // JSON transports (WebSocket) deliver strings — parse before the key check.
+    let data = event.data
+    if (typeof data === 'string') {
+      try { data = JSON.parse(data) as Message } catch { return }
+    }
+    if (!checkOsraMessageKey(data, key)) return
+    if (remoteName && data.name !== remoteName) return
+    if (origin !== '*' && event.origin && event.origin !== origin) return
+    listener(data, { receiveTransport, source: event.source, origin: event.origin })
   }
-  receiveTransport.addEventListener('message', messageListener as EventListener)
+  target.addEventListener('message', messageListener as EventListener)
+  // addEventListener alone never enables a MessagePort's queue — only
+  // .start() or assigning onmessage does.
+  if (target instanceof MessagePort) target.start()
   onAbort(unregisterSignal, () =>
-    receiveTransport.removeEventListener('message', messageListener as EventListener),
+    target.removeEventListener('message', messageListener as EventListener),
   )
 }
 
@@ -174,7 +198,12 @@ export const sendOsraMessage = (
   } else if (isWebExtensionRuntime(emitTransport)) {
     emitTransport.sendMessage(message)
   } else if (isWebSocket(emitTransport)) {
-    emitTransport.send(JSON.stringify(message))
+    const payload = JSON.stringify(message)
+    if (emitTransport.readyState === WebSocket.CONNECTING) {
+      emitTransport.addEventListener('open', () => emitTransport.send(payload), { once: true })
+    } else {
+      emitTransport.send(payload)
+    }
   } else if (isSharedWorker(emitTransport)) {
     emitTransport.port.postMessage(message, transferables)
   } else { // MessagePort | ServiceWorker | Worker

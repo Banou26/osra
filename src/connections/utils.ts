@@ -11,15 +11,21 @@ import { defaultRevivableModules } from '../revivables/index.js'
 import { isJsonOnlyTransport, isCustomTransport } from '../utils/type-guards.js'
 
 export const normalizeTransport = (transport: Transport): Transport => {
+  const custom = isCustomTransport(transport)
+  const emit = custom ? (transport as { emit?: unknown }).emit : transport
+  const receive = custom ? (transport as { receive?: unknown }).receive : transport
+  // Probe the embedded platform transports, not the wrapper — a custom
+  // { emit: webSocket } is JSON-only even though the wrapper itself isn't.
   const isJson =
-    'isJson' in transport && transport.isJson !== undefined
+    custom && 'isJson' in transport && transport.isJson !== undefined
       ? transport.isJson
-      : isJsonOnlyTransport(transport)
-  const ports =
-    isCustomTransport(transport)
-      ? transport
-      : { emit: transport, receive: transport }
-  return { isJson, ...ports } satisfies Transport
+      : (emit !== undefined && isJsonOnlyTransport(emit))
+        || (receive !== undefined && isJsonOnlyTransport(receive))
+  return {
+    isJson,
+    ...(emit !== undefined ? { emit } : {}),
+    ...(receive !== undefined ? { receive } : {}),
+  } as Transport
 }
 
 /** Resolves the final revivable module list. The user supplies a function
