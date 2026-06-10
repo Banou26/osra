@@ -1,3 +1,4 @@
+import type { Browser } from 'webextension-polyfill'
 import type { Message} from '../types.js'
 import type {
   WebExtOnConnect, WebExtOnMessage,
@@ -73,14 +74,19 @@ export type PlatformTransport =
   | EmitPlatformTransport
   | ReceivePlatformTransport
 
-export type EmitTransport = EmitPlatformTransport & Extract<CustomTransport, { emit: any }>
-export type ReceiveTransport = ReceivePlatformTransport & Extract<CustomTransport, { receive: any }>
+export type EmitTransport = EmitPlatformTransport | CustomEmitTransport
+export type ReceiveTransport = ReceivePlatformTransport | CustomReceiveTransport
 
 export type Transport =
   | PlatformTransport
   | CustomTransport
 
-export const getWebExtensionGlobal = () => globalThis.browser ?? globalThis.chrome
+// Typed via the shipped webextension-polyfill module types — referencing the
+// ambient `browser`/`chrome` globals here would leak unresolvable names into
+// the published .d.ts (those @types are devDependencies only).
+type WebExtGlobals = { browser?: Browser, chrome?: Browser }
+export const getWebExtensionGlobal = (): Browser | undefined =>
+  (globalThis as unknown as WebExtGlobals).browser ?? (globalThis as unknown as WebExtGlobals).chrome
 export const getWebExtensionRuntime = () => getWebExtensionGlobal()?.runtime
 
 export const checkOsraMessageKey = (message: any, key: string): message is Message =>
@@ -132,7 +138,7 @@ export const registerOsraMessageListener = (
     || isWebExtensionOnMessage(receiveTransport)
   ) {
     const listenOnWebExtOnMessage = (onMessage: WebExtOnMessage, port?: WebExtPort) => {
-      const _listener = (message: object, sender?: WebExtSender) => {
+      const _listener = (message: unknown, sender?: WebExtSender) => {
         if (!checkOsraMessageKey(message, key)) return
         if (remoteName && message.name !== remoteName) return
         listener(message, { port, sender })

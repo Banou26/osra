@@ -60,8 +60,16 @@ export const isWebSocket = (value: unknown): value is WebSocket => value instanc
 export const isServiceWorkerContainer = (value: unknown): value is ServiceWorkerContainer => !!globalThis.ServiceWorkerContainer && value instanceof ServiceWorkerContainer
 export const isServiceWorker = (value: unknown): value is ServiceWorker => !!globalThis.ServiceWorker && value instanceof ServiceWorker
 export const isWorker = (value: unknown): value is Worker => !!globalThis.Worker && value instanceof Worker
-// @ts-expect-error DedicatedWorkerGlobalScope is only present in worker scopes
-export const isDedicatedWorker = (value: unknown): value is DedicatedWorkerGlobalScope => !!globalThis.DedicatedWorkerGlobalScope && value instanceof DedicatedWorkerGlobalScope
+// Structural stand-in: the real DedicatedWorkerGlobalScope type lives in
+// lib.webworker, which consumers of the published .d.ts may not load.
+export type DedicatedWorkerGlobalScopeLike = typeof globalThis & {
+  postMessage: (message: unknown, transfer?: Transferable[]) => void
+  name: string
+}
+export const isDedicatedWorker = (value: unknown): value is DedicatedWorkerGlobalScopeLike => {
+  const scope = (globalThis as { DedicatedWorkerGlobalScope?: abstract new (...args: never[]) => unknown }).DedicatedWorkerGlobalScope
+  return !!scope && value instanceof scope
+}
 export const isSharedWorker = (value: unknown): value is SharedWorker => !!globalThis.SharedWorker && value instanceof SharedWorker
 const isMessagePort = (value: unknown): value is MessagePort => value instanceof MessagePort
 
@@ -105,7 +113,7 @@ export const isTransferable = (value: unknown): value is Transferable =>
     (globalThis as { WebTransportSendStream?: abstract new (...args: any[]) => unknown }).WebTransportSendStream,
   ])
 
-export type WebExtRuntime = typeof browser.runtime
+export type WebExtRuntime = Runtime.Static
 export const isWebExtensionRuntime = (value: unknown): value is WebExtRuntime => {
   const runtime = getWebExtensionRuntime()
   if (!runtime) return false

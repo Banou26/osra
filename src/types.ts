@@ -68,6 +68,24 @@ export type Capable<
   | Map<Capable<TModules, Ctx>, Capable<TModules, Ctx>>
   | Set<Capable<TModules, Ctx>>
 
+/** What a value looks like from the far side of the connection: functions
+ *  become async (calls cross the wire), Blobs arrive as Promise<Blob>,
+ *  containers map recursively, everything else revives as itself. */
+export type Remote<T> =
+  T extends (...args: infer P) => infer R ? (...args: P) => Promise<Remote<Awaited<R>>>
+  : T extends Blob ? Promise<T>
+  : T extends Promise<infer U> ? Promise<Remote<U>>
+  : T extends
+      | Map<any, any> | Set<any> | Date | Error | RegExp
+      | ArrayBuffer | ArrayBufferView
+      | ReadableStream | WritableStream | MessagePort | EventTarget
+      | Request | Response | Headers
+    ? T
+  : T extends AsyncIterable<infer U> ? AsyncIterableIterator<Remote<U>>
+  : T extends ReadonlyArray<unknown> ? { [K in keyof T]: Remote<T[K]> }
+  : T extends object ? { [K in keyof T]: Remote<T[K]> }
+  : T
+
 export type MessageFields = {
   type: string
   remoteUuid: Uuid

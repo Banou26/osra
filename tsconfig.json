@@ -16,7 +16,7 @@
     "strictNullChecks": true,
     "noUncheckedIndexedAccess": true,
     "allowSyntheticDefaultImports": true,
-    "types": ["@types/chrome", "@types/firefox-webext-browser"],
+    "types": [],
     "skipLibCheck": true
   },
   "include": ["src/**/*"],

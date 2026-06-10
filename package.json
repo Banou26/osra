@@ -33,7 +33,8 @@
     "type-check": "tsgo --noEmit && tsgo --noEmit -p tsconfig.tests.json",
     "start-server": "http-server -p 3000",
     "build-extension-test": "node build-extension-test.mjs",
-    "test-extension": "npm run build-extension-test && npx playwright test -c playwright.extension.config.ts"
+    "test-extension": "npm run build-extension-test && npx playwright test -c playwright.extension.config.ts",
+    "check-consumer-types": "npm run build && tsgo --noEmit -p tsconfig.consumer.json"
   },
   "repository": {
     "type": "git",

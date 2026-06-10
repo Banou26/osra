@@ -1,4 +1,4 @@
-import type { Capable } from './types.js'
+import type { Capable, Remote } from './types.js'
 import type { DefaultRevivableModules, RevivableContext } from './revivables/index.js'
 import type { RevivableModule } from './revivables/index.js'
 import type { StartConnectionsOptions } from './connections/utils.js'
@@ -42,8 +42,8 @@ export const expose = async <
 >(
   value: CapableCheck<TValue, TModules, ContextOf<TTransport>>,
   options: StartConnectionsOptions<TModules> & { transport: TTransport }
-): Promise<T> =>
-  startConnections<T, TModules>(
+): Promise<Remote<T>> =>
+  startConnections<Remote<T>, TModules>(
     value as Capable<TModules>,
     options
   )
