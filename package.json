@@ -1,6 +1,6 @@
 {
   "name": "osra",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Easy communication between workers",
   "files": [
     "build"
@@ -11,6 +11,10 @@
     ".": {
       "types": "./build/index.d.ts",
       "import": "./build/index.js"
+    },
+    "./build/*": {
+      "types": "./build/*.d.ts",
+      "import": "./build/*.js"
     },
     "./package.json": "./package.json"
   },
