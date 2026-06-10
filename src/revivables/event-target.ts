@@ -9,20 +9,42 @@ type ListenerOpts = boolean | { capture?: boolean, once?: boolean, passive?: boo
 
 export const isType = (value: unknown): value is EventTarget => value instanceof EventTarget
 
-export const box = <T extends EventTarget, T2 extends RevivableContext>(value: T, context: T2) => ({
-  ...BoxBase,
-  type,
-  addListener: boxFunction(
-    (type: string, listener: EventListener, options?: ListenerOpts) =>
-      value.addEventListener(type, listener, options),
-    context,
-  ),
-  removeListener: boxFunction(
-    (type: string, listener: EventListener, options?: ListenerOpts) =>
-      value.removeEventListener(type, listener, options),
-    context,
-  ),
-})
+export const box = <T extends EventTarget, T2 extends RevivableContext>(value: T, context: T2) => {
+  // Track what this box added so the façade's GC cleanup can drop everything
+  // through one zero-argument RPC — holding no reference to user listeners.
+  const added: { eventType: string, listener: EventListener, capture: boolean }[] = []
+  const captureOf = (options?: ListenerOpts) =>
+    typeof options === 'boolean' ? options : !!options?.capture
+  return {
+    ...BoxBase,
+    type,
+    addListener: boxFunction(
+      (eventType: string, listener: EventListener, options?: ListenerOpts) => {
+        added.push({ eventType, listener, capture: captureOf(options) })
+        value.addEventListener(eventType, listener, options)
+      },
+      context,
+    ),
+    removeListener: boxFunction(
+      (eventType: string, listener: EventListener, options?: ListenerOpts) => {
+        const capture = captureOf(options)
+        const index = added.findIndex(r =>
+          r.eventType === eventType && r.listener === listener && r.capture === capture)
+        if (index !== -1) added.splice(index, 1)
+        value.removeEventListener(eventType, listener, options)
+      },
+      context,
+    ),
+    removeAllListeners: boxFunction(
+      () => {
+        for (const { eventType, listener, capture } of added.splice(0)) {
+          value.removeEventListener(eventType, listener, { capture })
+        }
+      },
+      context,
+    ),
+  }
+}
 
 export type BoxedEventTarget = ReturnType<typeof box>
 
@@ -36,18 +58,24 @@ const toListener = (listerObject: EventListenerOrEventListenerObject): EventList
   return listener
 }
 
-type Reg = { eventType: string, listener: EventListener, capture: boolean }
+type Reg = { eventType: string, listener: EventListener, capture: boolean, wire: EventListener }
 
 const findReg = (regs: Reg[], eventType: string, listener: EventListener, capture: boolean): Reg | undefined =>
   regs.find(r => r.eventType === eventType && r.listener === listener && r.capture === capture)
 
-export const revive = <T extends ReturnType<typeof box>, T2 extends RevivableContext>(value: T, context: T2) => {
+export const revive = <T extends BoxedEventTarget, T2 extends RevivableContext>(value: T, context: T2) => {
   const addRpc = reviveFunction(value.addListener, context)
   const removeRpc = reviveFunction(value.removeListener, context)
+  const removeAllRpc = reviveFunction(value.removeAllListeners, context)
   // Façade only — events never dispatch through it. Source-side EventTarget
-  // owns all semantics; we just track regs for trackGc cleanup.
+  // owns all semantics; we just track regs for cleanup.
   const target = new EventTarget()
   const regs: Reg[] = []
+
+  const prune = (reg: Reg) => {
+    const index = regs.indexOf(reg)
+    if (index !== -1) regs.splice(index, 1)
+  }
 
   Object.defineProperty(target, 'addEventListener', {
     value: (eventType: string, listener: EventListenerOrEventListenerObject | null, options?: ListenerOpts) => {
@@ -55,8 +83,20 @@ export const revive = <T extends ReturnType<typeof box>, T2 extends RevivableCon
       const fn = toListener(listener)
       const capture = typeof options === 'boolean' ? options : !!options?.capture
       if (findReg(regs, eventType, fn, capture)) return
-      regs.push({ eventType, listener: fn, capture })
-      addRpc(eventType, identity(fn), options).catch(() => {})
+      const once = typeof options === 'object' && !!options?.once
+      // The source side auto-removes once/aborted listeners — prune the
+      // local reg in step so the same listener can be re-added later.
+      const wire: EventListener = once
+        ? (event) => {
+            prune(reg)
+            return fn(event)
+          }
+        : fn
+      const reg: Reg = { eventType, listener: fn, capture, wire }
+      regs.push(reg)
+      const signal = typeof options === 'object' ? options?.signal : undefined
+      signal?.addEventListener('abort', () => prune(reg), { once: true })
+      addRpc(eventType, identity(wire), options).catch(() => {})
     },
   })
 
@@ -67,17 +107,17 @@ export const revive = <T extends ReturnType<typeof box>, T2 extends RevivableCon
       const capture = typeof options === 'boolean' ? options : !!options?.capture
       const reg = findReg(regs, eventType, fn, capture)
       if (!reg) return
-      regs.splice(regs.indexOf(reg), 1)
-      removeRpc(eventType, identity(fn), { capture }).catch(() => {})
+      prune(reg)
+      removeRpc(eventType, identity(reg.wire), { capture }).catch(() => {})
     },
   })
 
-  // Cleanup must NOT close over `target` — otherwise the FR can never fire.
+  // Cleanup must NOT close over `target`, `regs`, or any user listener —
+  // the FR strong-holds it, and a listener closing over the façade would
+  // otherwise pin the whole subgraph forever. removeAllRpc only references
+  // its own RPC port.
   trackGc(target, () => {
-    for (const { eventType, listener, capture } of regs) {
-      removeRpc(eventType, identity(listener), { capture }).catch(() => {})
-    }
-    regs.length = 0
+    removeAllRpc().catch(() => {})
   })
 
   return target

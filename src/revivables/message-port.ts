@@ -114,18 +114,29 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
   const liveRef: AnyPort<T> = value
   const portId: Uuid = globalThis.crypto.randomUUID()
 
+  // The FR-held cleanup must not (transitively) strong-hold liveRef or the
+  // context — the gc-tracker contract — or the registry pins them forever
+  // and the safety net can never fire.
+  const liveRefWeak = new WeakRef(liveRef)
+  const contextWeak = new WeakRef(context)
+  const portHandlersWeak = new WeakRef(portHandlers)
+
   let cleanedUp = false
   const performCleanup = () => {
     if (cleanedUp) return
     cleanedUp = true
-    portHandlers.delete(portId)
+    portHandlersWeak.deref()?.delete(portId)
     unregisterGc?.()
-    liveRef.removeEventListener('message', outgoingListener as EventListener)
+    const live = liveRefWeak.deref()
+    live?.removeEventListener('message', outgoingListener as EventListener)
+    if (live instanceof EventPort) live._onClose = undefined
   }
 
   const handler = (message: Messages) => {
     if (message.type === 'message-port-close') {
       performCleanup()
+      // Peer side closed — surface the platform 'close' event before closing.
+      liveRef.dispatchEvent(new Event('close'))
       liveRef.close()
       return
     }
@@ -143,9 +154,10 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
 
   // Safety net only — `handler` strong-holds liveRef via portHandlers, so
   // the FR won't fire while the connection is alive. Real cleanup runs via
-  // the wire `message-port-close` or EventPort `_onClose`.
+  // the wire `message-port-close`, EventPort `_onClose`, or teardown.
   const unregisterGc = trackGc(liveRef, () => {
-    sendClose(context, portId)
+    const ctx = contextWeak.deref()
+    if (ctx) sendClose(ctx, portId)
     performCleanup()
   })
 
@@ -187,7 +199,13 @@ const createProtocolPort = <T>(
   const onMessage = ({ data }: MessageEvent<Capable>): void => {
     target.dispatchEvent(new MessageEvent('message', { data: recursiveRevive(data, ctx) }))
   }
+  // Modern browsers fire 'close' on a MessagePort when its entangled peer
+  // closes or its realm dies — forward it so consumers can clean up.
+  const onClose = (): void => {
+    target.dispatchEvent(new Event('close'))
+  }
   port.addEventListener('message', onMessage)
+  port.addEventListener('close', onClose as EventListener)
   target.postMessage = (data: T, opt?: Transferable[] | StructuredSerializeOptions) => {
     const boxed = recursiveBox(data as Capable, ctx)
     const transferables = getTransferableObjects(boxed)
@@ -197,6 +215,7 @@ const createProtocolPort = <T>(
   target.start = () => port.start()
   target.close = () => {
     port.removeEventListener('message', onMessage)
+    port.removeEventListener('close', onClose as EventListener)
     port.close()
   }
   return target
@@ -254,7 +273,10 @@ const reviveViaPortId = <T extends Capable>(
   const handler = (message: Messages) => {
     if (message.type === 'message-port-close') {
       performCleanup()
-      userPortRef.deref()?.close()
+      const user = userPortRef.deref()
+      // Peer side closed — surface the platform 'close' event before closing.
+      user?.dispatchEvent(new Event('close'))
+      user?.close()
       return
     }
     if (!userPortRef.deref()) {

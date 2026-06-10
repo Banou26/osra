@@ -4,6 +4,7 @@ import type { TypedEventTarget } from './typed-event-target.js'
 export type TypedMessagePortEventMap<T = unknown> = {
   'message': MessageEvent<T>
   'messageerror': MessageEvent
+  'close': Event
 }
 
 export interface TypedMessagePort<T = unknown>

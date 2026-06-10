@@ -91,6 +91,14 @@ export class EventPort<T> extends EventTarget {
     this._closed = true
     this._queue.length = 0
     this._onClose?.()
+    // Mirror the platform 'close' event: closing a port notifies its peer.
+    // Deferred so messages posted before the close still deliver first.
+    const peer = this._peer
+    if (peer && !peer._closed) {
+      queueMicrotask(() => {
+        if (!peer._closed) peer.dispatchEvent(new Event('close'))
+      })
+    }
   }
 }
 

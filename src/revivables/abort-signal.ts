@@ -4,9 +4,11 @@ import type { BoxedMessagePort } from './message-port.js'
 
 import { BoxBase } from './utils.js'
 import { recursiveBox, recursiveRevive } from './index.js'
+import { onTeardown } from '../utils/teardown.js'
 import {
   createRevivableChannel,
   revive as reviveMessagePort,
+  AnyPort,
 } from './message-port.js'
 
 export const type = 'abortSignal' as const
@@ -21,34 +23,54 @@ export type BoxedAbortSignal =
   & {
     aborted: boolean
     reason?: Capable
-    port: BoxedMessagePort<AbortMessage>
+    /** Absent when the signal was already aborted at box time — the reason
+     *  rides the wrapper and no live channel is needed. */
+    port?: BoxedMessagePort<AbortMessage>
   }
 
 export const isType = (value: unknown): value is AbortSignal =>
   value instanceof AbortSignal
 
+// Pins the revived port for exactly as long as the revived signal is
+// reachable — the port↔listener↔controller subgraph has no other strong
+// root, and a GC of it would silently sever abort propagation.
+const revivedPortPins = new WeakMap<AbortSignal, AnyPort<AbortMessage>>()
+
 export const box = <T extends AbortSignal, T2 extends RevivableContext>(
   value: T,
   context: T2,
 ): BoxedAbortSignal => {
-  const { localPort, boxedRemote } = createRevivableChannel<AbortMessage>(context)
-
-  if (!value.aborted) {
-    value.addEventListener('abort', () => {
-      localPort.postMessage({ type: 'abort', reason: value.reason as Capable })
-      localPort.close()
-    }, { once: true })
-  } else {
-    localPort.close()
-  }
-
   // Eagerly-aborted reason rides the wrapper, so we must box it here —
   // recursiveBox short-circuits on OSRA_BOX without descending in.
+  if (value.aborted) {
+    return {
+      ...BoxBase,
+      type,
+      aborted: true,
+      reason: recursiveBox(value.reason as Capable, context) as Capable,
+    }
+  }
+
+  const { localPort, boxedRemote } = createRevivableChannel<AbortMessage>(context)
+
+  const onSourceAbort = () => {
+    localPort.postMessage({ type: 'abort', reason: value.reason as Capable })
+    localPort.close()
+    removeTeardown()
+  }
+  // Long-lived signals accumulate one listener per send otherwise —
+  // connection death must release them.
+  const removeTeardown = onTeardown(context, () => {
+    value.removeEventListener('abort', onSourceAbort)
+    localPort.close()
+  })
+  value.addEventListener('abort', onSourceAbort, { once: true })
+
   return {
     ...BoxBase,
     type,
-    aborted: value.aborted,
-    reason: value.aborted ? recursiveBox(value.reason as Capable, context) as Capable : undefined,
+    aborted: false,
+    reason: undefined,
     port: boxedRemote,
   }
 }
@@ -59,17 +81,19 @@ export const revive = <T extends BoxedAbortSignal, T2 extends RevivableContext>(
 ): AbortSignal => {
   const controller = new AbortController()
 
-  if (value.aborted) {
+  if (value.aborted || value.port === undefined) {
     controller.abort(recursiveRevive(value.reason as Capable, context))
     return controller.signal
   }
 
   const port = reviveMessagePort(value.port, context)
+  revivedPortPins.set(controller.signal, port)
   port.start()
 
   port.addEventListener('message', ({ data: message }) => {
     if (message.type === 'abort') {
       controller.abort(recursiveRevive(message.reason as Capable, context))
+      revivedPortPins.delete(controller.signal)
       port.close()
     }
   })

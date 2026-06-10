@@ -1,3 +1,4 @@
+import type { Capable } from '../types.js'
 import type { RevivableContext, BoxBase as BoxBaseType } from './utils.js'
 import type { UnderlyingType } from './index.js'
 
@@ -10,9 +11,9 @@ import {
 
 export const type = 'readableStream' as const
 
-export type PullContext = {
-  type: 'pull' | 'cancel'
-}
+export type PullContext =
+  | { type: 'pull' }
+  | { type: 'cancel', reason?: Capable }
 
 type ChunkMessage<T = unknown> = Promise<ReadableStreamReadResult<T>>
 
@@ -38,10 +39,15 @@ export const box = <T extends ReadableStream, T2 extends RevivableContext>(
       // reader.read() is a Promise — localPort boxes it for the transport.
       localPort.postMessage(reader.read())
     } else {
-      reader.cancel()
+      reader.cancel('type' in data ? data.reason : undefined).catch(() => {})
       localPort.close()
     }
   })
+  // Abnormal channel death (consumer dropped, connection closed): stop the
+  // producer and release the source lock instead of leaking both forever.
+  localPort.addEventListener('close', () => {
+    reader.cancel(new Error('osra: connection closed')).catch(() => {})
+  }, { once: true })
   localPort.start()
 
   return { ...BoxBase, type, port: boxedRemote } as BoxedReadableStream<T>
@@ -54,22 +60,42 @@ export const revive = <T extends BoxedReadableStream, T2 extends RevivableContex
   const port = reviveMessagePort(value.port, context)
   port.start()
 
+  let done = false
   return new ReadableStream({
+    start: (controller) => {
+      // Channel death mid-stream (source dropped, connection closed): error
+      // the consumer instead of hanging its pending read forever.
+      port.addEventListener('close', () => {
+        if (done) return
+        done = true
+        try { controller.error(new Error('osra: connection closed')) } catch { /* already settled */ }
+      }, { once: true })
+    },
     pull: (controller) => new Promise<void>((resolve, reject) => {
       port.addEventListener('message', ({ data }) => {
         if (!(data instanceof Promise)) return
         data
           .then(result => {
-            if (result.done) controller.close()
+            if (result.done) {
+              done = true
+              controller.close()
+              // Stream exhausted — release the channel on both sides.
+              port.postMessage({ type: 'cancel' })
+              queueMicrotask(() => port.close())
+            }
             else controller.enqueue(result.value)
             resolve()
           })
-          .catch(reject)
+          .catch(error => {
+            done = true
+            reject(error)
+          })
       }, { once: true })
       port.postMessage({ type: 'pull' })
     }),
-    cancel: () => {
-      port.postMessage({ type: 'cancel' })
+    cancel: (reason) => {
+      done = true
+      port.postMessage({ type: 'cancel', reason: reason as Capable })
       // Defer close so the cancel message dispatches before tear-down.
       queueMicrotask(() => port.close())
     },
