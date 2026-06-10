@@ -5,10 +5,16 @@ export default defineConfig({
   fullyParallel: true,
   testDir: './tests/browser',
   testMatch: '**/*.spec.ts',
-  webServer: {
-    command: 'npm run start-server',
-    url: 'http://localhost:3000'
-  },
+  webServer: [
+    {
+      command: 'npm run start-server',
+      url: 'http://localhost:3000'
+    },
+    {
+      command: 'node tests/ws-relay.mjs',
+      port: 3001
+    },
+  ],
   projects: [
     {
       name: 'chromium',

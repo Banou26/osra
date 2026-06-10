@@ -1130,6 +1130,184 @@ export const userSymbolNoDescription = async (transport: Transport) => {
   expect(sym.description).to.be.undefined
 }
 
+
+const until = async (condition: () => Promise<boolean>) => {
+  for (let i = 0; i < 80; i++) {
+    if (await condition()) return
+    await new Promise(resolve => setTimeout(resolve, 25))
+  }
+  throw new Error('condition not reached within deadline')
+}
+
+export const userWritableStream = async (transport: Transport) => {
+  const chunks: Uint8Array[] = []
+  let closed = false
+  const value = {
+    writableStream: new WritableStream<Uint8Array>({
+      write: (chunk) => { chunks.push(chunk) },
+      close: () => { closed = true },
+    }),
+    getState: async () => ({ chunks, closed }),
+  }
+  expose(value, { transport })
+
+  const remote = await expose<typeof value>({}, { transport })
+  const writer = remote.writableStream.getWriter()
+  await writer.write(new Uint8Array([1, 2, 3]))
+  await writer.write(new Uint8Array([4, 5]))
+  await writer.close()
+
+  const state = await remote.getState()
+  expect(state.closed).to.be.true
+  expect(state.chunks.length).to.equal(2)
+  expect([...state.chunks[0]!]).to.deep.equal([1, 2, 3])
+  expect([...state.chunks[1]!]).to.deep.equal([4, 5])
+}
+
+export const userWritableStreamAbort = async (transport: Transport) => {
+  let abortReason: string | undefined
+  const value = {
+    writableStream: new WritableStream({
+      abort: (reason) => { abortReason = String(reason) },
+    }),
+    getAbortReason: async () => abortReason,
+  }
+  expose(value, { transport })
+
+  const remote = await expose<typeof value>({}, { transport })
+  const writer = remote.writableStream.getWriter()
+  await writer.abort('stop now')
+  await until(async () => await remote.getAbortReason() !== undefined)
+  expect(await remote.getAbortReason()).to.equal('stop now')
+}
+
+export const userWritableStreamSinkErrorPropagates = async (transport: Transport) => {
+  const value = {
+    writableStream: new WritableStream({
+      write: () => { throw new Error('sink failed') },
+    }),
+  }
+  expose(value, { transport })
+
+  const remote = await expose<typeof value>({}, { transport })
+  const writer = remote.writableStream.getWriter()
+  await expect(writer.write('x')).to.eventually.be.rejectedWith(/sink failed/)
+}
+
+export const userAsyncGenerator = async (transport: Transport) => {
+  const value = {
+    streamData: async function* () {
+      for (let i = 0; i < 3; i++) yield i
+    },
+  }
+  expose(value, { transport })
+
+  const remote = await expose<typeof value>({}, { transport })
+  const collected: number[] = []
+  for await (const item of await remote.streamData()) collected.push(item as number)
+  expect(collected).to.deep.equal([0, 1, 2])
+}
+
+export const userAsyncGeneratorEarlyBreak = async (transport: Transport) => {
+  let finallyRan = false
+  const value = {
+    infinite: async function* () {
+      try {
+        let i = 0
+        while (true) yield i++
+      } finally {
+        finallyRan = true
+      }
+    },
+    didFinally: async () => finallyRan,
+  }
+  expose(value, { transport })
+
+  const remote = await expose<typeof value>({}, { transport })
+  for await (const item of await remote.infinite()) {
+    if ((item as number) >= 2) break
+  }
+  // break drives iterator.return() across the wire into the source finally
+  await until(() => remote.didFinally())
+}
+
+export const userTypedArraySubarray = async (transport: Transport) => {
+  const backing = new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7])
+  const oddSized = new Int32Array(new ArrayBuffer(10), 0, 2)
+  oddSized.set([7, 8])
+  const value = {
+    getViews: async () => ({
+      sub: backing.subarray(2, 5),
+      odd: oddSized,
+    }),
+  }
+  expose(value, { transport })
+
+  const remote = await expose<typeof value>({}, { transport })
+  const { sub, odd } = await remote.getViews()
+  expect([...sub]).to.deep.equal([2, 3, 4])
+  expect(sub.byteLength).to.equal(3)
+  expect([...odd]).to.deep.equal([7, 8])
+}
+
+export const userCircularThrows = async (transport: Transport) => {
+  const value = { echo: async (input: unknown) => input }
+  expose(value, { transport })
+
+  const remote = await expose<typeof value>({}, { transport })
+  const cyclic: Record<string, unknown> = {}
+  cyclic.self = cyclic
+  await expect(remote.echo(cyclic as never)).to.eventually.be.rejectedWith(TypeError, /circular/)
+}
+
+export const userErrorSubclasses = async (transport: Transport) => {
+  const value = {
+    getTypeError: async () => new TypeError('bad type'),
+    getAggregate: async () => new AggregateError([new RangeError('inner range')], 'multiple'),
+  }
+  expose(value, { transport })
+
+  const remote = await expose<typeof value>({}, { transport })
+  const typeError = await remote.getTypeError()
+  expect(typeError).to.be.instanceOf(TypeError)
+  expect(typeError.message).to.equal('bad type')
+
+  const aggregate = await remote.getAggregate() as AggregateError
+  expect(aggregate).to.be.instanceOf(AggregateError)
+  expect(aggregate.message).to.equal('multiple')
+  expect(aggregate.errors[0]).to.be.instanceOf(RangeError)
+  expect((aggregate.errors[0] as RangeError).message).to.equal('inner range')
+}
+
+export const userRegisteredSymbol = async (transport: Transport) => {
+  const value = { sym: Symbol.for('osra.test.registered') }
+  expose(value, { transport })
+
+  const { sym } = await expose<typeof value>({}, { transport })
+  expect(sym).to.equal(Symbol.for('osra.test.registered'))
+}
+
+export const userNonFinitePrimitives = async (transport: Transport) => {
+  const value = {
+    numbers: async () => ({
+      nan: NaN,
+      positive: Infinity,
+      negative: -Infinity,
+      sparse: [1, undefined, 2] as (number | undefined)[],
+      maybe: undefined as number | undefined,
+    }),
+  }
+  expose(value, { transport })
+
+  const remote = await expose<typeof value>({}, { transport })
+  const result = await remote.numbers()
+  expect(Number.isNaN(result.nan)).to.be.true
+  expect(result.positive).to.equal(Infinity)
+  expect(result.negative).to.equal(-Infinity)
+  expect(result.sparse).to.deep.equal([1, undefined, 2])
+  expect('maybe' in result).to.be.true
+}
+
 export const base = {
   argsAndResponse,
   callback,
@@ -1192,4 +1370,14 @@ export const base = {
   userBlobBinary,
   userSymbol,
   userSymbolNoDescription,
+  userWritableStream,
+  userWritableStreamAbort,
+  userWritableStreamSinkErrorPropagates,
+  userAsyncGenerator,
+  userAsyncGeneratorEarlyBreak,
+  userTypedArraySubarray,
+  userCircularThrows,
+  userErrorSubclasses,
+  userRegisteredSymbol,
+  userNonFinitePrimitives,
 }

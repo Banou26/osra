@@ -1,0 +1,26 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium firefox webkit
+      - run: npm run type-check
+      - run: npm run check-consumer-types
+      # `npm test` builds the library first so WorkerHandshake (and the other
+      # /build/index.js-loading tests) run against the current source.
+      - run: npm test
+      # The extension suite (npm run test-extension) needs a headed browser
+      # with a display — run it locally; it is intentionally not part of CI.

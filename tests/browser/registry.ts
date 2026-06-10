@@ -8,7 +8,9 @@ import * as identityTests from './identity'
 import * as transferTests from './transfer'
 import * as lifecycle from './lifecycle'
 import * as messageChannel from './message-channel-transport'
+import * as platformTransports from './platform-transports'
 import * as relayTests from './relay'
+import * as teardownTests from './teardown'
 import * as typeGuards from './type-guards'
 import * as workerHandshake from './worker-handshake'
 
@@ -47,7 +49,9 @@ export const gcTests: Readonly<Record<string, (transport: Transport) => Promise<
 export const standaloneTests: Readonly<Record<string, Readonly<Record<string, () => Promise<void>>>>> = {
   Lifecycle: fns(lifecycle),
   MessageChannelTransport: fns(messageChannel),
+  PlatformTransports: fns(platformTransports),
   Relay: fns(relayTests),
+  Teardown: fns(teardownTests),
   TypeGuards: fns(typeGuards),
   WorkerHandshake: fns(workerHandshake),
 }
