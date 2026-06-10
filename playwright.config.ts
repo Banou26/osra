@@ -1,7 +1,10 @@
 import { defineConfig, devices } from '@playwright/test'
 
 export default defineConfig({
-  timeout: 5_000,
+  // 5s is a deliberate hang-catcher locally; CI runners pay cold-start costs
+  // (especially WebKit newPage) that need headroom plus one retry.
+  timeout: process.env.CI ? 15_000 : 5_000,
+  retries: process.env.CI ? 1 : 0,
   fullyParallel: true,
   testDir: './tests/browser',
   testMatch: '**/*.spec.ts',
