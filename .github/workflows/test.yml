@@ -17,9 +17,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium firefox webkit
+      # Build before type-check: examples/ import 'osra' via the package
+      # self-reference, which resolves through exports → build/index.d.ts.
+      - run: npm run build
       - run: npm run type-check
       - run: npm run check-consumer-types
-      # `npm test` builds the library first so WorkerHandshake (and the other
+      # `npm test` rebuilds the library so WorkerHandshake (and the other
       # /build/index.js-loading tests) run against the current source.
       - run: npm test
       # The extension suite (npm run test-extension) needs a headed browser
