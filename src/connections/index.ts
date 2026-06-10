@@ -118,6 +118,7 @@ export const startConnections = <
     resolveRemoteValue,
     rejectRemoteValue,
     createConnectionEventTarget: createTypedEventTarget,
+    unregisterSignal,
   }
 
   const listener = (message: Message, _: MessageContext) => {

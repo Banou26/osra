@@ -65,6 +65,7 @@ export type ProtocolContext<
   resolveRemoteValue: (value: Capable<TModules>) => void
   rejectRemoteValue: (error: unknown) => void
   createConnectionEventTarget: () => TypedEventTarget<MessageEventMap<TModules>>
+  unregisterSignal?: AbortSignal
 }
 
 export type StartConnectionsOptions<

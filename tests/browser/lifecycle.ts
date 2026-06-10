@@ -196,3 +196,40 @@ export const keyIsolationOverJson = async () => {
   await expect(remoteA.which()).to.eventually.equal('A')
   await expect(remoteB.which()).to.eventually.equal('B')
 }
+
+// Both sides expose and announce, but the link between them only starts
+// delivering afterwards (a relay attached after a worker exposed, a slow
+// iframe) — both initial announces are dropped. The announce retry must
+// re-offer the handshake until the link is up, with a stable uuid.
+export const announceRetrySurvivesLateLink = async () => {
+  const { port1, port2 } = new MessageChannel()
+  port1.start()
+  port2.start()
+
+  let linked = false
+  const gated = (port: MessagePort, sink?: Message[]): Transport => ({
+    receive: (listener) => {
+      port.addEventListener('message', event => {
+        if (linked) listener(event.data as Message, {})
+      })
+    },
+    emit: (message, transferables) => {
+      sink?.push(message)
+      port.postMessage(message, transferables ?? [])
+    },
+  })
+
+  const value = { ping: async () => 'pong' }
+  const sent: Message[] = []
+  expose(value, { transport: gated(port1) })
+  const remotePromise = expose<typeof value>({}, { transport: gated(port2, sent) })
+
+  await new Promise(resolve => setTimeout(resolve, 300))
+  linked = true
+
+  const remote = await remotePromise
+  await expect(remote.ping()).to.eventually.equal('pong')
+
+  const announceUuids = new Set(sent.filter(m => m.type === 'announce').map(m => m.uuid))
+  expect(announceUuids.size).to.equal(1)
+}

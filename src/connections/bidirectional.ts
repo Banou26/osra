@@ -204,5 +204,17 @@ export const init = <TModules extends readonly RevivableModule[]>(
     return
   }
 
-  ctx.sendMessage({ type: 'announce' })
+  // A lone announce is lost when the counterpart isn't listening yet (still-loading iframe,
+  // relay attached after a worker exposes) — re-announce with capped backoff until a peer
+  // connects. The uuid is stable across retries, so duplicates are dropped as handshake echoes.
+  let announceDelay = 50
+  let announceTimeout: ReturnType<typeof setTimeout> | undefined
+  const announce = () => {
+    if (ctx.unregisterSignal?.aborted || ctx.connectionContexts.size > 0) return
+    ctx.sendMessage({ type: 'announce' })
+    announceTimeout = setTimeout(announce, announceDelay)
+    announceDelay = Math.min(announceDelay * 2, 1_000)
+  }
+  ctx.unregisterSignal?.addEventListener('abort', () => clearTimeout(announceTimeout), { once: true })
+  announce()
 }
