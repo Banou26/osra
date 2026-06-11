@@ -1,6 +1,15 @@
 import type { TypedMessagePort, TypedMessagePortEventMap } from './typed-message-channel.js'
 
-export class EventPort<T> extends EventTarget {
+// NOT `extends EventTarget`: Firefox content-script / privileged sandboxes don't
+// support subclassing platform interfaces - `super()` returns a bare EventTarget
+// and the subclass methods (start/postMessage/close) vanish. EventPort keeps its
+// own listener registry so it works in every realm.
+type EventPortListener = EventListenerOrEventListenerObject
+
+export class EventPort<T> {
+  private _listeners = new Map<string, Set<EventPortListener>>()
+  private _onceListeners = new WeakSet<EventPortListener>()
+
   addEventListener<K extends keyof TypedMessagePortEventMap<T> & string>(
     type: K,
     listener: ((event: TypedMessagePortEventMap<T>[K]) => void) | null,
@@ -16,7 +25,11 @@ export class EventPort<T> extends EventTarget {
     listener: EventListenerOrEventListenerObject | null,
     options?: boolean | AddEventListenerOptions
   ): void {
-    super.addEventListener(type, listener, options)
+    if (!listener) return
+    let set = this._listeners.get(type)
+    if (!set) { set = new Set(); this._listeners.set(type, set) }
+    set.add(listener)
+    if (typeof options === 'object' && options?.once) this._onceListeners.add(listener)
   }
 
   removeEventListener<K extends keyof TypedMessagePortEventMap<T> & string>(
@@ -34,7 +47,9 @@ export class EventPort<T> extends EventTarget {
     listener: EventListenerOrEventListenerObject | null,
     options?: boolean | EventListenerOptions
   ): void {
-    super.removeEventListener(type, listener, options)
+    if (!listener) return
+    this._listeners.get(type)?.delete(listener)
+    this._onceListeners.delete(listener)
   }
 
   _peer: EventPort<any> | undefined
@@ -61,7 +76,18 @@ export class EventPort<T> extends EventTarget {
     } else if (event.type === 'messageerror') {
       this.onmessageerror?.call(this, event as MessageEvent)
     }
-    return super.dispatchEvent(event)
+    const set = this._listeners.get(event.type)
+    if (set) {
+      for (const listener of [...set]) {
+        if (this._onceListeners.has(listener)) {
+          set.delete(listener)
+          this._onceListeners.delete(listener)
+        }
+        if (typeof listener === 'function') listener.call(this, event)
+        else listener.handleEvent(event)
+      }
+    }
+    return true
   }
 
   postMessage(message: T, _options?: Transferable[] | StructuredSerializeOptions): void {

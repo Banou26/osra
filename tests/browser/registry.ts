@@ -6,6 +6,7 @@ import { gc } from './gc-tests'
 import * as customRevivables from './custom-revivables'
 import * as identityTests from './identity'
 import * as transferTests from './transfer'
+import * as eventPort from './event-port'
 import * as lifecycle from './lifecycle'
 import * as messageChannel from './message-channel-transport'
 import * as platformTransports from './platform-transports'
@@ -47,6 +48,7 @@ export const gcTests: Readonly<Record<string, (transport: Transport) => Promise<
 
 // Standalone: no transport parameterization. One execution per test.
 export const standaloneTests: Readonly<Record<string, Readonly<Record<string, () => Promise<void>>>>> = {
+  EventPort: fns(eventPort),
   Lifecycle: fns(lifecycle),
   MessageChannelTransport: fns(messageChannel),
   PlatformTransports: fns(platformTransports),
