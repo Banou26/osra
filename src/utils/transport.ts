@@ -54,6 +54,16 @@ export type JsonPlatformTransport =
   | EmitJsonPlatformTransport
   | ReceiveJsonPlatformTransport
 
+// A worker's own global scope (`self`/`globalThis` inside a worker), typed structurally:
+// lib.webworker can't be loaded next to lib.dom (conflicting `self` declarations), and the
+// shape also has to cover worker code compiled under lib.dom, where the globals carry
+// Window-style postMessage signatures. Runtime treats it like Worker (last-resort branch).
+export type WorkerSelf = {
+  postMessage(...args: any[]): void
+  addEventListener(type: string, listener: (event: any) => void): void
+  removeEventListener(type: string, listener: (event: any) => void): void
+}
+
 export type EmitPlatformTransport =
   | EmitJsonPlatformTransport
   | Window
@@ -61,6 +71,7 @@ export type EmitPlatformTransport =
   | Worker
   | SharedWorker
   | MessagePort
+  | WorkerSelf
 
 export type ReceivePlatformTransport =
   | ReceiveJsonPlatformTransport
@@ -69,6 +80,7 @@ export type ReceivePlatformTransport =
   | Worker
   | SharedWorker
   | MessagePort
+  | WorkerSelf
 
 export type PlatformTransport =
   | EmitPlatformTransport
@@ -216,7 +228,7 @@ export const sendOsraMessage = (
     }
   } else if (isSharedWorker(emitTransport)) {
     emitTransport.port.postMessage(message, transferables)
-  } else { // MessagePort | ServiceWorker | Worker
+  } else { // MessagePort | ServiceWorker | Worker | WorkerSelf
     emitTransport.postMessage(message, transferables)
   }
 }

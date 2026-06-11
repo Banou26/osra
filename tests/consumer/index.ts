@@ -24,3 +24,8 @@ const checkRemote = async () => {
   const sync: number = remote.add(1, 2)
   return sum
 }
+
+// A worker's own global scope — commonly compiled under lib.dom, where it is NOT
+// assignable to Window — must be accepted via the structural WorkerSelf member.
+const workerSelf: Transport = globalThis
+expose({}, { transport: globalThis, key: 'worker-self' })
