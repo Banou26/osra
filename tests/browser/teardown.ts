@@ -45,7 +45,7 @@ export const abortRejectsPendingCalls = async () => {
   await expect(call).to.eventually.be.rejectedWith(/connection closed/)
 }
 
-// Aborting one side sends a protocol 'close' — the *peer*'s pending calls
+// Aborting one side sends a protocol 'close' - the *peer*'s pending calls
 // must reject too, not hang forever.
 export const peerCloseRejectsPendingCalls = async () => {
   const { port1, port2 } = new MessageChannel()
@@ -61,7 +61,7 @@ export const peerCloseRejectsPendingCalls = async () => {
 }
 
 // A hand-rolled peer completes the announce dance, then sends an init
-// whose payload contains an unrevivable box — expose() must reject with
+// whose payload contains an unrevivable box - expose() must reject with
 // the revive error instead of hanging with an unhandled rejection.
 export const malformedInitRejects = async () => {
   const { port1, port2 } = new MessageChannel()

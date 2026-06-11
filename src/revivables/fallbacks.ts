@@ -6,7 +6,7 @@ import { instanceOfAny } from '../utils/type-guards.js'
 type AnyCtor = abstract new (...args: any[]) => unknown
 
 // -------------------------------------------------------------------------
-// clonable — pass-through fast path for HTML structured-clone types not
+// clonable - pass-through fast path for HTML structured-clone types not
 // owned by another revivable. Short-circuits findBoxModule so unclonable's
 // structuredClone probe never fires on a known-safe value.
 // -------------------------------------------------------------------------
@@ -50,7 +50,7 @@ export type Clonable = InstanceType<typeof TYPED_CLONABLE_CTORS[number]>
 export type BoxedClonable = BoxBaseType<'clonable'>
 
 // `capableOnly: true` tells ExtractType to elide this module from the
-// Capable union on JSON transports — TS can't narrow `isType<Ctx>` via
+// Capable union on JSON transports - TS can't narrow `isType<Ctx>` via
 // generic inference, so we use a marker flag.
 const isClonable = (value: unknown): value is Clonable =>
   instanceOfAny(value, TYPED_CLONABLE_CTORS) || instanceOfAny(value, EXPERIMENTAL_CLONABLE_CTORS)
@@ -60,13 +60,13 @@ export const clonable = {
   capableOnly: true,
   isType: isClonable,
   // Pass-through; structured-clone handles these on the wire. `revive` is
-  // never reached — `box` returns the raw value so isRevivableBox is false.
+  // never reached - `box` returns the raw value so isRevivableBox is false.
   box: (value: Clonable, _context: RevivableContext<any>): Clonable => value,
   revive: (value: BoxedClonable, _context: RevivableContext<any>): Clonable => value as unknown as Clonable,
 } as const
 
 // -------------------------------------------------------------------------
-// transferable — pass-through fast path for transfer-only host objects.
+// transferable - pass-through fast path for transfer-only host objects.
 // getTransferableObjects pulls them out of the envelope at send time.
 // -------------------------------------------------------------------------
 
@@ -103,7 +103,7 @@ export const transferable = {
 } as const
 
 // -------------------------------------------------------------------------
-// unclonable — catch-all that probes via structuredClone and coerces
+// unclonable - catch-all that probes via structuredClone and coerces
 // unclonables to `{}` so the wire never blows up on exotic host objects.
 // -------------------------------------------------------------------------
 

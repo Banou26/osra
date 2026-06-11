@@ -6,7 +6,7 @@ import { expose } from '../../src/index'
 // `window.postMessage`-loopback never hits (same realm, no actual cloning).
 // Each test gets its own pair so listeners don't leak.
 
-// No manual start() — registerOsraMessageListener must start the ports itself.
+// No manual start() - registerOsraMessageListener must start the ports itself.
 const newPair = () => new MessageChannel()
 
 export const argsAndResponseOverChannel = async () => {

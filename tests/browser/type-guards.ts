@@ -11,7 +11,7 @@ import {
 import { normalizeTransport } from '../../src/connections/utils'
 
 // Mimics a cross-origin WindowProxy: whitelisted props (window/closed/close/postMessage)
-// resolve; any other property access — including the `in` operator — throws SecurityError,
+// resolve; any other property access - including the `in` operator - throws SecurityError,
 // exactly like the browser blocks `'isJson' in iframe.contentWindow`.
 const crossOriginWindowMock = (): Window => {
   const allowed = new Set(['window', 'self', 'closed', 'close', 'postMessage', 'parent', 'top'])

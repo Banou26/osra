@@ -1,7 +1,7 @@
 // Builds the test extension for the Playwright extension suite.
 //
-// Each entry (background, content, popup) must be self-contained — content
-// scripts and MV3 service workers can't share chunks — so we run vite once
+// Each entry (background, content, popup) must be self-contained - content
+// scripts and MV3 service workers can't share chunks - so we run vite once
 // per entry rather than relying on rollup multi-input.
 //
 // This used to be a vite config (`vite.extension-test.config.ts`) that

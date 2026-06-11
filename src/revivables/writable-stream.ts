@@ -47,7 +47,7 @@ export const box = <T extends WritableStream, T2 extends RevivableContext>(
       .then(() => {
         if (!terminal) return
         terminated = true
-        // Terminal op acked — release the channel on both sides.
+        // Terminal op acked - release the channel on both sides.
         queueMicrotask(() => localPort.close())
       })
 
@@ -88,7 +88,7 @@ export const revive = <T extends BoxedWritableStream, T2 extends RevivableContex
   }, { once: true })
 
   // Each `write` call posts a 'write' message and awaits an 'ack'/'err'.
-  // The port is shared, so we serialize via a chain — without it, two
+  // The port is shared, so we serialize via a chain - without it, two
   // concurrent writes would race and could mis-pair their ack messages.
   let chain: Promise<void> = Promise.resolve()
   const request = (msg: WriteContext): Promise<void> => {

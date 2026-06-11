@@ -44,7 +44,7 @@ export const revivedEventTargetDroppedWithoutListenerIsCollected = async (transp
 
 // Diagnostic companion to funcDropRejectsPending: if this fails, the
 // revived function itself isn't being collected (so the finalizer never
-// runs) — the fix would be in the revival pipeline, not in the pending-call
+// runs) - the fix would be in the revival pipeline, not in the pending-call
 // cleanup path. We null the property rather than the binding because the
 // resolved init-object is retained by osra internals (connection state
 // holds the same object reference), so only scrubbing the field releases
@@ -66,7 +66,7 @@ export const revivedEventTargetDropTearsDownSource = async (transport: Transport
 
   // forwarderLive: 1 while the box side has its forwarder attached, 0 once
   // it's removed. The forwarder fires before the probe listener (install
-  // order), so we can't use probe to detect its presence — we wrap the
+  // order), so we can't use probe to detect its presence - we wrap the
   // source's addEventListener so the box side's install/remove is observable.
   let forwarderLive = 0
   const originalAdd = _et.addEventListener.bind(_et)
@@ -97,7 +97,7 @@ export const revivedEventTargetDropTearsDownSource = async (transport: Transport
   const remote = await expose<typeof value>({}, { transport })
 
   // Subscribe inside an inner scope so the only strong reference to the
-  // revived EventTarget is `remote.et` — we'll drop that below. The listener
+  // revived EventTarget is `remote.et` - we'll drop that below. The listener
   // is captured here and referenced by the revive-side subscription map;
   // that's fine, since the whole graph roots from `remote.et`.
   remote.et.addEventListener('tick', () => {})
@@ -107,7 +107,7 @@ export const revivedEventTargetDropTearsDownSource = async (transport: Transport
   expect(await remote.forwarderLive()).to.equal(1)
 
   // Drop the last strong reference to the revived target. WeakRef probe
-  // confirms the engine actually collects it — if this fails we know the
+  // confirms the engine actually collects it - if this fails we know the
   // issue is in the test's reference graph, not the revivable.
   const etRef = new WeakRef(remote.et)
   ;(remote as { et?: unknown }).et = undefined
@@ -127,14 +127,14 @@ export const revivedEventTargetDropTearsDownSource = async (transport: Transport
 
 // Spec-aligned semantics: dropping the proxy mid-call does NOT reject the
 // in-flight await. Promises don't auto-reject on slowness, and there's no
-// MessagePort signal that says "sender lost interest, reject everyone" —
+// MessagePort signal that says "sender lost interest, reject everyone" -
 // the queued call message is delivered, the receiver may or may not reply,
 // and the awaiter settles when (and only when) it does. Auto-rejecting
 // would fire spuriously whenever V8's liveness analysis collects the
 // proxy local mid-await, silently failing legitimate calls under memory
 // pressure. Users who want a deadline can `Promise.race` with a timeout.
 export const funcDropDoesNotRejectPending = async (transport: Transport) => {
-  // Box-side function that never resolves — simulates a remote that
+  // Box-side function that never resolves - simulates a remote that
   // accepts the call but can't/won't reply.
   const value = { slow: (): Promise<number> => new Promise(() => {}) }
   expose(value, { transport })
@@ -149,7 +149,7 @@ export const funcDropDoesNotRejectPending = async (transport: Transport) => {
   // Allow the call to actually dispatch before we drop the function.
   await new Promise(r => setTimeout(r, 50))
 
-  // Drop the proxy and force GC — the box-side function port tears down
+  // Drop the proxy and force GC - the box-side function port tears down
   // (no further calls accepted), but the in-flight call's return port
   // stays alive waiting for a result that will never come.
   ;(remote as { slow?: unknown }).slow = undefined

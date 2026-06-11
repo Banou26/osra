@@ -6,7 +6,7 @@ import { isJsonOnlyTransport } from '../utils/type-guards.js'
 // JSON.stringify silently corrupts these: NaN/±Infinity become null,
 // undefined vanishes from objects and becomes null in arrays. On clone
 // transports both pass through untouched (box returns the raw value, so
-// isRevivableBox is false and revive is never reached) — the wire shape
+// isRevivableBox is false and revive is never reached) - the wire shape
 // only exists on JSON transports.
 
 export type BoxedNonFiniteNumber = BoxBaseType<'nonFiniteNumber'> & { value: 'NaN' | 'Infinity' | '-Infinity' }

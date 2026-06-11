@@ -309,7 +309,7 @@ export const userAbortSignalAlreadyAborted = async (transport: Transport) => {
 // The eagerly-aborted reason rides the wrapper object instead of the
 // revivable channel, so it has to be recursively boxed at send time. If
 // it isn't, a reason carrying live values (functions, nested AbortSignals,
-// etc.) fails — DataCloneError on clone transports, silent loss on JSON.
+// etc.) fails - DataCloneError on clone transports, silent loss on JSON.
 export const userAbortSignalAlreadyAbortedWithLiveReason = async (transport: Transport) => {
   const inner = new AbortController()
   const controller = new AbortController()
@@ -414,7 +414,7 @@ export const userRequest = async (transport: Transport) => {
 
 // Firefox does not yet support ReadableStream as a Request body (Bugzilla
 // 1387483). The Request constructor silently coerces the stream to its
-// toString — `req.body` ends up `undefined` and `req.text()` returns the
+// toString - `req.body` ends up `undefined` and `req.text()` returns the
 // literal "[object ReadableStream]". Probe for the capability so the test
 // short-circuits cleanly on Firefox instead of failing on a platform gap.
 const supportsStreamingRequestBody = (): boolean => {
@@ -477,7 +477,7 @@ export const userRequestNoBody = async (transport: Transport) => {
   expect(request.method).to.equal('GET')
   expect(request.url).to.equal('https://example.com/resource')
   // Firefox 146 returns `undefined` for a bodyless Request's `.body` instead
-  // of the spec-mandated `null`. Both encode "no body" — accept either.
+  // of the spec-mandated `null`. Both encode "no body" - accept either.
   // eslint-disable-next-line eqeqeq
   expect(request.body == null).to.be.true
 }
@@ -642,7 +642,7 @@ export const userBigUint64Array = async (transport: Transport) => {
 
 export const userPromiseRejected = async (transport: Transport) => {
   const value = { failing: Promise.reject(new Error('boom')) }
-  // Swallow the unhandledrejection on the local side — we re-reject on the wire.
+  // Swallow the unhandledrejection on the local side - we re-reject on the wire.
   ;(value.failing as Promise<unknown>).catch(() => {})
   expose(value, { transport })
 
@@ -928,7 +928,7 @@ export const userEventTargetUnsubscribe = async (transport: Transport) => {
     fire: async () => { _et.dispatchEvent(new Event('tick')) },
     listenerCount: async () => {
       // Dispatch a probe; if there's a forwarder, we'll see it via instrumentation
-      // below. We can't directly inspect EventTarget listeners — use a sentinel
+      // below. We can't directly inspect EventTarget listeners - use a sentinel
       // counter instead.
       return probeCount
     },
@@ -992,7 +992,7 @@ export const userEventTargetMultipleEventTypes = async (transport: Transport) =>
 // Box-side postMessage of a non-clonable result pre-fix threw DataCloneError
 // and the caller hung forever because the once-listener on returnLocal was
 // never fired. Fix surfaces the error as __osra_err__ so the Promise rejects
-// (clone transport). JSON silently coerces but still settles — the load-
+// (clone transport). JSON silently coerces but still settles - the load-
 // bearing assertion is "does not hang".
 export const functionNonClonableResultRejects = async (transport: Transport) => {
   const value = async (): Promise<any> => new WeakMap()
@@ -1034,7 +1034,7 @@ export const userEventTargetCaptureBothFlags = async (transport: Transport) => {
   // Both registrations fired.
   expect(count).to.equal(2)
 
-  // Remove only the bubble registration — the capture one must survive.
+  // Remove only the bubble registration - the capture one must survive.
   et.removeEventListener('ping', handler, { capture: false })
   await new Promise(r => setTimeout(r, 50))
   await fire()
@@ -1070,7 +1070,7 @@ export const userEventTargetOnceUnsubscribes = async (transport: Transport) => {
 
   // Second fire: source still ticks (probe increments), but the revive-side
   // forwarder should have torn down because once:true consumed the only
-  // subscription — so the receiver's listener must NOT fire again.
+  // subscription - so the receiver's listener must NOT fire again.
   await fire()
   await new Promise(r => setTimeout(r, 50))
   expect(receiverCount).to.equal(1)
@@ -1084,7 +1084,7 @@ export const userBlob = async (transport: Transport) => {
 
   const { blob } = await expose<typeof value>({}, { transport })
 
-  // Blob revive returns Promise<Blob> — bytes arrive async over the wire.
+  // Blob revive returns Promise<Blob> - bytes arrive async over the wire.
   const revived = await blob
   expect(revived).to.be.instanceOf(Blob)
   expect(revived.type).to.equal('text/plain')
@@ -1115,7 +1115,7 @@ export const userSymbol = async (transport: Transport) => {
 
   expect(typeof sym).to.equal('symbol')
   expect(sym.description).to.equal('hello symbol')
-  // Description-based serialization can't preserve identity — a fresh
+  // Description-based serialization can't preserve identity - a fresh
   // Symbol() with the same description is intentionally !== the original.
   expect(sym).to.not.equal(_sym)
 }

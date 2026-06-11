@@ -23,7 +23,7 @@ export const box = <T extends TypedArray, T2 extends RevivableContext>(
   value: T,
   context: T2,
 ): BoxedTypedArray<T, T2> => {
-  // Ship exactly the view's window — shipping the whole backing buffer
+  // Ship exactly the view's window - shipping the whole backing buffer
   // loses byteOffset/length on revive (silent corruption for subarrays,
   // RangeError for multi-byte views over odd-sized buffers).
   const aligned = value.byteOffset === 0 && value.byteLength === value.buffer.byteLength

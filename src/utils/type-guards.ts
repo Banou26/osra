@@ -90,12 +90,12 @@ export const instanceOfAny = (value: unknown, ctors: readonly (AnyConstructor | 
 
 export const isSharedArrayBuffer = (value: unknown): boolean =>
   instanceOfAny(value, [globalThis.SharedArrayBuffer])
-/** @deprecated Renamed — this only ever checked SharedArrayBuffer, unlike
+/** @deprecated Renamed - this only ever checked SharedArrayBuffer, unlike
  *  the unrelated clonable fallback module. Use isSharedArrayBuffer. */
 export const isClonable = isSharedArrayBuffer
 
 // Types eligible for transfer when the user opts in via `transfer()`. Some
-// entries are also clonable (ArrayBuffer, ImageBitmap, …) — outside a
+// entries are also clonable (ArrayBuffer, ImageBitmap, …) - outside a
 // `transfer` box they fall back to clone.
 export const isTransferable = (value: unknown): value is Transferable =>
   instanceOfAny(value, [
@@ -136,7 +136,7 @@ export const isWebExtensionPort = (value: unknown, connectPort: boolean = false)
 
 export type WebExtSender = NonNullable<WebExtPort['sender']>
 
-// Structural guard. Can't distinguish onConnect from onMessage on its own —
+// Structural guard. Can't distinguish onConnect from onMessage on its own -
 // they share this exact shape.
 const hasListenerApi = (value: unknown): boolean =>
   !!value
@@ -146,7 +146,7 @@ const hasListenerApi = (value: unknown): boolean =>
   && 'hasListener' in value
   && 'removeListener' in value
 
-// Identity-compare against runtime.onConnect — structural checks can't
+// Identity-compare against runtime.onConnect - structural checks can't
 // distinguish onConnect from onMessage, and misclassifying causes us to
 // treat each incoming message as a port and crash.
 export type WebExtOnConnect = WebExtRuntime['onConnect']
@@ -165,7 +165,7 @@ export const isWindow = (value: unknown): value is Window => {
   try {
     return 'window' in value && value.window === value
   } catch {
-    // Cross-origin Window access can throw SecurityError — fall back to a
+    // Cross-origin Window access can throw SecurityError - fall back to a
     // shape probe over properties that don't trigger the security check.
     try {
       return 'closed' in value
@@ -193,7 +193,7 @@ export const isReceiveJsonOnlyTransport = (value: unknown): value is ReceiveJson
 export type IsJsonOnlyTransport<T extends Transport> = T extends JsonPlatformTransport ? true : false
 export const isJsonOnlyTransport = (value: unknown): value is Extract<Transport, JsonPlatformTransport> =>
   // `'isJson' in value` triggers SecurityError on a cross-origin Window (the iframe-broker
-  // `emit: window.parent` case) — exclude windows first; the marker only lives on normalized transports.
+  // `emit: window.parent` case) - exclude windows first; the marker only lives on normalized transports.
      (!!value && typeof value === 'object' && !isWindow(value) && 'isJson' in value && value.isJson === true)
   || isEmitJsonOnlyTransport(value)
   || isReceiveJsonOnlyTransport(value)
@@ -201,7 +201,7 @@ export const isJsonOnlyTransport = (value: unknown): value is Extract<Transport,
 export const isEmitTransport = (value: unknown): value is EmitTransport =>
      isWindow(value)
   || isEmitJsonOnlyTransport(value)
-  // ServiceWorker instances can postMessage; the container cannot — it only receives.
+  // ServiceWorker instances can postMessage; the container cannot - it only receives.
   || isServiceWorker(value)
   || isWorker(value)
   || isDedicatedWorker(value)
@@ -232,7 +232,7 @@ export function assertReceiveTransport(transport: Transport): asserts transport 
 // misclassified, then gutted by normalizeTransport's object spread.
 const isPlainObjectShape = (value: unknown): value is Record<string, unknown> => {
   if (!value || typeof value !== 'object') return false
-  // Prevent SecurityError when `value` is a cross-origin window — its
+  // Prevent SecurityError when `value` is a cross-origin window - its
   // [[GetPrototypeOf]] returns null, which would pass the proto check.
   if (isWindow(value)) return false
   const proto = Object.getPrototypeOf(value)

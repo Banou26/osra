@@ -93,7 +93,7 @@ export type Transport =
   | PlatformTransport
   | CustomTransport
 
-// Typed via the shipped webextension-polyfill module types — referencing the
+// Typed via the shipped webextension-polyfill module types - referencing the
 // ambient `browser`/`chrome` globals here would leak unresolvable names into
 // the published .d.ts (those @types are devDependencies only).
 type WebExtGlobals = { browser?: Browser, chrome?: Browser }
@@ -142,7 +142,7 @@ export const registerOsraMessageListener = (
     return
   }
 
-  // WebExtension family — subscribe to an `onMessage`-style listener.
+  // WebExtension family - subscribe to an `onMessage`-style listener.
   if (
     isWebExtensionRuntime(receiveTransport)
     || isWebExtensionPort(receiveTransport)
@@ -177,12 +177,12 @@ export const registerOsraMessageListener = (
   // Window, Worker, WebSocket, ServiceWorkerContainer, MessagePort, SharedWorker, …
   // SharedWorker dispatches messages on its .port, not on the worker object.
   const target = isSharedWorker(receiveTransport) ? receiveTransport.port : receiveTransport
-  // Inbound origin filtering is a cross-origin *window* concern — WebSocket
+  // Inbound origin filtering is a cross-origin *window* concern - WebSocket
   // and ServiceWorkerContainer events carry their own unrelated origins and
   // a page-origin value would silently drop all their traffic.
   const filterByOrigin = origin !== '*' && isWindow(receiveTransport)
   const messageListener = (event: MessageEvent<Message | string>) => {
-    // JSON transports (WebSocket) deliver strings — parse before the key check.
+    // JSON transports (WebSocket) deliver strings - parse before the key check.
     let data = event.data
     if (typeof data === 'string') {
       try { data = JSON.parse(data) as Message } catch { return }
@@ -193,7 +193,7 @@ export const registerOsraMessageListener = (
     listener(data, { receiveTransport, source: event.source, origin: event.origin })
   }
   target.addEventListener('message', messageListener as EventListener)
-  // addEventListener alone never enables a MessagePort's queue — only
+  // addEventListener alone never enables a MessagePort's queue - only
   // .start() or assigning onmessage does.
   if (target instanceof MessagePort) target.start()
   onAbort(unregisterSignal, () =>
@@ -213,7 +213,7 @@ export const sendOsraMessage = (
   if (typeof emitTransport === 'function') {
     emitTransport(message, transferables)
   } else if (isWindow(emitTransport)) {
-    // Must check first — cross-origin windows throw on other property access.
+    // Must check first - cross-origin windows throw on other property access.
     emitTransport.postMessage(message, origin, transferables)
   } else if (isWebExtensionPort(emitTransport)) {
     emitTransport.postMessage(message)

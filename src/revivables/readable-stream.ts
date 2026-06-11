@@ -36,7 +36,7 @@ export const box = <T extends ReadableStream, T2 extends RevivableContext>(
 
   localPort.addEventListener('message', ({ data }) => {
     if ('type' in data && data.type === 'pull') {
-      // reader.read() is a Promise — localPort boxes it for the transport.
+      // reader.read() is a Promise - localPort boxes it for the transport.
       localPort.postMessage(reader.read())
     } else {
       reader.cancel('type' in data ? data.reason : undefined).catch(() => {})
@@ -79,7 +79,7 @@ export const revive = <T extends BoxedReadableStream, T2 extends RevivableContex
             if (result.done) {
               done = true
               controller.close()
-              // Stream exhausted — release the channel on both sides.
+              // Stream exhausted - release the channel on both sides.
               port.postMessage({ type: 'cancel' })
               queueMicrotask(() => port.close())
             }

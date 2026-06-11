@@ -26,4 +26,4 @@ jobs:
       # /build/index.js-loading tests) run against the current source.
       - run: npm test
       # The extension suite (npm run test-extension) needs a headed browser
-      # with a display — run it locally; it is intentionally not part of CI.
+      # with a display - run it locally; it is intentionally not part of CI.

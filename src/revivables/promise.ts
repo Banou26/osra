@@ -21,7 +21,7 @@ export type Context =
   | { type: 'resolve', data: Capable }
   | { type: 'reject', error: Capable }
 
-// Error branches intersect with T so the user's own keys land on the target —
+// Error branches intersect with T so the user's own keys land on the target -
 // otherwise TS's excess-property check flags a user key instead of the failure.
 type CapablePromise<T> = T extends Promise<infer U>
   ? U extends Capable
@@ -51,7 +51,7 @@ export type BoxedPromise<T extends Capable = Capable> =
   & { port: BoxedMessagePort<Context> }
   & { [UnderlyingType]: T }
 
-// Pins the revived port between executor return and result arrival — the
+// Pins the revived port between executor return and result arrival - the
 // port↔listener cycle has no other anchor (the caller only holds the
 // returned Promise). The once-listener removes its entry on settle.
 const inFlightPromisePorts = new Set<AnyPort<Context>>()

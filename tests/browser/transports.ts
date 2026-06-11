@@ -2,7 +2,7 @@ import type { Transport } from '../../src'
 import type { Message } from '../../src/types'
 import type { MessageContext } from '../../src/utils/transport'
 
-// Transport registry — adding a new transport here automatically runs every
+// Transport registry - adding a new transport here automatically runs every
 // transport-parameterized test against it.
 
 export type TransportName = 'Web' | 'JSON'
@@ -50,7 +50,7 @@ export const transports: readonly TransportEntry[] = [
     factory: jsonLoopback,
     memoryIterations: 2_500,
     // Baseline growth sits near 980 kB for the heaviest test
-    // (nestedCallbacksNoLeak) — leave real headroom so constant overhead
+    // (nestedCallbacksNoLeak) - leave real headroom so constant overhead
     // (instrumentation, module growth) doesn't masquerade as a leak.
     memoryThreshold: 1_250_000,
   },

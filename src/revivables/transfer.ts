@@ -43,7 +43,7 @@ const isWrappableTransferable = (value: unknown): boolean => {
 /** Opt into transfer (move) semantics for a transferable value. Idempotent;
  *  non-transferable inputs pass through unchanged. Silently degrades to a
  *  copy when the platform/transport can't transfer the given type. Lies at
- *  the type level — runtime value is a TransferWrapper<T> typed as T. */
+ *  the type level - runtime value is a TransferWrapper<T> typed as T. */
 export const transfer = <T>(value: T): T =>
   (isWrappableTransferable(value)
     ? { [TRANSFER_MARKER]: true, value }

@@ -14,7 +14,7 @@ export type BoxedBlob<T extends Blob = Blob> =
   & { fileName?: string, lastModified?: number }
   & { [UnderlyingType]: Promise<T> }
 
-// File extends Blob and is handled here too — encoding `name` + `lastModified`
+// File extends Blob and is handled here too - encoding `name` + `lastModified`
 // when present so the receiver reconstructs a File rather than dropping to a
 // plain Blob. Avoids a runtime/type mismatch where File would type-check as
 // Capable but silently coerce.
@@ -38,7 +38,7 @@ export const box = <T extends Blob, T2 extends RevivableContext>(
 }) as unknown as BoxedBlob<T>
 
 // Blob bytes are fetched async (`blob.arrayBuffer()`), so revive can't
-// hand back a Blob synchronously — receivers `await` to get the Blob.
+// hand back a Blob synchronously - receivers `await` to get the Blob.
 export const revive = <T extends BoxedBlob, T2 extends RevivableContext>(
   value: T,
   context: T2,

@@ -14,7 +14,7 @@ export const normalizeTransport = (transport: Transport): Transport => {
   const custom = isCustomTransport(transport)
   const emit = custom ? (transport as { emit?: unknown }).emit : transport
   const receive = custom ? (transport as { receive?: unknown }).receive : transport
-  // Probe the embedded platform transports, not the wrapper — a custom
+  // Probe the embedded platform transports, not the wrapper - a custom
   // { emit: webSocket } is JSON-only even though the wrapper itself isn't.
   const isJson =
     custom && 'isJson' in transport && transport.isJson !== undefined
@@ -30,7 +30,7 @@ export const normalizeTransport = (transport: Transport): Transport => {
 
 /** Resolves the final revivable module list. The user supplies a function
  *  that takes the defaults and returns whatever ordering/composition they
- *  want — add modules, drop defaults, reorder, override per-type. When
+ *  want - add modules, drop defaults, reorder, override per-type. When
  *  omitted, the defaults are used as-is. */
 export const mergeRevivableModules = <
   TModules extends readonly RevivableModule[] = DefaultRevivableModules
@@ -78,7 +78,7 @@ export type StartConnectionsOptions<
   origin?: string
   unregisterSignal?: AbortSignal
   /** Configure the revivable module list. Receives the defaults and
-   *  returns the final ordered list — add modules, drop defaults, reorder,
+   *  returns the final ordered list - add modules, drop defaults, reorder,
    *  or override per-type as needed. */
   revivableModules?: (defaults: DefaultRevivableModules) => TModules
   uuid?: Uuid

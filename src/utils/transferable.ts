@@ -5,7 +5,7 @@ import { instanceOfAny, isSharedArrayBuffer, isTransferable } from './type-guard
 export { transfer }
 
 // Must-transfer types: structured clone can't copy these, so any occurrence
-// in the outgoing message must go on the transfer list — opt-in or not.
+// in the outgoing message must go on the transfer list - opt-in or not.
 // (MessagePort is the canonical case: cloning would leave the peer mute.)
 const isMustTransfer = (value: unknown): value is Transferable =>
   instanceOfAny(value, [
@@ -22,7 +22,7 @@ const isMustTransfer = (value: unknown): value is Transferable =>
     (globalThis as { WebTransportSendStream?: abstract new (...args: any[]) => unknown }).WebTransportSendStream,
   ])
 
-// Structural check — keeps the walker decoupled from the module graph.
+// Structural check - keeps the walker decoupled from the module graph.
 // `degraded` (set by transfer.box) means the wrapper is a no-op here.
 const isTransferBox = (value: unknown): value is { inner: unknown, degraded: boolean } =>
   isRevivableBox(value) && value.type === 'transfer'
@@ -62,7 +62,7 @@ export const getTransferableObjects = (value: unknown): Transferable[] => {
       return
     }
 
-    // TypedArray / DataView expose every numeric index — iterating a 100 KB
+    // TypedArray / DataView expose every numeric index - iterating a 100 KB
     // buffer would walk 100 K entries for nothing. The underlying buffer is
     // the only candidate; the typed-array revivable handles that path.
     if (ArrayBuffer.isView(value)) return

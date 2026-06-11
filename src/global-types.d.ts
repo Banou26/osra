@@ -10,7 +10,7 @@ interface Uint8ArrayConstructor {
 }
 
 // MediaSourceHandle is referenced by the lib's `Transferable` union but
-// isn't yet declared in the bundled lib — without this shim, `Transferable`
+// isn't yet declared in the bundled lib - without this shim, `Transferable`
 // collapses and breaks every narrowing chain that references it.
 interface MediaSourceHandle {
   __dummy__: never

@@ -6,7 +6,7 @@ import type { Transport } from '../../src'
 import { expose } from '../../src/index'
 import { makeJsonTransport } from './utils'
 
-// Spy transport over a MessagePort — records every outbound envelope so
+// Spy transport over a MessagePort - records every outbound envelope so
 // tests can assert on uuids and message types exchanged during the handshake.
 // Transferables must be forwarded: boxed functions/streams embed real
 // MessagePorts that aren't structured-clonable without explicit transfer.
@@ -22,7 +22,7 @@ const spyTransport = (port: MessagePort, sink: Message[]): Transport => ({
   },
 })
 
-// unregisterSignal: aborting tears the side down — its transport listener is
+// unregisterSignal: aborting tears the side down - its transport listener is
 // removed, its own pending expose() rejects with the abort reason, and every
 // tracked peer is notified with a protocol 'close'. A peer that never managed
 // to connect (the exposer aborted first) is left with a pending handshake.
@@ -155,7 +155,7 @@ export const presetRemoteUuidSkipsAnnounce = async () => {
 }
 
 // Aborting `unregisterSignal` tears down a side's protocol listener. Calling
-// expose() again on the same transport must complete a fresh handshake — the
+// expose() again on the same transport must complete a fresh handshake - the
 // remote side doesn't re-expose, it just receives the new announce through
 // its still-live listener and creates a second connection for the new uuid.
 export const reregisterAfterCloseContinuesMessaging = async () => {
@@ -199,7 +199,7 @@ export const keyIsolationOverJson = async () => {
 
 // Both sides expose and announce, but the link between them only starts
 // delivering afterwards (a relay attached after a worker exposed, a slow
-// iframe) — both initial announces are dropped. The announce retry must
+// iframe) - both initial announces are dropped. The announce retry must
 // re-offer the handshake until the link is up, with a stable uuid.
 export const announceRetrySurvivesLateLink = async () => {
   const { port1, port2 } = new MessageChannel()

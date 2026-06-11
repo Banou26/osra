@@ -3,16 +3,16 @@
 [![npm version](https://img.shields.io/npm/v/osra.svg)](https://www.npmjs.com/package/osra)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-osra is a zero-runtime-dependency TypeScript RPC library that connects two JavaScript contexts over any message channel. Both sides call `expose(value, { transport })` and each receives the other's value with live semantics: functions become callable async proxies, async generators stream with `for await`, streams keep backpressure, errors keep their subclasses, `AbortSignal`s propagate aborts. It works across Workers, SharedWorkers, windows/iframes, MessagePorts, WebSockets, web extensions, and anything else you can wrap in a custom `{ emit, receive }` pair — degrading gracefully to a JSON-only mode on text channels.
+osra is a zero-runtime-dependency TypeScript RPC library that connects two JavaScript contexts over any message channel. Both sides call `expose(value, { transport })` and each receives the other's value with live semantics: functions become callable async proxies, async generators stream with `for await`, streams keep backpressure, errors keep their subclasses, `AbortSignal`s propagate aborts. It works across Workers, SharedWorkers, windows/iframes, MessagePorts, WebSockets, web extensions, and anything else you can wrap in a custom `{ emit, receive }` pair, degrading gracefully to a JSON-only mode on text channels.
 
 ## Features
 
-- **Zero runtime dependencies** — one ESM module
-- **Symmetric API** — both sides call `expose()`; either side can pass functions, both can call
-- **Deep type support** — functions, promises, async generators, `ReadableStream`/`WritableStream`, `MessagePort`, `AbortSignal`, `Error` subclasses, `Blob`/`File`, `Request`/`Response`, `Map`/`Set`, typed arrays, `BigInt`, `Symbol`, …
-- **JSON-mode degradation** — the same value types work over text-only transports (WebSocket, extension messaging); `Date`, `Map`, typed arrays, even `NaN`/`±Infinity` survive
+- **Zero runtime dependencies**: one ESM module
+- **Symmetric API**: both sides call `expose()`; either side can pass functions, both can call
+- **Deep type support**: functions, promises, async generators, `ReadableStream`/`WritableStream`, `MessagePort`, `AbortSignal`, `Error` subclasses, `Blob`/`File`, `Request`/`Response`, `Map`/`Set`, typed arrays, `BigInt`, `Symbol`, …
+- **JSON-mode degradation**: the same value types work over text-only transports (WebSocket, extension messaging); `Date`, `Map`, typed arrays, even `NaN`/`±Infinity` survive
 - **`identity()`** for reference-preserving sends, **`transfer()`** for zero-copy moves
-- **Strict TypeScript** — `Remote<T>` maps your API type across the wire; a compile-time `Capable` check rejects non-serializable values with the offending path pinpointed
+- **Strict TypeScript**: `Remote<T>` maps your API type across the wire; a compile-time `Capable` check rejects non-serializable values with the offending path pinpointed
 - **Tested** on Chromium, Firefox, and WebKit via Playwright
 
 ## Install
@@ -66,19 +66,19 @@ for await (const n of await remote.streamData()) {
 }
 ```
 
-Both sides call `expose()` — the returned promise resolves with the remote side's value once the handshake completes. A side that only serves (like the worker above) can ignore the returned promise.
+Both sides call `expose()`; the returned promise resolves with the remote side's value once the handshake completes. A side that only serves (like the worker above) can ignore the returned promise.
 
 ### Options
 
 | Option | Default | Description |
 |---|---|---|
 | `transport` | required | The channel to communicate over (see [Transports](#transports)) |
-| `key` | `'__OSRA_DEFAULT_KEY__'` | Namespacing tag — lets multiple independent osra connections share one channel. **Not authentication.** |
+| `key` | `'__OSRA_DEFAULT_KEY__'` | Namespacing tag that lets multiple independent osra connections share one channel. **Not authentication.** |
 | `origin` | `'*'` | On window transports: sets the outbound `postMessage` target origin **and** filters inbound messages by `event.origin` |
-| `name` / `remoteName` | — | Label your endpoint / only accept envelopes from a matching peer name |
-| `unregisterSignal` | — | `AbortSignal` that tears the connection down (see [Lifecycle](#error-handling--lifecycle)) |
-| `uuid` / `remoteUuid` | random / — | Pin instance uuids (`remoteUuid` is otherwise learned from the peer's announce); when both sides preset each other's `remoteUuid`, the announce handshake is skipped |
-| `revivableModules` | — | `defaults => modules` function to add, drop, reorder, or override type-handling modules |
+| `name` / `remoteName` | - | Label your endpoint / only accept envelopes from a matching peer name |
+| `unregisterSignal` | - | `AbortSignal` that tears the connection down (see [Lifecycle](#error-handling--lifecycle)) |
+| `uuid` / `remoteUuid` | random / - | Pin instance uuids (`remoteUuid` is otherwise learned from the peer's announce); when both sides preset each other's `remoteUuid`, the announce handshake is skipped |
+| `revivableModules` | - | `defaults => modules` function to add, drop, reorder, or override type-handling modules |
 
 If multiple peers connect over the same transport, the returned promise resolves with the **first** peer's value; later peers still connect and can call your exposed value.
 
@@ -106,7 +106,7 @@ Transports are either **structured-clone** (Worker, Window, MessagePort, SharedW
 | `Blob` / `File` | ✅ | ✅ | revive as `Promise<Blob>` / `Promise<File>` (bytes fetched async) |
 | `Request` / `Response` / `Headers` | ✅ | ✅ | streamed bodies; `Request.signal` propagates; `Response.url`/`redirected` restored; opaque status-0 revives as `Response.error()` |
 | `Event` / `CustomEvent` | ✅ | ✅ | subclass fields beyond `detail` are dropped |
-| `EventTarget` | ✅ | ✅ | revives as a listener-only façade — `add`/`removeEventListener` proxy to the source; you can't dispatch through it |
+| `EventTarget` | ✅ | ✅ | revives as a listener-only façade: `add`/`removeEventListener` proxy to the source; you can't dispatch through it |
 | Other structured-clonables (`FileList`, `ImageData`, `DOMRect`, `CryptoKey`, …) | ✅ | ❌ | pass through structured clone untouched |
 | Transfer-only host objects (`OffscreenCanvas`, `MediaStreamTrack`, `RTCDataChannel`, …) | ✅ | ❌ | always moved to the peer |
 | `ImageBitmap`, `VideoFrame`, `AudioData` | ✅ | ❌ | copied by structured clone; wrap in `transfer()` to move |
@@ -116,7 +116,7 @@ Transports are either **structured-clone** (Worker, Window, MessagePort, SharedW
 
 ### Worker
 
-Pass the `Worker` on the page side and `globalThis` (the `DedicatedWorkerGlobalScope`) inside the worker — see [Quick Start](#quick-start). The worker scope is detected at runtime but isn't part of the `Transport` type union, so cast it: `globalThis as unknown as Transport`.
+Pass the `Worker` on the page side and `globalThis` (the `DedicatedWorkerGlobalScope`) inside the worker; see [Quick Start](#quick-start). The worker scope is detected at runtime but isn't part of the `Transport` type union, so cast it: `globalThis as unknown as Transport`.
 
 ### Window ↔ iframe
 
@@ -141,7 +141,7 @@ const remote = await expose<ParentApi>(iframeApi, {
 
 ### SharedWorker
 
-Pass the `SharedWorker` instance directly on the page side — osra rides its `.port` internally. Inside the worker, expose per connected port:
+Pass the `SharedWorker` instance directly on the page side; osra rides its `.port` internally. Inside the worker, expose per connected port:
 
 ```ts
 // page
@@ -162,7 +162,7 @@ globalThis.addEventListener('connect', event => {
 
 ### WebSocket
 
-JSON mode. You can `expose()` while the socket is still `CONNECTING` — outbound envelopes queue until open. The other end is anything that relays frames to a peer also running osra:
+JSON mode. You can `expose()` while the socket is still `CONNECTING`; outbound envelopes queue until open. The other end is anything that relays frames to a peer also running osra:
 
 ```ts
 const socket = new WebSocket('wss://relay.example.com')
@@ -171,7 +171,7 @@ const remote = await expose<PeerApi>(localApi, { transport: socket })
 
 ### Service worker
 
-A `ServiceWorker` can only emit and a `ServiceWorkerContainer` can only receive — combine them as a custom pair:
+A `ServiceWorker` can only emit and a `ServiceWorkerContainer` can only receive, so combine them as a custom pair:
 
 ```ts
 const registration = await navigator.serviceWorker.ready
@@ -197,7 +197,7 @@ browser.runtime.onConnect.addListener(port => {
 })
 ```
 
-If you accept `onConnectExternal`/`onMessageExternal`, validate senders yourself — the `MessageContext` passed to custom receive listeners exposes `sender`.
+If you accept `onConnectExternal`/`onMessageExternal`, validate senders yourself; the `MessageContext` passed to custom receive listeners exposes `sender`.
 
 ### Custom transports
 
@@ -219,11 +219,11 @@ const remote = await expose<PeerApi>(localApi, {
 })
 ```
 
-Custom transports **must be plain objects** — prototype-based objects (e.g. Node `EventEmitter`s) with `emit` methods are deliberately not detected as custom transports.
+Custom transports **must be plain objects**: prototype-based objects (e.g. Node `EventEmitter`s) with `emit` methods are deliberately not detected as custom transports.
 
 ## `identity()`
 
-`identity(value)` preserves reference identity across the connection: sending the same wrapped value twice revives as the same object on the peer, and when the peer wraps the revived object in `identity()` and sends it back, you receive your original reference (`===`). Without it, every send produces an independent copy — including the return trip: a revived value passed back *bare* arrives as a fresh copy, so the returning side must re-wrap it.
+`identity(value)` preserves reference identity across the connection: sending the same wrapped value twice revives as the same object on the peer, and when the peer wraps the revived object in `identity()` and sends it back, you receive your original reference (`===`). Without it, every send produces an independent copy, including the return trip: a revived value passed back *bare* arrives as a fresh copy, so the returning side must re-wrap it.
 
 ```ts
 import { expose, identity } from 'osra'
@@ -239,13 +239,13 @@ expose({
 
 ## `transfer()`
 
-`transfer(value)` opts a `Transferable` (`ArrayBuffer`, `MessagePort`, streams, `ImageBitmap`, `OffscreenCanvas`, …) into move semantics — ownership transfers to the peer instead of copying. On JSON transports it silently degrades to a copy.
+`transfer(value)` opts a `Transferable` (`ArrayBuffer`, `MessagePort`, streams, `ImageBitmap`, `OffscreenCanvas`, …) into move semantics: ownership transfers to the peer instead of copying. On JSON transports it silently degrades to a copy.
 
 ```ts
 import { transfer } from 'osra'
 
 const pixels = new ArrayBuffer(16_000_000)
-await remote.render(transfer(pixels)) // moved — pixels is detached locally
+await remote.render(transfer(pixels)) // moved - pixels is detached locally
 ```
 
 ## Error handling & lifecycle
@@ -255,7 +255,7 @@ await remote.render(transfer(pixels)) // moved — pixels is detached locally
 - Aborting `unregisterSignal`:
   - the pending `expose()` rejects with the abort reason,
   - a protocol `close` is sent to every connected peer and per-connection state is disposed,
-  - pending RPC calls reject with `'osra: connection closed'` — on **both** sides (the peer receiving `close` rejects its pending calls too),
+  - pending RPC calls reject with `'osra: connection closed'` on **both** sides (the peer receiving `close` rejects its pending calls too),
   - proxied streams on wire-routed channels (JSON transports) are cancelled/aborted with the same error.
 - Promises and streams riding real transferred `MessagePort`s on structured-clone transports live independently of the connection and survive its closure; wire-routed traffic does not.
 - After aborting, calling `expose()` again on the same transport performs a fresh handshake.
@@ -269,16 +269,16 @@ controller.abort(new Error('shutting down'))
 // pending rejects with 'osra: connection closed'
 ```
 
-**Trust model**: `key` is namespacing, not authentication. `origin` filters window messages in both directions — set it whenever you talk across origins. Treat peers as semi-trusted: malformed payloads are handled, but DoS-hardening against hostile peers is not complete.
+**Trust model**: `key` is namespacing, not authentication. `origin` filters window messages in both directions; set it whenever you talk across origins. Treat peers as semi-trusted: malformed payloads are handled, but DoS-hardening against hostile peers is not complete.
 
 ## Limitations
 
-- **Circular structures throw** a `TypeError` at send time — break the cycle or restructure.
+- **Circular structures throw** a `TypeError` at send time; break the cycle or restructure.
 - **Shared references duplicate**: two fields pointing at the same object arrive as two copies unless wrapped with `identity()`.
-- **Classes/prototypes are not preserved** — values cross as plain data; a class instance's methods are not proxied. Expose plain objects and functions.
-- **Unclonable values** (`WeakMap`, `WeakSet`, exotic host objects) coerce to `{}` — and fail the compile-time check.
-- **One-shot bodies**: sending the same `Request`/`Response`/`ReadableStream` twice fails — the body locks at first send.
-- **Generic functions collapse** in `Remote<T>` — mapped types can't preserve generic signatures.
+- **Classes/prototypes are not preserved**: values cross as plain data; a class instance's methods are not proxied. Expose plain objects and functions.
+- **Unclonable values** (`WeakMap`, `WeakSet`, exotic host objects) coerce to `{}` and fail the compile-time check.
+- **One-shot bodies**: sending the same `Request`/`Response`/`ReadableStream` twice fails; the body locks at first send.
+- **Generic functions collapse** in `Remote<T>`: mapped types can't preserve generic signatures.
 - **Multi-peer**: only the first peer's value is accessible through the returned promise.
 - **Everything is async**: sync return values still arrive as `Promise`s.
 
@@ -286,11 +286,11 @@ controller.abort(new Error('shutting down'))
 
 `Remote<T>` is what the other side sees: functions become `(...args) => Promise<Awaited<R>>`, `Blob` becomes `Promise<Blob>`, containers map recursively, platform objects revive as themselves.
 
-`expose()` validates the value you pass at compile time against `Capable` — the union of everything serializable for the inferred transport (narrower on JSON transports). Failures pinpoint the offending path:
+`expose()` validates the value you pass at compile time against `Capable`, the union of everything serializable for the inferred transport (narrower on JSON transports). Failures pinpoint the offending path:
 
 ```ts
 expose({ ok: async () => 1, cache: new WeakMap() }, { transport: worker })
-// type error: Value type must resolve to a Capable — with `cache` identified as the bad field
+// type error: Value type must resolve to a Capable, with `cache` identified as the bad field
 ```
 
 The published declarations require **TypeScript >= 5.9** with `strict` mode.

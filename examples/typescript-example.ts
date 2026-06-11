@@ -1,9 +1,9 @@
-// Typed RPC with osra — Remote<T>, the Capable compile-time check,
+// Typed RPC with osra - Remote<T>, the Capable compile-time check,
 // AbortSignal cancellation, error subclass round-trips, and a custom
 // { emit, receive } transport.
 //
 // Both peers live in the same JS context here, connected through a custom
-// in-memory transport pair, so this file runs as-is — no worker needed.
+// in-memory transport pair, so this file runs as-is - no worker needed.
 // The same typings apply unchanged over Worker/Window/WebSocket/… transports.
 
 import type { Message, MessageContext, Remote, Transport } from 'osra'
@@ -11,12 +11,12 @@ import type { Message, MessageContext, Remote, Transport } from 'osra'
 import { expose } from 'osra'
 
 // --- Custom transport --------------------------------------------------------
-// emit/receive can be plain functions on a PLAIN object literal — osra
+// emit/receive can be plain functions on a PLAIN object literal - osra
 // deliberately does not detect prototype-based objects (class instances,
 // Node EventEmitters) as custom transports. `isJson: true` declares that the
 // wire only carries JSON: binary payloads are base64-encoded, ports become
 // synthetic, and transfer() degrades to a copy. `receive` may return an
-// unsubscribe function — osra calls it when the `unregisterSignal` option
+// unsubscribe function - osra calls it when the `unregisterSignal` option
 // aborts.
 
 type Listener = (message: Message, context: MessageContext) => void
@@ -52,7 +52,7 @@ const createTransportPair = (): [Transport, Transport] => {
 
 // --- API -----------------------------------------------------------------------
 // Plain objects and arrow functions only. Class instances do NOT survive the
-// boundary — prototypes aren't preserved, so an instance's methods would be
+// boundary - prototypes aren't preserved, so an instance's methods would be
 // lost. Expose plain data and functions instead.
 
 const api = {
@@ -65,7 +65,7 @@ const api = {
     return JSON.parse(input)
   },
 
-  // The AbortSignal argument revives as a live signal — aborting on the
+  // The AbortSignal argument revives as a live signal - aborting on the
   // caller side fires this listener, reason included.
   longTask: (durationMs: number, signal: AbortSignal) =>
     new Promise<string>((resolve, reject) => {
@@ -103,7 +103,7 @@ const main = async () => {
   // CAVEAT: with the published package's types alone this error does NOT fire.
   // lib.dom declares `interface MediaSourceHandle {}` empty, it is a member of
   // the `Transferable` union Capable accepts, and an empty interface matches
-  // every object type — so the check collapses to accepting anything. Restore
+  // every object type - so the check collapses to accepting anything. Restore
   // it by declaring this one-line shim in an ambient .d.ts of your project
   // (it's what this repo does internally in src/global-types.d.ts):
   //
@@ -113,7 +113,7 @@ const main = async () => {
   const pending: Promise<number> = remote.add(2, 3)
   console.log(await pending) // 5
 
-  // Error subclasses round-trip — a thrown TypeError is still a TypeError.
+  // Error subclasses round-trip - a thrown TypeError is still a TypeError.
   try {
     await remote.parse('not json')
   } catch (error) {

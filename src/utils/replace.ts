@@ -12,7 +12,7 @@ export type ReplaceWithBox<T, M> =
     ? T
     : FindMatchingBox<T, M>
 
-// Recursive variant of ReplaceWithBox — descends into arrays and objects.
+// Recursive variant of ReplaceWithBox - descends into arrays and objects.
 export type DeepReplaceWithBox<T, M> =
   [FindMatchingBox<T, M>] extends [never]
     ? T extends Array<infer U> ? Array<DeepReplaceWithBox<U, M>>

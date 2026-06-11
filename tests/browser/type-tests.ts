@@ -7,7 +7,7 @@ import type { BoxedMap } from '../../src/revivables/map'
 import type { BoxedSet } from '../../src/revivables/set'
 import type { DefaultRevivableModule } from '../../src/revivables'
 
-// Compile-time test scaffolding. None of these run at runtime — TypeScript's
+// Compile-time test scaffolding. None of these run at runtime - TypeScript's
 // errors are the test results.
 
 type Expect<T extends true> = T
@@ -93,7 +93,7 @@ type _CapableCloneCtxPositives = [
   Expect<Assignable<ImageData, Capable<DefaultRevivableModule[], CloneCtx>>>,
 ]
 
-// On a JSON-only transport, those same types are NOT assignable —
+// On a JSON-only transport, those same types are NOT assignable -
 // the type system rejects them at the `expose()` call site. Blob and
 // its File subclass are the exception: the `blob` revivable encodes
 // via boxBuffer (base64 on JSON) so they stay Capable everywhere.
@@ -102,7 +102,7 @@ type _CapableJsonCtxNegatives = [
   Expect<Equals<ImageData extends Capable<DefaultRevivableModule[], JsonCtx> ? true : false, false>>,
 ]
 
-// Module-handled types stay Capable on JSON transports — their boxes
+// Module-handled types stay Capable on JSON transports - their boxes
 // produce JSON-clonable shapes (date → ISO string, map/set → entries,
 // etc).
 type _CapableJsonCtxPositives = [

@@ -2,7 +2,7 @@
  * Run `cleanup` after `target` is garbage-collected. Returns a handle to
  * cancel the tracking before that happens.
  *
- * Backed by a single shared FinalizationRegistry — every revivable that
+ * Backed by a single shared FinalizationRegistry - every revivable that
  * needs FR semantics goes through this so the boilerplate (token,
  * unregister, cycle-safety contract) lives in one place.
  *

@@ -39,7 +39,7 @@ export const revive = <T extends ReturnType<typeof box>, T2 extends RevivableCon
     headers
   })
   // url/redirected are read-only getters fed by internal state the
-  // constructor can't set — shadow them so the round trip is faithful.
+  // constructor can't set - shadow them so the round trip is faithful.
   if (value.url) Object.defineProperty(response, 'url', { value: value.url, configurable: true })
   if (value.redirected) Object.defineProperty(response, 'redirected', { value: true, configurable: true })
   return response

@@ -7,7 +7,7 @@ import { expose, relay } from '../../src/index'
 //   workerA ─ chanA.port1 ── chanA.port2 ─ relay ─ chanB.port1 ── chanB.port2 ─ workerB
 //
 // The MessagePort hop on each side stands in for a real Worker / iframe
-// transport — same structured-clone serialization, same transferable
+// transport - same structured-clone serialization, same transferable
 // semantics. The relay sits in the middle and is a pure wire: it never
 // constructs an osra connection of its own.
 
@@ -20,7 +20,7 @@ type Wire = {
 const wire = (opts?: { key?: string }): Wire => {
   const chanA = new MessageChannel()
   const chanB = new MessageChannel()
-  // Neither expose nor relay starts ports — do it here so queued envelopes
+  // Neither expose nor relay starts ports - do it here so queued envelopes
   // (including the first announce) actually flow.
   chanA.port1.start()
   chanA.port2.start()
@@ -70,7 +70,7 @@ export const relayedCallback = async () => {
   const { workerATransport, workerBTransport } = wire()
 
   // workerB will pass a callback to workerA's function. The callback's
-  // per-call return-port routing rides the same protocol channel — the
+  // per-call return-port routing rides the same protocol channel - the
   // relay must forward every direction of that traffic.
   const apiA = {
     runWith: async (cb: (n: number) => Promise<number>) => (await cb(41)) + 1,
@@ -111,7 +111,7 @@ export const relayedPromise = async () => {
 // The defining behavior of the relay: a real MessagePort exposed by workerA
 // is structured-cloned twice (worker→relay, relay→worker) so its ownership
 // lands in workerB. Once delivered, the underlying MessageChannel is a
-// direct workerA ↔ workerB wire — the relay's transports never see traffic
+// direct workerA ↔ workerB wire - the relay's transports never see traffic
 // on it. We assert that by aborting the relay and confirming the pair still
 // talks.
 export const relayedUserMessagePortTransfersEndToEnd = async () => {
@@ -124,7 +124,7 @@ export const relayedUserMessagePortTransfersEndToEnd = async () => {
   const remoteA = await expose<typeof apiA>({}, { transport: workerBTransport })
   expect(remoteA.takeMyPort).to.be.instanceOf(MessagePort)
 
-  // Pull the relay out from under the pair — if the user port still works,
+  // Pull the relay out from under the pair - if the user port still works,
   // it can only be because it was actually transferred end-to-end.
   relayController.abort()
 

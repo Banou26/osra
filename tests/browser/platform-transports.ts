@@ -12,7 +12,7 @@ const osraUrl = () => new URL('/build/index.js', location.href).href
 
 type AddApi = { add: (a: number, b: number) => Promise<number> }
 
-// onconnect can fire before the dynamic import resolves — buffer until ready.
+// onconnect can fire before the dynamic import resolves - buffer until ready.
 const sharedWorkerSource = () => `
   const pending = []
   globalThis.onconnect = (event) => pending.push(event)
@@ -41,7 +41,7 @@ export const sharedWorkerRpc = async () => {
 }
 
 // Two sockets through the relay server (tests/ws-relay.mjs, port 3001).
-// expose() is called while the sockets are still CONNECTING — outbound
+// expose() is called while the sockets are still CONNECTING - outbound
 // envelopes must queue until open instead of throwing.
 export const webSocketRpc = async () => {
   const socketA = new WebSocket('ws://localhost:3001')

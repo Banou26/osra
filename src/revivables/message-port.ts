@@ -50,7 +50,7 @@ type StructurableTransferablePort<T> = [T] extends [Capable]
     }
 
 type ConnectionMessagePortState = {
-  /** O(1) per-portId dispatch — avoids the O(N) addEventListener scan
+  /** O(1) per-portId dispatch - avoids the O(N) addEventListener scan
    *  that was the bottleneck for tight-loop RPC traffic. */
   portHandlers: Map<string, (message: Messages) => void>
 }
@@ -116,7 +116,7 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
   const portId: Uuid = globalThis.crypto.randomUUID()
 
   // The FR-held cleanup must not (transitively) strong-hold liveRef or the
-  // context — the gc-tracker contract — or the registry pins them forever
+  // context - the gc-tracker contract - or the registry pins them forever
   // and the safety net can never fire.
   const liveRefWeak = new WeakRef(liveRef)
   const contextWeak = new WeakRef(context)
@@ -136,7 +136,7 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
   const handler = (message: Messages) => {
     if (message.type === 'message-port-close') {
       performCleanup()
-      // Peer side closed — surface the platform 'close' event before closing.
+      // Peer side closed - surface the platform 'close' event before closing.
       liveRef.dispatchEvent(new Event('close'))
       liveRef.close()
       return
@@ -153,7 +153,7 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
     })
   }
 
-  // Safety net only — `handler` strong-holds liveRef via portHandlers, so
+  // Safety net only - `handler` strong-holds liveRef via portHandlers, so
   // the FR won't fire while the connection is alive. Real cleanup runs via
   // the wire `message-port-close`, EventPort `_onClose`, or teardown.
   const unregisterGc = trackGc(liveRef, () => {
@@ -190,7 +190,7 @@ export const revive = <T extends Capable, T2 extends RevivableContext>(
 }
 
 /** Wraps a real MessagePort so revivables can treat it like a transparent
- *  EventTarget that auto-boxes/revives — letting live values (Promises,
+ *  EventTarget that auto-boxes/revives - letting live values (Promises,
  *  Functions, …) ride a clone-only transport. */
 const createProtocolPort = <T>(
   port: TypedMessagePort<Capable>,
@@ -201,7 +201,7 @@ const createProtocolPort = <T>(
     target.dispatchEvent(new MessageEvent('message', { data: recursiveRevive(data, ctx) }))
   }
   // Modern browsers fire 'close' on a MessagePort when its entangled peer
-  // closes or its realm dies — forward it so consumers can clean up.
+  // closes or its realm dies - forward it so consumers can clean up.
   const onClose = (): void => {
     target.dispatchEvent(new Event('close'))
   }
@@ -253,7 +253,7 @@ const reviveViaPortId = <T extends Capable>(
       ? new EventChannel<T, T>()
       : new MessageChannel() as unknown as TypedMessageChannel<T, T>
   const userPortRef = new WeakRef(userPort)
-  // For synthetic EventChannels, internalPort._peer === userPort — holding
+  // For synthetic EventChannels, internalPort._peer === userPort - holding
   // internalPort strongly from the trackGc cleanup would re-pin userPort.
   const internalPortRef = new WeakRef(internalPort)
 
@@ -272,7 +272,7 @@ const reviveViaPortId = <T extends Capable>(
     if (message.type === 'message-port-close') {
       performCleanup()
       const user = userPortRef.deref()
-      // Peer side closed — surface the platform 'close' event before closing.
+      // Peer side closed - surface the platform 'close' event before closing.
       user?.dispatchEvent(new Event('close'))
       user?.close()
       return

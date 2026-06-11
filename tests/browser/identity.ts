@@ -36,7 +36,7 @@ export const sameReferenceAcrossCalls = async (transport: Transport) => {
   expect(result).to.equal(true)
 }
 
-// 3. addEventListener / removeEventListener pattern — a listener registered
+// 3. addEventListener / removeEventListener pattern - a listener registered
 // with identity() can be unregistered with identity() on the same value.
 export const addRemoveEventListenerPattern = async (transport: Transport) => {
   // Use a Set<listener>, which matches identity-based
@@ -73,7 +73,7 @@ export const addRemoveEventListenerPattern = async (transport: Transport) => {
   expect(callCount).to.equal(1)
 }
 
-// 4. Unwrapped values are unchanged — two sends still produce different refs
+// 4. Unwrapped values are unchanged - two sends still produce different refs
 export const unwrappedValuesClone = async (transport: Transport) => {
   const value = async (a: () => number, b: () => number) => a === b
   expose(value, { transport })
@@ -108,7 +108,7 @@ export const primitivesPassThrough = async (_transport: Transport) => {
   expect(identity('')).to.equal('')
 }
 
-// 7. Works with custom class instances — reference preserved on receiver
+// 7. Works with custom class instances - reference preserved on receiver
 export const identityWithFunctionStillCallable = async (transport: Transport) => {
   const value = async (fn: () => number) => fn()
   expose(value, { transport })
@@ -120,7 +120,7 @@ export const identityWithFunctionStillCallable = async (transport: Transport) =>
   expect(result).to.equal(42)
 }
 
-// 8. Used twice on same identity(fn) — both refs === on receiver, still callable
+// 8. Used twice on same identity(fn) - both refs === on receiver, still callable
 export const identityTwiceAcrossCallsCallable = async (transport: Transport) => {
   let captured: (() => number) | undefined
   const value = {
@@ -144,7 +144,7 @@ export const identityTwiceAcrossCallsCallable = async (transport: Transport) => 
 }
 
 // 9. Round-trip: a function we send and the peer echoes back (identity-wrapped
-// on the return path too) arrives as the ORIGINAL reference on our side —
+// on the return path too) arrives as the ORIGINAL reference on our side -
 // not a new proxy tunneling back through the peer.
 export const roundTripReturnsOriginalFunction = async (transport: Transport) => {
   const value = async (fn: () => number) => identity(fn)
@@ -171,7 +171,7 @@ export const roundTripReturnsOriginalObject = async (transport: Transport) => {
 }
 
 // 11. Repeated round-trips of the same value keep returning the same original
-// reference — not a fresh one every time.
+// reference - not a fresh one every time.
 export const roundTripStableAcrossCalls = async (transport: Transport) => {
   const value = async (fn: () => number) => identity(fn)
   expose(value, { transport })

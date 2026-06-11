@@ -5,7 +5,7 @@ import { expose } from '../../src/index'
 // The worker imports osra from the published build (/build/index.js)
 // and calls expose() inside the dynamic import resolution. A
 // synchronous busy-wait at the top of the module body blocks the event
-// loop and delays both the import and the expose() — that is, no
+// loop and delays both the import and the expose() - that is, no
 // 'message' listener exists in the worker scope for `delayMs`. Firefox
 // silently drops messages posted to a worker during that window;
 // Chrome and WebKit buffer them. This mirrors libav-wasm's real shape:
@@ -64,7 +64,7 @@ export const moduleWorkerHandshake = async () => {
 }
 
 // Stress: open module workers back-to-back. Per the brief, the race
-// is intermittent — one round may slip through. N sequential rounds
+// is intermittent - one round may slip through. N sequential rounds
 // give Firefox plenty of opportunities to drop the first announce.
 export const moduleWorkerHandshakeStress = async () => {
   const url = URL.createObjectURL(

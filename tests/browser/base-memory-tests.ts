@@ -34,7 +34,7 @@ export const callbackAsArgNoLeak = async (transport: Transport, iterations = DEF
 
 export const promiseValuesNoLeak = async (transport: Transport, iterations = DEFAULT_ITERATIONS) => {
   // Each call returns an object containing a fresh inner Promise so the
-  // promise revivable boxes/revives per iteration — awaiting a singleton
+  // promise revivable boxes/revives per iteration - awaiting a singleton
   // from a single expose() doesn't exercise the box/revive churn.
   const value = async (n: number) => ({ inner: Promise.resolve(n) })
   expose(value, { transport })
@@ -101,7 +101,7 @@ export const nestedCallbacksNoLeak = async (transport: Transport, iterations = D
 
 // Each iteration fires 5 concurrent calls, so the call count is already
 // 5× the other tests' for the same iteration budget. Scale iterations
-// down to match the per-call workload — concurrency is what we're
+// down to match the per-call workload - concurrency is what we're
 // exercising, not raw call count.
 const CONCURRENT_CALL_FAN_OUT = 5
 export const concurrentCallsNoLeak = async (transport: Transport, iterations = DEFAULT_ITERATIONS) => {
@@ -149,7 +149,7 @@ export const eventTargetDispatchNoLeak = async (transport: Transport, iterations
   }
   expose(value, { transport })
   const remote = await expose<typeof value>({}, { transport })
-  // Subscribe once and fire repeatedly — exercises the per-dispatch wire
+  // Subscribe once and fire repeatedly - exercises the per-dispatch wire
   // overhead (subscribe is one-shot at the 0→1 listener edge).
   remote.et.addEventListener('tick', () => {})
   await new Promise(r => setTimeout(r, 50))

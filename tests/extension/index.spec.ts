@@ -90,7 +90,7 @@ test.describe('Content', () => {
   }
 })
 
-// Runtime transport tests (sendMessage/onMessage) — same extension, same page
+// Runtime transport tests (sendMessage/onMessage) - same extension, same page
 test.describe('Runtime Transport Content', () => {
   const runtimeTests = tests.RuntimeContent as TestObject
   for (const [key, value] of Object.entries(runtimeTests)) {

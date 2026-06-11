@@ -48,7 +48,7 @@ export type StructurableTransferable =
   | Map<StructurableTransferable, StructurableTransferable>
   | Set<StructurableTransferable>
 
-/** "Free" types in `Capable` — narrows to `Jsonable` on JSON transports so
+/** "Free" types in `Capable` - narrows to `Jsonable` on JSON transports so
  *  user code can't type a `Date`/`Blob`/etc. that JSON would silently coerce.
  *  Modules that DO support JSON (date, map, set, bigint, …) put their type
  *  back via `InferRevivables`. */

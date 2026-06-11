@@ -59,7 +59,7 @@ export const defaultRevivableModules = [
   headers,
   error,
   typedArray,
-  // blob MUST come before clonable — clonable would otherwise pass-through
+  // blob MUST come before clonable - clonable would otherwise pass-through
   // a Blob unboxed, which works on clone transports but loses the data on
   // JSON. Blob's isType excludes File so File still rides clonable.
   blob,
@@ -85,7 +85,7 @@ export const defaultRevivableModules = [
   // that also extend EventTarget, which eventTarget would otherwise box as façade husks.
   clonable,
   transferable,
-  // eventTarget MUST be last among instanceof-EventTarget revivables —
+  // eventTarget MUST be last among instanceof-EventTarget revivables -
   // MessagePort/AbortSignal/Window/Worker all extend EventTarget; the
   // specific ones need first dibs via findBoxModule iteration order.
   eventTarget,
@@ -126,7 +126,7 @@ const descend = <TOut>(value: unknown, transform: (v: Capable) => unknown): TOut
 
 // Walk path for cycle detection. Box/revive are fully synchronous, so a
 // module-global set with balanced enter/exit is safe; tracking the *path*
-// (not all visited values) keeps sibling aliasing working — only a true
+// (not all visited values) keeps sibling aliasing working - only a true
 // ancestor revisit, which would recurse forever, throws.
 const boxPath = new WeakSet<object>()
 const revivePath = new WeakSet<object>()
@@ -142,13 +142,13 @@ export const recursiveBox = <
   context: RevivableContext<TModules>
 ): DeepReplaceWithBox<T, TModules[number]> => {
   type ReturnCastType = DeepReplaceWithBox<T, TModules[number]>
-  // Already-boxed values pass through — revivables may embed a pre-built
+  // Already-boxed values pass through - revivables may embed a pre-built
   // BoxedX in their outgoing payload; descending would re-box raw ports.
   if (isRevivableBox(value)) return value as ReturnCastType
   const track = isTrackable(value)
   if (track) {
     if (boxPath.has(value)) {
-      throw new TypeError('osra: cannot serialize a circular structure — break the cycle or send the container by reference')
+      throw new TypeError('osra: cannot serialize a circular structure - break the cycle or send the container by reference')
     }
     boxPath.add(value)
   }
@@ -173,7 +173,7 @@ export const recursiveRevive = <
   type ReturnCastType = DeepReplaceWithRevive<T, TModules[number]>
   const track = isTrackable(value)
   if (track) {
-    // Structured clone can deliver cyclic graphs a peer crafted — fail
+    // Structured clone can deliver cyclic graphs a peer crafted - fail
     // with a clear error instead of blowing the stack mid-dispatch.
     if (revivePath.has(value)) {
       throw new TypeError('osra: cannot revive a circular structure')

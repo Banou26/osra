@@ -23,7 +23,7 @@ const fns = <Fn extends (...args: any[]) => any>(o: Record<string, unknown>): Re
 
 // Transport-parameterized: each test runs once per registered transport.
 // New tests added to base-tests.ts (or any of these source modules) appear
-// automatically — no per-transport wiring file to update.
+// automatically - no per-transport wiring file to update.
 export const transportTests: Readonly<Record<string, Readonly<Record<string, (transport: Transport) => Promise<void>>>>> = {
   Base: base,
   Identity: fns(identityTests),
@@ -35,7 +35,7 @@ export const transportTests: Readonly<Record<string, Readonly<Record<string, (tr
   },
 }
 
-// Memory tests take (transport, iterations) — the runner pulls iterations
+// Memory tests take (transport, iterations) - the runner pulls iterations
 // from the per-transport config so JSON gets fewer rounds than Web.
 export const memoryTests: Readonly<Record<string, (transport: Transport, iterations: number) => Promise<void>>> =
   fns(baseMemory)

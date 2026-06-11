@@ -36,7 +36,7 @@ export const transferredBufferIsDetached = async (transport: Transport) => {
   const result = await remote(transfer(buffer))
   expect(result).to.equal(1024)
   // Transfer semantics: sender-side buffer is neutered.
-  // Only observable when the platform actually transfers — JSON-only transports
+  // Only observable when the platform actually transfers - JSON-only transports
   // serialize to base64 and always "copy" regardless.
   if (!('isJson' in transport && transport.isJson === true)) {
     expect(buffer.byteLength).to.equal(0)
@@ -65,7 +65,7 @@ export const broadcastUnwrappedWorks = async (transport: Transport) => {
 }
 
 // Behavior 4: transfer() is idempotent.
-// transfer(transfer(x)) == transfer(x) — wrapping twice is a no-op.
+// transfer(transfer(x)) == transfer(x) - wrapping twice is a no-op.
 export const transferIsIdempotent = async (_transport: Transport) => {
   const buffer = new ArrayBuffer(64)
   const once = transfer(buffer)
@@ -98,7 +98,7 @@ export const transferTwiceInlineStillTransfers = async (transport: Transport) =>
   }
 }
 
-// Behavior 5: transfer works for typed arrays — the underlying .buffer moves.
+// Behavior 5: transfer works for typed arrays - the underlying .buffer moves.
 export const transferTypedArrayMovesUnderlyingBuffer = async (transport: Transport) => {
   const value = async (data: Uint8Array) => data.length
   expose(value, { transport })
@@ -197,7 +197,7 @@ export const messagePortStillTransfersWithoutWrapper = async (transport: Transpo
   await expect(port2Promise).to.eventually.equal(1)
 }
 
-// Behavior 8: existing tests still pass — covered by the base test suite wiring
+// Behavior 8: existing tests still pass - covered by the base test suite wiring
 // (not re-asserted here; the full suite is run from web-context-transport.ts and
 // json-transport.ts).
 
@@ -217,7 +217,7 @@ export const transferredBufferDataRoundTrips = async (transport: Transport) => {
   expect(receivedHex).to.equal(expectedHex)
 }
 
-// Behavior 9: OffscreenCanvas is a Transferable that also extends EventTarget — it must
+// Behavior 9: OffscreenCanvas is a Transferable that also extends EventTarget - it must
 // transfer as a real canvas, not get boxed into an eventTarget husk. (Skipped on JSON.)
 export const offscreenCanvasTransfersAsCanvas = async (transport: Transport) => {
   if ('isJson' in transport && transport.isJson === true) return

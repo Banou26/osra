@@ -16,7 +16,7 @@ type ResultMessage =
 
 type CallContext = [EventPort<Capable>, Capable[]]
 
-// Pins return-value ports between call-site return and result arrival —
+// Pins return-value ports between call-site return and result arrival -
 // the (port ↔ once-listener ↔ resolve/reject) cycle has no other anchor.
 const inFlightReturnPorts = new Set<EventPort<Capable>>()
 
@@ -43,7 +43,7 @@ export const box = <T extends (...args: any[]) => any, T2 extends RevivableConte
   const { port1: localPort, port2: remotePort } = new EventChannel<CallContext, CallContext>()
 
   localPort.addEventListener('message', ({ data }) => {
-    // Don't recursiveRevive — message-port handler already revived in place.
+    // Don't recursiveRevive - message-port handler already revived in place.
     // Re-walking would Object.fromEntries plain args, breaking identity.
     const [returnPort, args] = data as CallContext
     ;(async () => {
@@ -58,7 +58,7 @@ export const box = <T extends (...args: any[]) => any, T2 extends RevivableConte
       returnPort.postMessage(boxedResult, getTransferableObjects(boxedResult))
       // Defer close so the result reaches the peer before tear-down. The
       // close fires _onClose, dropping per-call routing entries on both
-      // sides — without it portHandlers grows one entry per call.
+      // sides - without it portHandlers grows one entry per call.
       queueMicrotask(() => {
         try { returnPort.close() } catch { /* may already be closed */ }
       })
@@ -90,7 +90,7 @@ export const revive = <T extends BoxedFunction, T2 extends RevivableContext>(
         removeTeardown()
       }
       // Calls always route over the wire (EventPorts are synthetic on every
-      // transport), so connection death must reject them — GC-drop of the
+      // transport), so connection death must reject them - GC-drop of the
       // proxy intentionally does not (see funcDropDoesNotRejectPending).
       const removeTeardown = onTeardown(context, () => {
         reject(new Error('osra: connection closed'))

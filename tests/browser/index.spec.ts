@@ -45,7 +45,7 @@ test.afterEach(async ({ page }) => {
   )
 })
 
-// Heap measurement bracket — call before the test body, await the returned
+// Heap measurement bracket - call before the test body, await the returned
 // finalizer afterwards. Iterates GC + a microtask break so FinalizationRegistry
 // callbacks fire before the final measurement.
 const measureHeapGrowth = async (page: Page, threshold: number) => {

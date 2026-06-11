@@ -23,7 +23,7 @@ export type BoxedAbortSignal =
   & {
     aborted: boolean
     reason?: Capable
-    /** Absent when the signal was already aborted at box time — the reason
+    /** Absent when the signal was already aborted at box time - the reason
      *  rides the wrapper and no live channel is needed. */
     port?: BoxedMessagePort<AbortMessage>
   }
@@ -32,7 +32,7 @@ export const isType = (value: unknown): value is AbortSignal =>
   value instanceof AbortSignal
 
 // Pins the revived port for exactly as long as the revived signal is
-// reachable — the port↔listener↔controller subgraph has no other strong
+// reachable - the port↔listener↔controller subgraph has no other strong
 // root, and a GC of it would silently sever abort propagation.
 const revivedPortPins = new WeakMap<AbortSignal, AnyPort<AbortMessage>>()
 
@@ -40,7 +40,7 @@ export const box = <T extends AbortSignal, T2 extends RevivableContext>(
   value: T,
   context: T2,
 ): BoxedAbortSignal => {
-  // Eagerly-aborted reason rides the wrapper, so we must box it here —
+  // Eagerly-aborted reason rides the wrapper, so we must box it here -
   // recursiveBox short-circuits on OSRA_BOX without descending in.
   if (value.aborted) {
     return {
@@ -58,7 +58,7 @@ export const box = <T extends AbortSignal, T2 extends RevivableContext>(
     localPort.close()
     removeTeardown()
   }
-  // Long-lived signals accumulate one listener per send otherwise —
+  // Long-lived signals accumulate one listener per send otherwise -
   // connection death must release them.
   const removeTeardown = onTeardown(context, () => {
     value.removeEventListener('abort', onSourceAbort)

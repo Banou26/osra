@@ -19,7 +19,7 @@ export type BoxedAsyncIterator =
 export const isType = (value: unknown): value is AnyAsyncIterable => {
   if (!value || typeof value !== 'object') return false
   // ReadableStream is async-iterable on some platforms but has its own
-  // revivable — belt and braces for custom module orders.
+  // revivable - belt and braces for custom module orders.
   if (typeof ReadableStream !== 'undefined' && value instanceof ReadableStream) return false
   return typeof (value as Record<symbol, unknown>)[Symbol.asyncIterator] === 'function'
 }

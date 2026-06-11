@@ -33,7 +33,7 @@ const isObjectOrFunction = (value: unknown): value is object =>
   value !== null && (typeof value === 'object' || typeof value === 'function')
 
 /** Anything we can hand to WeakMap/WeakRef/FinalizationRegistry. Excludes
- *  registered symbols (Symbol.for) — those throw at runtime. */
+ *  registered symbols (Symbol.for) - those throw at runtime. */
 const isWeakKeyable = (value: unknown): value is WeakKey => {
   if (value === null) return false
   const t = typeof value
@@ -58,7 +58,7 @@ const wrap = (value: object): IdentityWrapper => {
 
 /** Wrap a value so osra preserves reference identity across the RPC
  *  boundary. Idempotent; primitives pass through unchanged. Lies at the
- *  type level — runtime value is an IdentityWrapper<T> typed as T. */
+ *  type level - runtime value is an IdentityWrapper<T> typed as T. */
 export const identity = <T>(value: T): T =>
   (isObjectOrFunction(value) ? wrap(value) : value) as T
 
@@ -143,7 +143,7 @@ export const box = <T extends Capable, TContext extends RevivableContext>(
   const inner = wrapper.value
   const innerBox = recursiveBox(inner, context)
   if (!isWeakKeyable(inner)) {
-    // Inner can't anchor a WeakMap key — emit fresh id+inner each time, no dedup.
+    // Inner can't anchor a WeakMap key - emit fresh id+inner each time, no dedup.
     return { ...BoxBase, type, id: globalThis.crypto.randomUUID(), inner: innerBox } as BoxedIdentity<T>
   }
   const { id, isExisting } = registerForReference(inner, state)

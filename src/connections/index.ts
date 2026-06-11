@@ -29,7 +29,7 @@ export * from './utils.js'
 export type ConnectionModule<T> = {
   readonly type: string
   // ProtocolContext<any> rather than ProtocolContext<readonly RevivableModule[]>
-  // for the same bivariance reason as RevivableModule.box — concrete modules
+  // for the same bivariance reason as RevivableModule.box - concrete modules
   // declare narrower context generics than the shared interface can express.
   readonly init: (ctx: ProtocolContext<any>) => void
   readonly Messages?: T
@@ -78,7 +78,7 @@ export const startConnections = <
   if (!(isEmitTransport(transport) && isReceiveTransport(transport))) {
     throw new Error(
       'osra: transport must be able to both emit and receive to establish a connection'
-      + ' — pass a bidirectional platform transport or a custom { emit, receive } pair',
+      + '; pass a bidirectional platform transport or a custom { emit, receive } pair',
     )
   }
   const mergedRevivableModules = mergeRevivableModules<TModules>(configureRevivableModules)

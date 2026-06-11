@@ -121,7 +121,7 @@ export const init = <TModules extends readonly RevivableModule[]>(
       }
       if (message.remoteUuid !== ctx.getUuid()) return
       // Already-tracked uuid is the normal handshake-echo (peer re-announcing
-      // back after our reply), not a collision — drop it.
+      // back after our reply), not a collision - drop it.
       if (ctx.connectionContexts.has(message.uuid)) return
       // Echo announce back in case the peer missed our initial one.
       ctx.sendMessage({ type: 'announce', remoteUuid: message.uuid })
@@ -137,7 +137,7 @@ export const init = <TModules extends readonly RevivableModule[]>(
           revivableModules: ctx.revivableModules
         })
       } catch (error) {
-        // Boxing our own value failed (e.g. cyclic data) — surface it
+        // Boxing our own value failed (e.g. cyclic data) - surface it
         // instead of swallowing inside EventTarget dispatch.
         ctx.rejectRemoteValue(error)
         return
@@ -205,7 +205,7 @@ export const init = <TModules extends readonly RevivableModule[]>(
   }
 
   // A lone announce is lost when the counterpart isn't listening yet (still-loading iframe,
-  // relay attached after a worker exposes) — re-announce with capped backoff until a peer
+  // relay attached after a worker exposes) - re-announce with capped backoff until a peer
   // connects. The uuid is stable across retries, so duplicates are dropped as handshake echoes.
   let announceDelay = 50
   let announceTimeout: ReturnType<typeof setTimeout> | undefined
