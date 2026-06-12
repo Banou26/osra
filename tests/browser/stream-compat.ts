@@ -174,6 +174,50 @@ export const legacyReviveCancelReachesNewBox = async () => {
   expect(cancelled).to.be.true
 }
 
+export const chunkBoxingFailureErrorsConsumer = async () => {
+  const context = fakeContext()
+  const circular: Record<string, unknown> = {}
+  circular.self = circular
+  const stream = new ReadableStream({
+    start(controller) {
+      controller.enqueue(circular)
+    },
+  })
+  const reader = revive(box(stream, context), context).getReader()
+  // 0.5.5 rejected the read on an unboxable chunk - the credit pump must
+  // surface the same failure instead of hanging the consumer.
+  let rejected = false
+  await reader.read().then(() => {}, () => { rejected = true })
+  expect(rejected).to.be.true
+}
+
+const floodingBox = (context: RevivableContext): BoxedReadableStream => {
+  const { localPort, boxedRemote } = createRevivableChannel<Capable>(context)
+  localPort.addEventListener('message', ({ data }) => {
+    if (data && typeof data === 'object' && 'type' in data && data.type === 'credit') {
+      for (let i = 0; i < 1000; i++) localPort.postMessage({ type: 'chunk', value: i } as never)
+    }
+  })
+  localPort.start()
+  return { ...BoxBase, type: 'readableStream', credit: true, port: boxedRemote } as unknown as BoxedReadableStream
+}
+
+export const creditFloodFailsClosed = async () => {
+  const context = fakeContext()
+  const reader = revive(floodingBox(context), context).getReader()
+  await reader.read()
+  // A consumer that keeps reading keeps granting - the flood only overruns
+  // the window while the reader is stalled, so stall it.
+  await new Promise(resolve => setTimeout(resolve, 100))
+  let error: unknown
+  try {
+    for (let i = 0; i < 200; i++) await reader.read()
+  } catch (e) {
+    error = e
+  }
+  expect(String(error)).to.contain('credit window')
+}
+
 const chunkSource = (count: number, size: number): ReadableStream<Uint8Array> => {
   let i = 0
   return new ReadableStream({

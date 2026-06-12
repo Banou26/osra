@@ -1329,6 +1329,28 @@ export const userReadableStreamBackpressure = async (transport: Transport) => {
   await reader.cancel()
 }
 
+export const userReadableStreamObjectBackpressure = async (transport: Transport) => {
+  let produced = 0
+  const stream = new ReadableStream({
+    pull(controller) {
+      produced++
+      controller.enqueue({ n: produced })
+    },
+  })
+  const value = { stream }
+  expose(value, { transport })
+
+  const { stream: revived } = await expose<typeof value>({}, { transport })
+  const reader = revived.getReader()
+  for (let i = 0; i < 3; i++) await reader.read()
+  await new Promise(resolve => setTimeout(resolve, 200))
+  // Unmeasurable chunks must stay on the conservative initial window, not
+  // jump to the maximum with zero byte accounting.
+  expect(produced).to.be.greaterThan(3)
+  expect(produced).to.be.at.most(16)
+  await reader.cancel()
+}
+
 export const userNonFinitePrimitives = async (transport: Transport) => {
   const value = {
     numbers: async () => ({
@@ -1424,4 +1446,5 @@ export const base = {
   userNonFinitePrimitives,
   userReadableStreamSourceErrorPropagates,
   userReadableStreamBackpressure,
+  userReadableStreamObjectBackpressure,
 }
