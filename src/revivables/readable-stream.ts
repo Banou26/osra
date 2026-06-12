@@ -6,7 +6,8 @@ import { BoxBase } from './utils.js'
 import {
   createRevivableChannel,
   revive as reviveMessagePort,
-  BoxedMessagePort
+  BoxedMessagePort,
+  AnyPort
 } from './message-port.js'
 
 export const type = 'readableStream' as const
@@ -14,18 +15,29 @@ export const type = 'readableStream' as const
 export type PullContext =
   | { type: 'pull' }
   | { type: 'cancel', reason?: Capable }
+  | { type: 'credit', n: number }
 
 type ChunkMessage<T = unknown> = Promise<ReadableStreamReadResult<T>>
 
-type Msg = PullContext | ChunkMessage
+type PushMessage =
+  | { type: 'chunk', value: Capable }
+  | { type: 'end' }
+  | { type: 'error', error: Capable }
+
+type Msg = PullContext | PushMessage | ChunkMessage
 
 export type BoxedReadableStream<T extends ReadableStream = ReadableStream> =
   & BoxBaseType<typeof type>
-  & { port: BoxedMessagePort<Msg> }
+  & { port: BoxedMessagePort<Msg>, credit?: true }
   & { [UnderlyingType]: T }
 
 export const isType = (value: unknown): value is ReadableStream =>
   value instanceof ReadableStream
+
+export const MAX_CREDIT_WINDOW = 64
+const MIN_CREDIT_WINDOW = 4
+const INITIAL_CREDIT_WINDOW = 8
+const CREDIT_BYTE_BUDGET = 4 * 1024 * 1024
 
 export const box = <T extends ReadableStream, T2 extends RevivableContext>(
   value: T,
@@ -34,32 +46,189 @@ export const box = <T extends ReadableStream, T2 extends RevivableContext>(
   const { localPort, boxedRemote } = createRevivableChannel<Msg>(context)
   const reader = value.getReader()
 
+  let credit = 0
+  let pumping = false
+  let finished = false
+
+  const finish = (message: PushMessage) => {
+    finished = true
+    localPort.postMessage(message)
+    localPort.close()
+  }
+
+  const pump = async () => {
+    if (pumping || finished) return
+    pumping = true
+    while (credit > 0) {
+      let result: ReadableStreamReadResult<unknown>
+      try { result = await reader.read() }
+      catch (error) {
+        if (!finished) finish({ type: 'error', error: error as Capable })
+        return
+      }
+      if (finished) return
+      if (result.done) {
+        finish({ type: 'end' })
+        return
+      }
+      credit--
+      localPort.postMessage({ type: 'chunk', value: result.value as Capable })
+    }
+    pumping = false
+  }
+
   localPort.addEventListener('message', ({ data }) => {
-    if ('type' in data && data.type === 'pull') {
-      // reader.read() is a Promise - localPort boxes it for the transport.
+    if (data instanceof Promise || !('type' in data)) return
+    if (data.type === 'pull') {
+      // Legacy peer (osra <= 0.5.5): one boxed-Promise round trip per chunk.
       localPort.postMessage(reader.read())
-    } else {
-      reader.cancel('type' in data ? data.reason : undefined).catch(() => {})
+    } else if (data.type === 'credit') {
+      credit += data.n
+      pump()
+    } else if (data.type === 'cancel') {
+      finished = true
+      reader.cancel(data.reason).catch(() => {})
       localPort.close()
     }
   })
   // Abnormal channel death (consumer dropped, connection closed): stop the
   // producer and release the source lock instead of leaking both forever.
   localPort.addEventListener('close', () => {
+    if (finished) return
+    finished = true
     reader.cancel(new Error('osra: connection closed')).catch(() => {})
   }, { once: true })
   localPort.start()
 
-  return { ...BoxBase, type, port: boxedRemote } as BoxedReadableStream<T>
+  return { ...BoxBase, type, credit: true, port: boxedRemote } as BoxedReadableStream<T>
 }
 
-export const revive = <T extends BoxedReadableStream, T2 extends RevivableContext>(
-  value: T,
-  context: T2
-): T[UnderlyingType] => {
-  const port = reviveMessagePort(value.port, context)
-  port.start()
+const byteLength = (value: unknown): number | undefined =>
+  ArrayBuffer.isView(value) ? value.byteLength
+  : value instanceof ArrayBuffer ? value.byteLength
+  : undefined
 
+const reviveCredit = (port: AnyPort<Msg>): ReadableStream => {
+  let done = false
+  let outstanding = 0
+  let sawChunk = false
+  let averageChunkBytes: number | undefined
+  // Pipelined chunks wait here, not in the controller queue - controller.error
+  // discards queued chunks, and an early error must not eat delivered data.
+  const buffered: unknown[] = []
+  let ended = false
+  let errored = false
+  let pendingError: unknown
+  let waiter: {
+    controller: ReadableStreamDefaultController<unknown>
+    resolve: () => void
+    reject: (error: unknown) => void
+  } | undefined
+
+  // Chunk sizes aren't knowable up front, so the window adapts: deep for
+  // small chunks, shallow for large ones, bounded by an in-flight byte budget.
+  const targetWindow = () =>
+    averageChunkBytes !== undefined
+      ? Math.max(MIN_CREDIT_WINDOW, Math.min(MAX_CREDIT_WINDOW, Math.floor(CREDIT_BYTE_BUDGET / averageChunkBytes)))
+      : sawChunk ? MAX_CREDIT_WINDOW : INITIAL_CREDIT_WINDOW
+
+  // Half-window hysteresis: ~one credit message per target/2 chunks.
+  const topUp = () => {
+    const target = targetWindow()
+    const ahead = outstanding + buffered.length
+    if (ahead > target / 2) return
+    const n = target - ahead
+    outstanding += n
+    port.postMessage({ type: 'credit', n })
+  }
+
+  const finishClose = () => {
+    done = true
+    queueMicrotask(() => port.close())
+  }
+
+  const fail = (error: unknown) => {
+    errored = true
+    pendingError = error
+    if (!waiter || buffered.length) return
+    const w = waiter
+    waiter = undefined
+    finishClose()
+    w.reject(error)
+  }
+
+  return new ReadableStream({
+    start: () => {
+      port.addEventListener('message', ({ data }) => {
+        if (data instanceof Promise || !('type' in data)) return
+        if (data.type === 'chunk') {
+          outstanding--
+          sawChunk = true
+          const size = byteLength(data.value)
+          if (size !== undefined) {
+            averageChunkBytes = averageChunkBytes === undefined ? size : averageChunkBytes * 0.875 + size * 0.125
+          }
+          if (done) return
+          if (waiter) {
+            const w = waiter
+            waiter = undefined
+            w.controller.enqueue(data.value)
+            w.resolve()
+          } else buffered.push(data.value)
+        } else if (data.type === 'end') {
+          if (done) return
+          ended = true
+          if (!waiter || buffered.length) return
+          const w = waiter
+          waiter = undefined
+          finishClose()
+          w.controller.close()
+          w.resolve()
+        } else if (data.type === 'error') {
+          if (done) return
+          fail(data.error)
+        }
+      })
+      // Channel death mid-stream (source dropped, connection closed): error
+      // the consumer once delivered chunks drain, instead of hanging a read.
+      port.addEventListener('close', () => {
+        if (done || ended || errored) return
+        fail(new Error('osra: connection closed'))
+      }, { once: true })
+    },
+    pull: (controller) => {
+      if (done) return
+      if (buffered.length) {
+        controller.enqueue(buffered.shift())
+        topUp()
+        return
+      }
+      if (ended) {
+        finishClose()
+        controller.close()
+        return
+      }
+      if (errored) {
+        finishClose()
+        return Promise.reject(pendingError)
+      }
+      topUp()
+      return new Promise<void>((resolve, reject) => { waiter = { controller, resolve, reject } })
+    },
+    cancel: (reason) => {
+      done = true
+      buffered.length = 0
+      const w = waiter
+      waiter = undefined
+      w?.resolve()
+      port.postMessage({ type: 'cancel', reason: reason as Capable })
+      // Defer close so the cancel message dispatches before tear-down.
+      queueMicrotask(() => port.close())
+    },
+  })
+}
+
+const revivePull = (port: AnyPort<Msg>): ReadableStream => {
   let done = false
   return new ReadableStream({
     start: (controller) => {
@@ -99,7 +268,18 @@ export const revive = <T extends BoxedReadableStream, T2 extends RevivableContex
       // Defer close so the cancel message dispatches before tear-down.
       queueMicrotask(() => port.close())
     },
-  }) as T[UnderlyingType]
+  })
+}
+
+export const revive = <T extends BoxedReadableStream, T2 extends RevivableContext>(
+  value: T,
+  context: T2
+): T[UnderlyingType] => {
+  const port = reviveMessagePort(value.port, context)
+  port.start()
+  // A box that doesn't advertise credit (osra <= 0.5.5) cancels on any
+  // unknown message, so it must only ever be spoken to in pull.
+  return (value.credit ? reviveCredit(port) : revivePull(port)) as T[UnderlyingType]
 }
 
 const typeCheck = () => {

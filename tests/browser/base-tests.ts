@@ -1287,6 +1287,48 @@ export const userRegisteredSymbol = async (transport: Transport) => {
   expect(sym).to.equal(Symbol.for('osra.test.registered'))
 }
 
+export const userReadableStreamSourceErrorPropagates = async (transport: Transport) => {
+  let calls = 0
+  const stream = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      calls++
+      if (calls <= 2) controller.enqueue(new Uint8Array([calls]))
+      else controller.error(new Error('source exploded'))
+    },
+  })
+  const value = { stream }
+  expose(value, { transport })
+
+  const { stream: revived } = await expose<typeof value>({}, { transport })
+  const reader = revived.getReader()
+  // Chunks produced before the error must still be delivered - the credit
+  // pump runs ahead of the consumer and must not let the error eat them.
+  expect((await reader.read()).value?.[0]).to.equal(1)
+  expect((await reader.read()).value?.[0]).to.equal(2)
+  await expect(reader.read()).to.be.rejectedWith(/source exploded/)
+}
+
+export const userReadableStreamBackpressure = async (transport: Transport) => {
+  let produced = 0
+  const stream = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      produced++
+      controller.enqueue(new Uint8Array([produced % 256]))
+    },
+  })
+  const value = { stream }
+  expose(value, { transport })
+
+  const { stream: revived } = await expose<typeof value>({}, { transport })
+  const reader = revived.getReader()
+  for (let i = 0; i < 5; i++) await reader.read()
+  await new Promise(resolve => setTimeout(resolve, 200))
+  // Pipelined ahead of the consumer, but bounded by the credit window.
+  expect(produced).to.be.greaterThan(5)
+  expect(produced).to.be.at.most(80)
+  await reader.cancel()
+}
+
 export const userNonFinitePrimitives = async (transport: Transport) => {
   const value = {
     numbers: async () => ({
@@ -1380,4 +1422,6 @@ export const base = {
   userErrorSubclasses,
   userRegisteredSymbol,
   userNonFinitePrimitives,
+  userReadableStreamSourceErrorPropagates,
+  userReadableStreamBackpressure,
 }
