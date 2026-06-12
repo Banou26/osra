@@ -96,6 +96,20 @@ const postRevived = <T>(port: AnyPort<T>, data: T, synthetic: boolean) => {
   else port.postMessage(data, getTransferableObjects(data))
 }
 
+// Built in its own scope so the FR-held closure can't share box()'s
+// environment record and transitively pin context/liveRef/handlers - the
+// gc-tracker contract. By the time it fires both derefs are usually dead;
+// its job is to not retain anything, so abandoned connections can collect.
+const makeBoxGcNet = (
+  contextWeak: WeakRef<RevivableContext>,
+  portHandlersWeak: WeakRef<Map<string, (message: Messages) => void>>,
+  portId: Uuid,
+) => () => {
+  const ctx = contextWeak.deref()
+  if (ctx) sendClose(ctx, portId)
+  portHandlersWeak.deref()?.delete(portId)
+}
+
 export const box = <T, T2 extends RevivableContext = RevivableContext>(
   value: StructurableTransferablePort<T>,
   context: T2,
@@ -156,11 +170,7 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
   // Safety net only - `handler` strong-holds liveRef via portHandlers, so
   // the FR won't fire while the connection is alive. Real cleanup runs via
   // the wire `message-port-close`, EventPort `_onClose`, or teardown.
-  const unregisterGc = trackGc(liveRef, () => {
-    const ctx = contextWeak.deref()
-    if (ctx) sendClose(ctx, portId)
-    performCleanup()
-  })
+  const unregisterGc = trackGc(liveRef, makeBoxGcNet(contextWeak, portHandlersWeak, portId))
 
   liveRef.addEventListener('message', outgoingListener as EventListener)
   liveRef.start()
