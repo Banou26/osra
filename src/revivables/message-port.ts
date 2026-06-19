@@ -18,8 +18,8 @@ import { onTeardown } from '../utils/teardown.js'
 export const type = 'messagePort' as const
 
 export type Messages =
-  | { type: 'message', remoteUuid: Uuid, data: Capable, portId: Uuid }
-  | { type: 'message-port-close', remoteUuid: Uuid, portId: Uuid }
+  | { type: 'message', remoteUuid: Uuid, data: Capable, portId: Uuid, seq?: number }
+  | { type: 'message-port-close', remoteUuid: Uuid, portId: Uuid, seq?: number }
 
 export declare const Messages: Messages
 
@@ -49,10 +49,30 @@ type StructurableTransferablePort<T> = [T] extends [Capable]
       [ParentObject]: BadFieldParent<T, Capable>
     }
 
+// Per-port routing. A connectionless transport (e.g. runtime.sendMessage) gives no
+// ordering guarantee: a port's messages can arrive out of order, and even before the
+// message that revives the port (registering its handler). Each side stamps its outgoing
+// port messages with a monotonic `seq`; the receiver buffers by seq and delivers strictly
+// in send-order once a handler exists. So neither reordering nor early arrival can drop or
+// misorder a port's stream - which the credit-window readable-stream protocol relies on.
+type PortRouting = {
+  handler?: (message: Messages) => void
+  /** Next incoming seq to deliver. */
+  nextSeq: number
+  /** Out-of-order / early incoming messages, keyed by their seq. */
+  buffer: Map<number, Messages>
+  /** Next outgoing seq to stamp on this side's messages for the port. */
+  outSeq: number
+}
+
+// Cap the per-port reorder buffer so a peer that never sends the awaited seq can't grow
+// it without bound; legitimate reordering closes the gap within a few messages.
+const REORDER_LIMIT = 2048
+
 type ConnectionMessagePortState = {
-  /** O(1) per-portId dispatch - avoids the O(N) addEventListener scan
-   *  that was the bottleneck for tight-loop RPC traffic. */
-  portHandlers: Map<string, (message: Messages) => void>
+  /** O(1) per-portId routing - avoids the O(N) addEventListener scan that was the
+   *  bottleneck for tight-loop RPC traffic. */
+  ports: Map<string, PortRouting>
 }
 
 const connectionStateMap = new WeakMap<RevivableContext, ConnectionMessagePortState>()
@@ -63,22 +83,57 @@ const getState = (context: RevivableContext): ConnectionMessagePortState => {
   return state
 }
 
+const getPort = (state: ConnectionMessagePortState, portId: string): PortRouting => {
+  let port = state.ports.get(portId)
+  if (!port) { port = { nextSeq: 0, buffer: new Map(), outSeq: 0 }; state.ports.set(portId, port) }
+  return port
+}
+
+// Deliver buffered messages along the contiguous seq run, once a handler exists.
+const drainPort = (port: PortRouting): void => {
+  if (!port.handler) return
+  for (let next = port.buffer.get(port.nextSeq); next !== undefined; next = port.buffer.get(port.nextSeq)) {
+    port.buffer.delete(port.nextSeq)
+    port.nextSeq++
+    port.handler(next)
+  }
+}
+
+// Next outgoing seq for a port (monotonic per sending side).
+const nextOutSeq = (context: RevivableContext, portId: Uuid): number => getPort(getState(context), portId).outSeq++
+
+const registerPortHandler = (
+  state: ConnectionMessagePortState,
+  portId: string,
+  handler: (message: Messages) => void,
+): void => {
+  const port = getPort(state, portId)
+  port.handler = handler
+  drainPort(port)
+}
+
 export const init = (context: RevivableContext): void => {
-  const state: ConnectionMessagePortState = { portHandlers: new Map() }
+  const state: ConnectionMessagePortState = { ports: new Map() }
   connectionStateMap.set(context, state)
 
   context.eventTarget.addEventListener('message', ({ detail }) => {
     if (detail.type !== 'message' && detail.type !== 'message-port-close') return
-    state.portHandlers.get(detail.portId)?.(detail)
+    const port = getPort(state, detail.portId)
+    // Legacy peer (osra <= 0.5.6) doesn't stamp seq - its transport was assumed ordered,
+    // so deliver in arrival order; only seq-stamped messages are reordered.
+    if (detail.seq === undefined) { port.handler?.(detail); return }
+    if (detail.seq < port.nextSeq || port.buffer.size >= REORDER_LIMIT) return
+    port.buffer.set(detail.seq, detail)
+    drainPort(port)
   })
 
   // Connection death = every routed port is dead: run each handler's close
   // arm so user-facing ports close and routing entries clear.
   onTeardown(context, () => {
-    for (const [portId, handler] of [...state.portHandlers]) {
-      handler({ type: 'message-port-close', remoteUuid: context.remoteUuid, portId: portId as Uuid })
+    for (const [portId, port] of [...state.ports]) {
+      port.handler?.({ type: 'message-port-close', remoteUuid: context.remoteUuid, portId: portId as Uuid })
     }
-    state.portHandlers.clear()
+    state.ports.clear()
   })
 }
 
@@ -87,7 +142,9 @@ export const isType = (value: unknown): value is MessagePort | EventPort<Structu
 
 const sendClose = (context: RevivableContext, portId: Uuid) => {
   try {
-    context.sendMessage({ type: 'message-port-close', remoteUuid: context.remoteUuid, portId })
+    // Stamp the close with the next seq so it's ordered after this side's data messages
+    // (a close that overtakes trailing data would drop it).
+    context.sendMessage({ type: 'message-port-close', remoteUuid: context.remoteUuid, portId, seq: nextOutSeq(context, portId) })
   } catch { /* connection torn down */ }
 }
 
@@ -102,12 +159,12 @@ const postRevived = <T>(port: AnyPort<T>, data: T, synthetic: boolean) => {
 // its job is to not retain anything, so abandoned connections can collect.
 const makeBoxGcNet = (
   contextWeak: WeakRef<RevivableContext>,
-  portHandlersWeak: WeakRef<Map<string, (message: Messages) => void>>,
+  portsWeak: WeakRef<Map<string, PortRouting>>,
   portId: Uuid,
 ) => () => {
   const ctx = contextWeak.deref()
   if (ctx) sendClose(ctx, portId)
-  portHandlersWeak.deref()?.delete(portId)
+  portsWeak.deref()?.delete(portId)
 }
 
 export const box = <T, T2 extends RevivableContext = RevivableContext>(
@@ -125,7 +182,7 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
     } as BoxedMessagePort<T>
   }
 
-  const { portHandlers } = getState(context)
+  const state = getState(context)
   const liveRef: AnyPort<T> = value
   const portId: Uuid = globalThis.crypto.randomUUID()
 
@@ -134,13 +191,13 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
   // and the safety net can never fire.
   const liveRefWeak = new WeakRef(liveRef)
   const contextWeak = new WeakRef(context)
-  const portHandlersWeak = new WeakRef(portHandlers)
+  const portsWeak = new WeakRef(state.ports)
 
   let cleanedUp = false
   const performCleanup = () => {
     if (cleanedUp) return
     cleanedUp = true
-    portHandlersWeak.deref()?.delete(portId)
+    portsWeak.deref()?.delete(portId)
     unregisterGc?.()
     const live = liveRefWeak.deref()
     live?.removeEventListener('message', outgoingListener as EventListener)
@@ -164,13 +221,14 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
       remoteUuid: context.remoteUuid,
       data: recursiveBox(data, context),
       portId,
+      seq: nextOutSeq(context, portId),
     })
   }
 
   // Safety net only - `handler` strong-holds liveRef via portHandlers, so
   // the FR won't fire while the connection is alive. Real cleanup runs via
   // the wire `message-port-close`, EventPort `_onClose`, or teardown.
-  const unregisterGc = trackGc(liveRef, makeBoxGcNet(contextWeak, portHandlersWeak, portId))
+  const unregisterGc = trackGc(liveRef, makeBoxGcNet(contextWeak, portsWeak, portId))
 
   liveRef.addEventListener('message', outgoingListener as EventListener)
   liveRef.start()
@@ -183,7 +241,7 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
     }
   }
 
-  portHandlers.set(portId, handler)
+  registerPortHandler(state, portId, handler)
 
   return { ...BoxBase, type, portId, synthetic } as BoxedMessagePort<T>
 }
@@ -257,7 +315,7 @@ const reviveViaPortId = <T extends Capable>(
   context: RevivableContext,
   synthetic: boolean,
 ): TypedMessagePort<T> => {
-  const { portHandlers } = getState(context)
+  const state = getState(context)
   const { port1: userPort, port2: internalPort } =
     synthetic
       ? new EventChannel<T, T>()
@@ -271,7 +329,7 @@ const reviveViaPortId = <T extends Capable>(
   const performCleanup = () => {
     if (cleanedUp) return
     cleanedUp = true
-    portHandlers.delete(portId)
+    state.ports.delete(portId)
     const internal = internalPortRef.deref()
     internal?.removeEventListener('message', internalPortListener as EventListener)
     internal?.close()
@@ -302,6 +360,7 @@ const reviveViaPortId = <T extends Capable>(
       remoteUuid: context.remoteUuid,
       data: recursiveBox(data, context),
       portId,
+      seq: nextOutSeq(context, portId),
     })
   }
 
@@ -321,7 +380,7 @@ const reviveViaPortId = <T extends Capable>(
   internalPort.addEventListener('message', internalPortListener as EventListener)
   internalPort.start()
 
-  portHandlers.set(portId, handler)
+  registerPortHandler(state, portId, handler)
 
   return userPort
 }

@@ -11,6 +11,7 @@ import * as lifecycle from './lifecycle'
 import * as messageChannel from './message-channel-transport'
 import * as platformTransports from './platform-transports'
 import * as relayTests from './relay'
+import * as reorderTests from './reorder'
 import * as streamCompat from './stream-compat'
 import * as teardownTests from './teardown'
 import * as typeGuards from './type-guards'
@@ -54,6 +55,7 @@ export const standaloneTests: Readonly<Record<string, Readonly<Record<string, ()
   MessageChannelTransport: fns(messageChannel),
   PlatformTransports: fns(platformTransports),
   Relay: fns(relayTests),
+  Reorder: fns(reorderTests),
   StreamCompat: fns(streamCompat),
   Teardown: fns(teardownTests),
   TypeGuards: fns(typeGuards),
