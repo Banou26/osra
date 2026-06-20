@@ -20,7 +20,7 @@
   },
   "type": "module",
   "scripts": {
-    "build": "vite build && tsgo --declaration --emitDeclarationOnly",
+    "build": "vite build && tsc --declaration --emitDeclarationOnly",
     "build-watch": "vite build --watch",
     "clean": "rimraf build",
     "prepublishOnly": "npm run clean && npm run build",
@@ -35,11 +35,11 @@
     "test-with-coverage": "npm run build-test && npx playwright test && npm run print-coverage && npm run clean-coverage",
     "print-coverage": "npx nyc report",
     "clean-coverage": "rimraf .nyc_output coverage",
-    "type-check": "tsgo --noEmit && tsgo --noEmit -p tsconfig.tests.json",
+    "type-check": "tsc --noEmit && tsc --noEmit -p tsconfig.tests.json",
     "start-server": "http-server -p 3000",
     "build-extension-test": "node build-extension-test.mjs",
     "test-extension": "npm run build-extension-test && npx playwright test -c playwright.extension.config.ts",
-    "check-consumer-types": "npm run build && tsgo --noEmit -p tsconfig.consumer.json"
+    "check-consumer-types": "npm run build && tsc --noEmit -p tsconfig.consumer.json"
   },
   "repository": {
     "type": "git",
@@ -62,7 +62,6 @@
     "@types/chrome": "^0.1.27",
     "@types/firefox-webext-browser": "^143.0.0",
     "@types/node": "^25.0.2",
-    "@typescript/native-preview": "7.0.0-dev.20260404.1",
     "chai": "^5.3.3",
     "chai-as-promised": "^8.0.1",
     "concurrently": "^9.1.0",
@@ -70,6 +69,7 @@
     "nodemon": "^3.1.10",
     "nyc": "^17.1.0",
     "playwright": "^1.58.2",
+    "typescript": "7.0.1-rc",
     "vite": "^8.0.3",
     "vite-plugin-istanbul": "^8.0.0",
     "ws": "^8.21.0"
