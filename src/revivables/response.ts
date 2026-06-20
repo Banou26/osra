@@ -31,7 +31,13 @@ export const revive = <T extends ReturnType<typeof box>, T2 extends RevivableCon
   if (value.status === 0) return Response.error()
 
   const headers = reviveHeaders(value.headers, context)
-  const body = value.body ? reviveReadableStream(value.body, context) : null
+  // 101/204/205/304 forbid a body; `new Response` throws if given one. Cancel any
+  // boxed stream (so the sender isn't left pushing into a dead port) and pass null.
+  const stream = value.body ? reviveReadableStream(value.body, context) : null
+  const isNullBodyStatus =
+    value.status === 101 || value.status === 204 || value.status === 205 || value.status === 304
+  if (stream && isNullBodyStatus) stream.cancel().catch(() => {})
+  const body = isNullBodyStatus ? null : stream
 
   const response = new Response(body, {
     status: value.status,

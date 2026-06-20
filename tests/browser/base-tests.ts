@@ -393,6 +393,31 @@ export const userResponseNoBody = async (transport: Transport) => {
   expect(response.body).to.be.null
 }
 
+// A fetched Response can arrive with a null-body status (204/205/304) yet still
+// carry body bytes - the network doesn't enforce the constructor's null-body
+// rule, but `new Response(body, { status: 204 })` throws, which used to crash
+// revive (heimdall hit this on googlevideo SABR responses). Shadow the status on
+// a body-carrying Response to simulate that wire shape; each must round-trip
+// body-less instead of throwing.
+export const userResponseNullBodyStatusWithBody = async (transport: Transport) => {
+  const withStatus = (status: number) => {
+    const response = new Response('unexpected body', { status: 200 })
+    Object.defineProperty(response, 'status', { value: status, configurable: true })
+    return response
+  }
+  const value = { r204: withStatus(204), r205: withStatus(205), r304: withStatus(304) }
+  expose(value, { transport })
+
+  const revived = await expose<typeof value>({}, { transport })
+
+  for (const [status, key] of [[204, 'r204'], [205, 'r205'], [304, 'r304']] as const) {
+    const response = revived[key]
+    expect(response, `status ${status}`).to.be.instanceOf(Response)
+    expect(response.status, `status ${status}`).to.equal(status)
+    expect(response.body, `status ${status} body`).to.be.null
+  }
+}
+
 export const userRequest = async (transport: Transport) => {
   const _request = new Request('https://example.com/api', {
     method: 'POST',
@@ -1393,6 +1418,7 @@ export const base = {
   userResponse,
   userResponseWithStreamBody,
   userResponseNoBody,
+  userResponseNullBodyStatusWithBody,
   userRequest,
   userRequestWithBody,
   userRequestNoBody,
