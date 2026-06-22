@@ -23,7 +23,6 @@ import * as set from './set.js'
 import * as bigInt from './bigint.js'
 import * as event from './event.js'
 import * as eventTarget from './event-target.js'
-import * as blob from './blob.js'
 import * as symbol from './symbol.js'
 import * as asyncIterator from './async-iterator.js'
 import { clonable, transferable, unclonable } from './fallbacks.js'
@@ -59,10 +58,6 @@ export const defaultRevivableModules = [
   headers,
   error,
   typedArray,
-  // blob MUST come before clonable - clonable would otherwise pass-through
-  // a Blob unboxed, which works on clone transports but loses the data on
-  // JSON. Blob's isType excludes File so File still rides clonable.
-  blob,
   promise,
   func,
   messagePort,

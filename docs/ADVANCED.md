@@ -401,7 +401,7 @@ with `isJson: true`. Everything else uses structured clone + transferables.
 
 Preserved on JSON via boxes; these all still work: `undefined`, `NaN`/`±Infinity`, `Date`,
 `BigInt`, `Map`/`Set`, TypedArrays and `ArrayBuffer` (as base64), `Error` subclasses,
-`Blob`/`File`, `Symbol`, and every live type (functions, promises, async iterables,
+`Symbol`, and every live type (functions, promises, async iterables,
 readable/writable streams, ports, `AbortSignal`, `Request`/`Response`); live values ride
 synthetic `EventChannel` ports instead of transferred `MessagePort`s, fully functional but
 wire-routed (so they die with the connection, see above).
@@ -411,7 +411,8 @@ Degrades or unavailable on JSON:
 - `transfer()` becomes a copy; the box is marked `degraded` and skipped by the
   transfer-list walker.
 - The structured-clone pass-through families are clone-only: `RegExp`, `FormData`,
-  `ImageData`, `DataView`, DOM geometry types, `CryptoKey`, `FileSystemHandle`, …
+  `File`/`FileList`, `ImageData`, `DataView`, DOM geometry types, `CryptoKey`,
+  `FileSystemHandle`, …
   (`clonable`) and `ImageBitmap`, `OffscreenCanvas`, `VideoFrame`, `MediaStreamTrack`, …
   (`transferable`). The `Capable` type-level check excludes them on JSON transports, so
   misuse fails at compile time rather than silently coercing.

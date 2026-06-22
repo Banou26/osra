@@ -28,7 +28,6 @@ export type Structurable =
   | bigint
   | Date
   | RegExp
-  | Blob
   | File
   | FileList
   | ArrayBuffer
@@ -49,7 +48,7 @@ export type StructurableTransferable =
   | Set<StructurableTransferable>
 
 /** "Free" types in `Capable` - narrows to `Jsonable` on JSON transports so
- *  user code can't type a `Date`/`Blob`/etc. that JSON would silently coerce.
+ *  user code can't type a `Date`/`File`/etc. that JSON would silently coerce.
  *  Modules that DO support JSON (date, map, set, bigint, …) put their type
  *  back via `InferRevivables`. */
 type CapableBase<Ctx extends RevivableContext> =
@@ -69,15 +68,14 @@ export type Capable<
   | Set<Capable<TModules, Ctx>>
 
 /** What a value looks like from the far side of the connection: functions
- *  become async (calls cross the wire), Blobs arrive as Promise<Blob>,
- *  containers map recursively, everything else revives as itself. */
+ *  become async (calls cross the wire), containers map recursively,
+ *  everything else revives as itself. */
 export type Remote<T> =
   T extends (...args: infer P) => infer R ? (...args: P) => Promise<Remote<Awaited<R>>>
-  : T extends Blob ? Promise<T>
   : T extends Promise<infer U> ? Promise<Remote<U>>
   : T extends
       | Map<any, any> | Set<any> | Date | Error | RegExp
-      | ArrayBuffer | ArrayBufferView
+      | ArrayBuffer | ArrayBufferView | File | FileList
       | ReadableStream | WritableStream | MessagePort | EventTarget
       | Request | Response | Headers
     ? T

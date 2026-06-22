@@ -32,7 +32,7 @@ type _StructurablePositives = [
   Expect<Assignable<bigint, Structurable>>,
   Expect<Assignable<Date, Structurable>>,
   Expect<Assignable<RegExp, Structurable>>,
-  Expect<Assignable<Blob, Structurable>>,
+  Expect<Assignable<File, Structurable>>,
   Expect<Assignable<ArrayBuffer, Structurable>>,
   Expect<Assignable<Uint8Array, Structurable>>,
   Expect<Assignable<Map<string, number>, Structurable>>,
@@ -84,22 +84,22 @@ type _CapableSymbol = [
 type JsonCtx = RevivableContext & { transport: { isJson: true; emit: any; receive: any } }
 type CloneCtx = RevivableContext & { transport: typeof window }
 
-// On a clone transport, Blob / OffscreenCanvas / RegExp / ImageBitmap
-// are all assignable to Capable.
+// On a clone transport, File / OffscreenCanvas / RegExp / ImageBitmap
+// are all assignable to Capable (File / FileList ride the clonable fallback).
 type _CapableCloneCtxPositives = [
-  Expect<Assignable<Blob, Capable<DefaultRevivableModule[], CloneCtx>>>,
   Expect<Assignable<File, Capable<DefaultRevivableModule[], CloneCtx>>>,
   Expect<Assignable<RegExp, Capable<DefaultRevivableModule[], CloneCtx>>>,
   Expect<Assignable<ImageData, Capable<DefaultRevivableModule[], CloneCtx>>>,
 ]
 
 // On a JSON-only transport, those same types are NOT assignable -
-// the type system rejects them at the `expose()` call site. Blob and
-// its File subclass are the exception: the `blob` revivable encodes
-// via boxBuffer (base64 on JSON) so they stay Capable everywhere.
+// the type system rejects them at the `expose()` call site. File / FileList
+// ride the clone-only `clonable` fallback, so they are NOT Capable on JSON
+// either. (Blob is no longer supported at all - callers send ArrayBuffers.)
 type _CapableJsonCtxNegatives = [
   Expect<Equals<RegExp extends Capable<DefaultRevivableModule[], JsonCtx> ? true : false, false>>,
   Expect<Equals<ImageData extends Capable<DefaultRevivableModule[], JsonCtx> ? true : false, false>>,
+  Expect<Equals<File extends Capable<DefaultRevivableModule[], JsonCtx> ? true : false, false>>,
 ]
 
 // Module-handled types stay Capable on JSON transports - their boxes
@@ -113,8 +113,6 @@ type _CapableJsonCtxPositives = [
   Expect<Assignable<Promise<number>, Capable<DefaultRevivableModule[], JsonCtx>>>,
   Expect<Assignable<() => number, Capable<DefaultRevivableModule[], JsonCtx>>>,
   Expect<Assignable<symbol, Capable<DefaultRevivableModule[], JsonCtx>>>,
-  Expect<Assignable<Blob, Capable<DefaultRevivableModule[], JsonCtx>>>,
-  Expect<Assignable<File, Capable<DefaultRevivableModule[], JsonCtx>>>,
 ]
 
 // --- ReplaceWithBox: confirm value-shape revivables transform correctly ---

@@ -102,10 +102,9 @@ The type of the value as seen from the far side:
 | Local type | Remote type |
 |---|---|
 | `(...args: P) => R` | `(...args: P) => Promise<Remote<Awaited<R>>>` |
-| `Blob` / `File` | `Promise<Blob>` / `Promise<File>` |
 | `Promise<U>` | `Promise<Remote<U>>` |
 | `AsyncIterable<U>` | `AsyncIterableIterator<Remote<U>>` |
-| `Map`, `Set`, `Date`, `Error`, `RegExp`, `ArrayBuffer`, `ArrayBufferView`, `ReadableStream`, `WritableStream`, `MessagePort`, `EventTarget`, `Request`, `Response`, `Headers` | itself |
+| `Map`, `Set`, `Date`, `Error`, `RegExp`, `ArrayBuffer`, `ArrayBufferView`, `ReadableStream`, `WritableStream`, `MessagePort`, `EventTarget`, `Request`, `Response`, `Headers`, `File`, `FileList` | itself (clone transports only; `Blob` is not supported) |
 | arrays / objects | mapped recursively |
 | primitives | themselves |
 
@@ -351,14 +350,14 @@ e.g. `{ "__OSRA_BOX__": 'revivable', type: 'date', ... }`. The constants `OSRA_K
 | `WritableStream` | `WritableStream` | `write`/`close`/`abort` with acks. |
 | `MessagePort` | `MessagePort` | Transferred natively on clone transports; routed via `portId` on JSON. |
 | `AbortSignal` | `AbortSignal` | `abort` and its `reason` propagate. |
-| `Blob` / `File` | `Promise<Blob>` / `Promise<File>` | Bytes fetched async, hence the Promise. File keeps `name` + `lastModified`. |
+| `File` / `FileList` | `File` / `FileList` | Revive as themselves via structured clone (clone transports only, not JSON); `File` keeps `name` + `lastModified`. `Blob` is not supported. |
 | `Request` | `Request` | Headers, streamed body, `mode`/`credentials`/etc.; `signal` propagates. |
 | `Response` | `Response` | Streamed body; `url`/`redirected` restored; opaque status-0 revives as `Response.error()`. |
 | `Headers` | `Headers` | |
 | `Event` / `CustomEvent` | `Event` / `CustomEvent` | `type`/`bubbles`/`cancelable`/`composed` + `detail` (boxed recursively). Subclass fields beyond `detail` are dropped. |
 | `EventTarget` | listener-only façade | `addEventListener`/`removeEventListener` proxy to the source; events do **not** dispatch locally on the façade. |
 | `symbol` | `symbol` | `Symbol.for` registry symbols round-trip via their key; others keep per-connection identity (same symbol on every send, round-trips to the original). |
-| Other clonables (`ImageBitmap`, `ImageData`, `FileList`, …) | itself | Clone transports only, via structured clone. |
+| Other clonables (`ImageBitmap`, `ImageData`, …) | itself | Clone transports only, via structured clone. |
 | Clonable Transferables (`VideoFrame`, `AudioData`, `ImageBitmap`, …) | itself | Cloned by default; wrap with `transfer()` to move. |
 | Must-transfer types (`OffscreenCanvas`, `MediaStreamTrack`, `RTCDataChannel`, …) | itself | Always **moved** (detached locally) on every send; structured clone cannot copy them, so `transfer()` is implied. |
 | Unclonables (`WeakMap`, `WeakSet`, …) | `{}` | Coerced, matching `JSON.stringify` behavior; the type-level `Capable` check flags them first. |

@@ -9,7 +9,7 @@ osra is a zero-runtime-dependency TypeScript RPC library that connects two JavaS
 
 - **Zero runtime dependencies**: one ESM module
 - **Symmetric API**: both sides call `expose()`; either side can pass functions, both can call
-- **Deep type support**: functions, promises, async generators, `ReadableStream`/`WritableStream`, `MessagePort`, `AbortSignal`, `Error` subclasses, `Blob`/`File`, `Request`/`Response`, `Map`/`Set`, typed arrays, `BigInt`, `Symbol`, …
+- **Deep type support**: functions, promises, async generators, `ReadableStream`/`WritableStream`, `MessagePort`, `AbortSignal`, `Error` subclasses, `File`/`FileList`, `Request`/`Response`, `Map`/`Set`, typed arrays, `BigInt`, `Symbol`, …
 - **JSON-mode degradation**: the same value types work over text-only transports (WebSocket, extension messaging); `Date`, `Map`, typed arrays, even `NaN`/`±Infinity` survive
 - **`identity()`** for reference-preserving sends, **`transfer()`** for zero-copy moves
 - **Strict TypeScript**: `Remote<T>` maps your API type across the wire; a compile-time `Capable` check rejects non-serializable values with the offending path pinpointed
@@ -103,11 +103,11 @@ Transports are either **structured-clone** (Worker, Window, MessagePort, SharedW
 | `WritableStream` | ✅ | ✅ | write/close/abort with acks; sink errors reject the writer |
 | `MessagePort` | ✅ | ✅ | revives as a real `MessagePort` on both transport kinds |
 | `AbortSignal` | ✅ | ✅ | abort and reason propagate |
-| `Blob` / `File` | ✅ | ✅ | revive as `Promise<Blob>` / `Promise<File>` (bytes fetched async) |
+| `File` / `FileList` | ✅ | ❌ | revive as themselves via structured clone (clone transports only); `Blob` is **not** supported |
 | `Request` / `Response` / `Headers` | ✅ | ✅ | streamed bodies; `Request.signal` propagates; `Response.url`/`redirected` restored; opaque status-0 revives as `Response.error()` |
 | `Event` / `CustomEvent` | ✅ | ✅ | subclass fields beyond `detail` are dropped |
 | `EventTarget` | ✅ | ✅ | revives as a listener-only façade: `add`/`removeEventListener` proxy to the source; you can't dispatch through it |
-| Other structured-clonables (`FileList`, `ImageData`, `DOMRect`, `CryptoKey`, …) | ✅ | ❌ | pass through structured clone untouched |
+| Other structured-clonables (`ImageData`, `DOMRect`, `CryptoKey`, …) | ✅ | ❌ | pass through structured clone untouched |
 | Transfer-only host objects (`OffscreenCanvas`, `MediaStreamTrack`, `RTCDataChannel`, …) | ✅ | ❌ | always moved to the peer |
 | `ImageBitmap`, `VideoFrame`, `AudioData` | ✅ | ❌ | copied by structured clone; wrap in `transfer()` to move |
 | `WeakMap` / `WeakSet`, other unclonables | ❌ | ❌ | coerce to `{}` at runtime, rejected at compile time |
@@ -284,7 +284,7 @@ controller.abort(new Error('shutting down'))
 
 ## TypeScript
 
-`Remote<T>` is what the other side sees: functions become `(...args) => Promise<Awaited<R>>`, `Blob` becomes `Promise<Blob>`, containers map recursively, platform objects revive as themselves.
+`Remote<T>` is what the other side sees: functions become `(...args) => Promise<Awaited<R>>`, containers map recursively, platform objects revive as themselves.
 
 `expose()` validates the value you pass at compile time against `Capable`, the union of everything serializable for the inferred transport (narrower on JSON transports). Failures pinpoint the offending path:
 
