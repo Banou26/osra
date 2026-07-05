@@ -7,8 +7,9 @@ import type { TypedMessagePort, TypedMessagePortEventMap } from './typed-message
 type EventPortListener = EventListenerOrEventListenerObject
 
 export class EventPort<T> {
-  private _listeners = new Map<string, Set<EventPortListener>>()
-  private _onceListeners = new WeakSet<EventPortListener>()
+  // Per (type, listener): value = once. Duplicate adds are ignored,
+  // matching EventTarget (options on a duplicate add don't apply).
+  private _listeners = new Map<string, Map<EventPortListener, boolean>>()
 
   addEventListener<K extends keyof TypedMessagePortEventMap<T> & string>(
     type: K,
@@ -26,10 +27,11 @@ export class EventPort<T> {
     options?: boolean | AddEventListenerOptions
   ): void {
     if (!listener) return
-    let set = this._listeners.get(type)
-    if (!set) { set = new Set(); this._listeners.set(type, set) }
-    set.add(listener)
-    if (typeof options === 'object' && options?.once) this._onceListeners.add(listener)
+    let listeners = this._listeners.get(type)
+    if (!listeners) { listeners = new Map(); this._listeners.set(type, listeners) }
+    if (!listeners.has(listener)) {
+      listeners.set(listener, typeof options === 'object' && !!options?.once)
+    }
   }
 
   removeEventListener<K extends keyof TypedMessagePortEventMap<T> & string>(
@@ -49,7 +51,6 @@ export class EventPort<T> {
   ): void {
     if (!listener) return
     this._listeners.get(type)?.delete(listener)
-    this._onceListeners.delete(listener)
   }
 
   _peer: EventPort<any> | undefined
@@ -76,13 +77,10 @@ export class EventPort<T> {
     } else if (event.type === 'messageerror') {
       this.onmessageerror?.call(this, event as MessageEvent)
     }
-    const set = this._listeners.get(event.type)
-    if (set) {
-      for (const listener of [...set]) {
-        if (this._onceListeners.has(listener)) {
-          set.delete(listener)
-          this._onceListeners.delete(listener)
-        }
+    const listeners = this._listeners.get(event.type)
+    if (listeners) {
+      for (const [listener, once] of [...listeners]) {
+        if (once) listeners.delete(listener)
         if (typeof listener === 'function') listener.call(this, event)
         else listener.handleEvent(event)
       }
