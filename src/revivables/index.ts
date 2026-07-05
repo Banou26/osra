@@ -25,7 +25,7 @@ import * as event from './event.js'
 import * as eventTarget from './event-target.js'
 import * as symbol from './symbol.js'
 import * as asyncIterator from './async-iterator.js'
-import { clonable, transferable, unclonable } from './fallbacks.js'
+import { blobGuard, clonable, transferable, unclonable } from './fallbacks.js'
 import { nonFiniteNumber, undefinedValue } from './json-primitives.js'
 
 export { identity } from './identity.js'
@@ -80,6 +80,9 @@ export const defaultRevivableModules = [
   // that also extend EventTarget, which eventTarget would otherwise box as façade husks.
   clonable,
   transferable,
+  // After clonable (File rides it): bare Blobs pass through on clone transports
+  // but throw on JSON, where they'd otherwise silently coerce to `{}`.
+  blobGuard,
   // eventTarget MUST be last among instanceof-EventTarget revivables -
   // MessagePort/AbortSignal/Window/Worker all extend EventTarget; the
   // specific ones need first dibs via findBoxModule iteration order.

@@ -1,7 +1,7 @@
 import type { BoxBase as BoxBaseType, RevivableContext } from './utils.js'
 
 import { BoxBase } from './utils.js'
-import { instanceOfAny } from '../utils/type-guards.js'
+import { instanceOfAny, isJsonOnlyTransport } from '../utils/type-guards.js'
 
 type AnyCtor = abstract new (...args: any[]) => unknown
 
@@ -100,6 +100,31 @@ export const transferable = {
   isType: isTransferable,
   box: (value: Transferable, _context: RevivableContext<any>): Transferable => value,
   revive: (value: BoxedTransferable, _context: RevivableContext<any>): Transferable => value as unknown as Transferable,
+} as const
+
+// -------------------------------------------------------------------------
+// blobGuard - Blob support was removed in 0.6.0; clone transports still get
+// the free structured-clone pass-through, but JSON.stringify would silently
+// coerce a Blob to `{}`, so JSON transports throw instead. Must sit after
+// clonable so File keeps riding it.
+// -------------------------------------------------------------------------
+
+export type BoxedBlobGuard = BoxBaseType<'blobGuard'>
+
+// `value is never` keeps Blob out of Capable - the 0.6.0 removal stays a type error.
+const isBlob = ((value: unknown) =>
+  typeof Blob !== 'undefined' && value instanceof Blob) as (value: unknown) => value is never
+
+export const blobGuard = {
+  type: 'blobGuard',
+  isType: isBlob,
+  box: (value: never, context: RevivableContext<any>): Blob => {
+    if (isJsonOnlyTransport(context.transport)) {
+      throw new TypeError('osra: Blob support was removed in 0.6.0, send an ArrayBuffer or Uint8Array instead')
+    }
+    return value as unknown as Blob
+  },
+  revive: (value: BoxedBlobGuard, _context: RevivableContext<any>): Blob => value as unknown as Blob,
 } as const
 
 // -------------------------------------------------------------------------
