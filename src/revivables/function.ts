@@ -54,7 +54,14 @@ export const box = <T extends (...args: any[]) => any, T2 extends RevivableConte
       } catch (error) {
         message = { type: 'throw', error: error as Capable }
       }
-      const boxedResult = recursiveBox(message as Capable, context)
+      // Result boxing can throw too (e.g. Blob over JSON) - reject the caller instead of hanging.
+      const boxedResult = (() => {
+        try {
+          return recursiveBox(message as Capable, context)
+        } catch (error) {
+          return recursiveBox({ type: 'throw', error: error as Capable } as Capable, context)
+        }
+      })()
       returnPort.postMessage(boxedResult, getTransferableObjects(boxedResult))
       // Defer close so the result reaches the peer before tear-down. The
       // close fires _onClose, dropping per-call routing entries on both
