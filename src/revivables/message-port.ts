@@ -132,8 +132,9 @@ const registerPortHandler = (
 ): void => {
   const state = getState(context)
   if (state.tombstones.has(portId)) {
-    // Deferred so a listener attached right after revive still observes the close.
-    queueMicrotask(() => handler({ type: 'message-port-close', remoteUuid: context.remoteUuid, portId }))
+    // Macrotask, not microtask: revived ports reach their consumer through microtask
+    // chains (function args, init data), which must win so close listeners attach first.
+    setTimeout(() => handler({ type: 'message-port-close', remoteUuid: context.remoteUuid, portId }))
     return
   }
   const port = getPort(state, portId)
