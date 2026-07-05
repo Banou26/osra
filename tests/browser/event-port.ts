@@ -50,3 +50,77 @@ export const eventPortRemoveListenerStops = async () => {
   await new Promise((resolve) => setTimeout(resolve, 0))
   expect(received).to.deep.equal(['one'])
 }
+
+// EventTarget semantics: adding the same callback twice registers it once,
+// and a single removeEventListener fully unregisters it.
+export const eventPortDuplicateAddRegistersOnce = async () => {
+  const { port1, port2 } = new EventChannel<string, string>()
+  let calls = 0
+  const listener = () => { calls++ }
+  port2.addEventListener('message', listener)
+  port2.addEventListener('message', listener)
+  port2.start()
+  port1.postMessage('x')
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  expect(calls).to.equal(1)
+  port2.removeEventListener('message', listener)
+  port1.postMessage('y')
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  expect(calls).to.equal(1)
+}
+
+export const eventPortOnceListenerFiresOnceAndSelfRemoves = async () => {
+  const { port1, port2 } = new EventChannel<string, string>()
+  let calls = 0
+  const listener = () => { calls++ }
+  port2.addEventListener('message', listener, { once: true })
+  port2.start()
+  port1.postMessage('a')
+  port1.postMessage('b')
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  expect(calls).to.equal(1)
+  // Re-adding after the once fired registers fresh, like EventTarget.
+  port2.addEventListener('message', listener, { once: true })
+  port1.postMessage('c')
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  expect(calls).to.equal(2)
+}
+
+// Options on a duplicate add don't apply: the first registration wins.
+export const eventPortDuplicateAddDoesNotUpgradeToOnce = async () => {
+  const { port1, port2 } = new EventChannel<string, string>()
+  let calls = 0
+  const listener = () => { calls++ }
+  port2.addEventListener('message', listener)
+  port2.addEventListener('message', listener, { once: true })
+  port2.start()
+  port1.postMessage('a')
+  port1.postMessage('b')
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  expect(calls).to.equal(2)
+}
+
+export const eventPortDuplicateAddDoesNotClearOnce = async () => {
+  const { port1, port2 } = new EventChannel<string, string>()
+  let calls = 0
+  const listener = () => { calls++ }
+  port2.addEventListener('message', listener, { once: true })
+  port2.addEventListener('message', listener)
+  port2.start()
+  port1.postMessage('a')
+  port1.postMessage('b')
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  expect(calls).to.equal(1)
+}
+
+export const eventPortOnceListenerRemovableBeforeFiring = async () => {
+  const { port1, port2 } = new EventChannel<string, string>()
+  let calls = 0
+  const listener = () => { calls++ }
+  port2.addEventListener('message', listener, { once: true })
+  port2.removeEventListener('message', listener)
+  port2.start()
+  port1.postMessage('a')
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  expect(calls).to.equal(0)
+}

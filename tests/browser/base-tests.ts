@@ -1368,6 +1368,68 @@ export const userNonFinitePrimitives = async (transport: Transport) => {
   expect('maybe' in result).to.be.true
 }
 
+// Blob support was removed in 0.6.0: clone transports keep the structured-clone
+// pass-through, JSON transports must throw a clear error instead of the silent
+// `{}` coercion JSON.stringify would produce.
+export const userBlobArg = async (transport: Transport) => {
+  const value = { echo: async (input: unknown) => input }
+  expose(value, { transport })
+  const remote = await expose<typeof value>({}, { transport })
+
+  const blob = new Blob(['osra-blob'], { type: 'text/plain' })
+  if ('isJson' in transport && transport.isJson === true) {
+    await expect(remote.echo(blob as never)).to.eventually.be.rejectedWith(TypeError, /Blob support was removed/)
+  } else {
+    const echoed = await remote.echo(blob as never) as Blob
+    expect(echoed).to.be.instanceOf(Blob)
+    expect(await echoed.text()).to.equal('osra-blob')
+  }
+}
+
+export const userBlobNestedArg = async (transport: Transport) => {
+  const value = { echo: async (input: unknown) => input }
+  expose(value, { transport })
+  const remote = await expose<typeof value>({}, { transport })
+
+  const wrapped = { data: [new Blob(['nested'], { type: 'text/plain' })] }
+  if ('isJson' in transport && transport.isJson === true) {
+    await expect(remote.echo(wrapped as never)).to.eventually.be.rejectedWith(TypeError, /Blob support was removed/)
+  } else {
+    const echoed = await remote.echo(wrapped as never) as typeof wrapped
+    expect(echoed.data[0]).to.be.instanceOf(Blob)
+    expect(await echoed.data[0]!.text()).to.equal('nested')
+  }
+}
+
+// The return direction must reject the caller too - result boxing happens on
+// the exposer's side, and its failure has to travel back instead of hanging.
+export const userBlobReturnRejects = async (transport: Transport) => {
+  const value = { getBlob: async () => new Blob(['osra-blob'], { type: 'text/plain' }) }
+  expose(value, { transport })
+  const remote = await expose<typeof value>({}, { transport })
+
+  if ('isJson' in transport && transport.isJson === true) {
+    await expect(remote.getBlob()).to.eventually.be.rejectedWith(TypeError, /Blob support was removed/)
+  } else {
+    const blob = await remote.getBlob()
+    expect(blob).to.be.instanceOf(Blob)
+    expect(await blob.text()).to.equal('osra-blob')
+  }
+}
+
+// Every completed call tombstones its per-call return port on both sides;
+// hundreds of sequential calls churn far past TOMBSTONE_LIMIT (128) and must
+// keep working as old tombstones evict.
+export const manyCallsChurnTombstonedPorts = async (transport: Transport) => {
+  const value = { echo: async (n: number) => n }
+  expose(value, { transport })
+  const remote = await expose<typeof value>({}, { transport })
+
+  for (let i = 0; i < 300; i++) {
+    expect(await remote.echo(i)).to.equal(i)
+  }
+}
+
 export const base = {
   argsAndResponse,
   callback,
@@ -1442,4 +1504,8 @@ export const base = {
   userReadableStreamSourceErrorPropagates,
   userReadableStreamBackpressure,
   userReadableStreamObjectBackpressure,
+  userBlobArg,
+  userBlobNestedArg,
+  userBlobReturnRejects,
+  manyCallsChurnTombstonedPorts,
 }

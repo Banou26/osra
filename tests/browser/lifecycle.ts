@@ -233,3 +233,38 @@ export const announceRetrySurvivesLateLink = async () => {
   const announceUuids = new Set(sent.filter(m => m.type === 'announce').map(m => m.uuid))
   expect(announceUuids.size).to.equal(1)
 }
+
+// A transport whose emit THROWS while the link is down (socket mid-reconnect,
+// extension port with no receiver yet) must not kill the announce loop - the
+// retry keeps re-offering and the handshake completes once emit recovers.
+export const announceSurvivesThrowingEmit = async () => {
+  const { port1, port2 } = new MessageChannel()
+  port1.start()
+  port2.start()
+
+  let linked = false
+  let failures = 0
+  const flaky = (port: MessagePort): Transport => ({
+    receive: (listener) => {
+      port.addEventListener('message', event => listener(event.data as Message, {}))
+    },
+    emit: (message, transferables) => {
+      if (!linked) {
+        failures++
+        throw new Error('link down')
+      }
+      port.postMessage(message, transferables ?? [])
+    },
+  })
+
+  const value = { ping: async () => 'pong' }
+  expose(value, { transport: flaky(port1) })
+  const remotePromise = expose<typeof value>({}, { transport: flaky(port2) })
+
+  await new Promise(resolve => setTimeout(resolve, 300))
+  linked = true
+
+  const remote = await remotePromise
+  await expect(remote.ping()).to.eventually.equal('pong')
+  expect(failures).to.be.greaterThan(0)
+}

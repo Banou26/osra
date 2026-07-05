@@ -3,6 +3,7 @@ import type { Transport } from '../../src'
 import { expect } from 'chai'
 
 import { expose } from '../../src/index'
+import { EventChannel, EventPort } from '../../src/utils/event-channel'
 
 // __osraForceGc is wired up by the spec runner via page.exposeFunction:
 // it drives page.requestGC (cross-browser, Playwright 1.48+) from the
@@ -162,10 +163,45 @@ export const funcDropDoesNotRejectPending = async (transport: Transport) => {
   expect(settled).to.equal('hung')
 }
 
+// Abandoning a revived port without closing it fires the GC safety net, which
+// sends the wire close FIRST (while routing state still exists, so the seq is
+// right) and tombstones after: the box side's port observably closes and the
+// connection stays fully usable - no routing-state resurrection.
+export const revivedPortDropSendsCloseToBoxSide = async (transport: Transport) => {
+  const channel = new EventChannel<string, string>()
+  let closes = 0
+  const sourceReceived: string[] = []
+  channel.port2.addEventListener('close', () => { closes++ })
+  channel.port1.addEventListener('message', event => { sourceReceived.push((event as MessageEvent<string>).data) })
+  channel.port1.start()
+
+  const value = {
+    getPort: async () => channel.port2,
+    ping: async () => 'pong',
+  }
+  expose(value, { transport })
+  const remote = await expose<typeof value>({}, { transport })
+
+  const holder: { port?: unknown } = { port: await remote.getPort() }
+  ;(holder.port as EventPort<string>).postMessage('hello')
+  await new Promise(r => setTimeout(r, 50))
+  expect(sourceReceived).to.deep.equal(['hello'])
+
+  const portRef = new WeakRef(holder.port as object)
+  holder.port = undefined
+  await __osraForceGc()
+  expect(portRef.deref(), 'revived port should be collected after drop').to.equal(undefined)
+
+  await new Promise(r => setTimeout(r, 50))
+  expect(closes).to.equal(1)
+  await expect(remote.ping()).to.eventually.equal('pong')
+}
+
 export const gc = {
   gcBracketCollectsUnreferencedObject,
   revivedEventTargetDroppedWithoutListenerIsCollected,
   revivedFunctionDroppedIsCollected,
   revivedEventTargetDropTearsDownSource,
   funcDropDoesNotRejectPending,
+  revivedPortDropSendsCloseToBoxSide,
 }
