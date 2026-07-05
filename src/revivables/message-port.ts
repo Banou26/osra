@@ -66,13 +66,21 @@ type PortRouting = {
 }
 
 // Cap the per-port reorder buffer so a peer that never sends the awaited seq can't grow
-// it without bound; legitimate reordering closes the gap within a few messages.
+// it without bound; overflow fails the port closed instead of wedging it silently.
 const REORDER_LIMIT = 2048
+// Closed portIds remembered so late in-flight messages can't resurrect routing state.
+const TOMBSTONE_LIMIT = 128
+// Cap routing entries allocated by messages arriving before their port's handler registers.
+const PENDING_PORT_LIMIT = 1024
 
 type ConnectionMessagePortState = {
   /** O(1) per-portId routing - avoids the O(N) addEventListener scan that was the
    *  bottleneck for tight-loop RPC traffic. */
   ports: Map<string, PortRouting>
+  /** Recently closed portIds, insertion-ordered for bounded eviction. */
+  tombstones: Set<string>
+  /** Count of handler-less entries in `ports`. */
+  pendingPorts: number
 }
 
 const connectionStateMap = new WeakMap<RevivableContext, ConnectionMessagePortState>()
@@ -85,8 +93,23 @@ const getState = (context: RevivableContext): ConnectionMessagePortState => {
 
 const getPort = (state: ConnectionMessagePortState, portId: string): PortRouting => {
   let port = state.ports.get(portId)
-  if (!port) { port = { nextSeq: 0, buffer: new Map(), outSeq: 0 }; state.ports.set(portId, port) }
+  if (!port) {
+    port = { nextSeq: 0, buffer: new Map(), outSeq: 0 }
+    state.ports.set(portId, port)
+    state.pendingPorts++
+  }
   return port
+}
+
+const tombstonePort = (state: ConnectionMessagePortState, portId: string): void => {
+  const port = state.ports.get(portId)
+  if (port && !port.handler) state.pendingPorts--
+  state.ports.delete(portId)
+  if (state.tombstones.size >= TOMBSTONE_LIMIT) {
+    const oldest = state.tombstones.values().next().value
+    if (oldest !== undefined) state.tombstones.delete(oldest)
+  }
+  state.tombstones.add(portId)
 }
 
 // Deliver buffered messages along the contiguous seq run, once a handler exists.
@@ -103,26 +126,45 @@ const drainPort = (port: PortRouting): void => {
 const nextOutSeq = (context: RevivableContext, portId: Uuid): number => getPort(getState(context), portId).outSeq++
 
 const registerPortHandler = (
-  state: ConnectionMessagePortState,
-  portId: string,
+  context: RevivableContext,
+  portId: Uuid,
   handler: (message: Messages) => void,
 ): void => {
+  const state = getState(context)
+  if (state.tombstones.has(portId)) {
+    // Deferred so a listener attached right after revive still observes the close.
+    queueMicrotask(() => handler({ type: 'message-port-close', remoteUuid: context.remoteUuid, portId }))
+    return
+  }
   const port = getPort(state, portId)
+  if (!port.handler) state.pendingPorts--
   port.handler = handler
   drainPort(port)
 }
 
 export const init = (context: RevivableContext): void => {
-  const state: ConnectionMessagePortState = { ports: new Map() }
+  const state: ConnectionMessagePortState = { ports: new Map(), tombstones: new Set(), pendingPorts: 0 }
   connectionStateMap.set(context, state)
 
   context.eventTarget.addEventListener('message', ({ detail }) => {
     if (detail.type !== 'message' && detail.type !== 'message-port-close') return
-    const port = getPort(state, detail.portId)
+    if (state.tombstones.has(detail.portId)) return
+    let port = state.ports.get(detail.portId)
     // Legacy peer (osra <= 0.5.6) doesn't stamp seq - its transport was assumed ordered,
     // so deliver in arrival order; only seq-stamped messages are reordered.
-    if (detail.seq === undefined) { port.handler?.(detail); return }
-    if (detail.seq < port.nextSeq || port.buffer.size >= REORDER_LIMIT) return
+    if (detail.seq === undefined) { port?.handler?.(detail); return }
+    if (!port) {
+      if (state.pendingPorts >= PENDING_PORT_LIMIT) return
+      port = getPort(state, detail.portId)
+    }
+    if (detail.seq < port.nextSeq) return
+    if (port.buffer.size >= REORDER_LIMIT && !(detail.seq === port.nextSeq && port.handler)) {
+      // A full buffer whose gap can't close is unrecoverable - fail the port closed.
+      port.buffer.clear()
+      tombstonePort(state, detail.portId)
+      port.handler?.({ type: 'message-port-close', remoteUuid: context.remoteUuid, portId: detail.portId })
+      return
+    }
     port.buffer.set(detail.seq, detail)
     drainPort(port)
   })
@@ -134,6 +176,8 @@ export const init = (context: RevivableContext): void => {
       port.handler?.({ type: 'message-port-close', remoteUuid: context.remoteUuid, portId: portId as Uuid })
     }
     state.ports.clear()
+    state.tombstones.clear()
+    state.pendingPorts = 0
   })
 }
 
@@ -143,8 +187,10 @@ export const isType = (value: unknown): value is MessagePort | EventPort<Structu
 const sendClose = (context: RevivableContext, portId: Uuid) => {
   try {
     // Stamp the close with the next seq so it's ordered after this side's data messages
-    // (a close that overtakes trailing data would drop it).
-    context.sendMessage({ type: 'message-port-close', remoteUuid: context.remoteUuid, portId, seq: nextOutSeq(context, portId) })
+    // (a close that overtakes trailing data would drop it); a missing entry means the
+    // port is already torn down, so read without resurrecting routing state.
+    const port = getState(context).ports.get(portId)
+    context.sendMessage({ type: 'message-port-close', remoteUuid: context.remoteUuid, portId, seq: port ? port.outSeq++ : 0 })
   } catch { /* connection torn down */ }
 }
 
@@ -159,12 +205,13 @@ const postRevived = <T>(port: AnyPort<T>, data: T, synthetic: boolean) => {
 // its job is to not retain anything, so abandoned connections can collect.
 const makeBoxGcNet = (
   contextWeak: WeakRef<RevivableContext>,
-  portsWeak: WeakRef<Map<string, PortRouting>>,
+  stateWeak: WeakRef<ConnectionMessagePortState>,
   portId: Uuid,
 ) => () => {
   const ctx = contextWeak.deref()
   if (ctx) sendClose(ctx, portId)
-  portsWeak.deref()?.delete(portId)
+  const state = stateWeak.deref()
+  if (state) tombstonePort(state, portId)
 }
 
 export const box = <T, T2 extends RevivableContext = RevivableContext>(
@@ -191,13 +238,14 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
   // and the safety net can never fire.
   const liveRefWeak = new WeakRef(liveRef)
   const contextWeak = new WeakRef(context)
-  const portsWeak = new WeakRef(state.ports)
+  const stateWeak = new WeakRef(state)
 
   let cleanedUp = false
   const performCleanup = () => {
     if (cleanedUp) return
     cleanedUp = true
-    portsWeak.deref()?.delete(portId)
+    const st = stateWeak.deref()
+    if (st) tombstonePort(st, portId)
     unregisterGc?.()
     const live = liveRefWeak.deref()
     live?.removeEventListener('message', outgoingListener as EventListener)
@@ -228,7 +276,7 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
   // Safety net only - `handler` strong-holds liveRef via portHandlers, so
   // the FR won't fire while the connection is alive. Real cleanup runs via
   // the wire `message-port-close`, EventPort `_onClose`, or teardown.
-  const unregisterGc = trackGc(liveRef, makeBoxGcNet(contextWeak, portsWeak, portId))
+  const unregisterGc = trackGc(liveRef, makeBoxGcNet(contextWeak, stateWeak, portId))
 
   liveRef.addEventListener('message', outgoingListener as EventListener)
   liveRef.start()
@@ -241,7 +289,7 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
     }
   }
 
-  registerPortHandler(state, portId, handler)
+  registerPortHandler(context, portId, handler)
 
   return { ...BoxBase, type, portId, synthetic } as BoxedMessagePort<T>
 }
@@ -329,7 +377,7 @@ const reviveViaPortId = <T extends Capable>(
   const performCleanup = () => {
     if (cleanedUp) return
     cleanedUp = true
-    state.ports.delete(portId)
+    tombstonePort(state, portId)
     const internal = internalPortRef.deref()
     internal?.removeEventListener('message', internalPortListener as EventListener)
     internal?.close()
@@ -380,7 +428,7 @@ const reviveViaPortId = <T extends Capable>(
   internalPort.addEventListener('message', internalPortListener as EventListener)
   internalPort.start()
 
-  registerPortHandler(state, portId, handler)
+  registerPortHandler(context, portId, handler)
 
   return userPort
 }
