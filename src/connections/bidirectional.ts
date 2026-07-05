@@ -211,7 +211,7 @@ export const init = <TModules extends readonly RevivableModule[]>(
   let announceTimeout: ReturnType<typeof setTimeout> | undefined
   const announce = () => {
     if (ctx.unregisterSignal?.aborted || ctx.connectionContexts.size > 0) return
-    ctx.sendMessage({ type: 'announce' })
+    try { ctx.sendMessage({ type: 'announce' }) } catch { /* transient send failure - keep retrying */ }
     announceTimeout = setTimeout(announce, announceDelay)
     announceDelay = Math.min(announceDelay * 2, 1_000)
   }

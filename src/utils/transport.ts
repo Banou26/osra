@@ -218,7 +218,10 @@ export const sendOsraMessage = (
   } else if (isWebExtensionPort(emitTransport)) {
     emitTransport.postMessage(message)
   } else if (isWebExtensionRuntime(emitTransport)) {
-    emitTransport.sendMessage(message)
+    // Rejects while no receiver exists yet (announce retries) - swallow only that.
+    emitTransport.sendMessage(message)?.catch?.((error: unknown) => {
+      if (!String((error as { message?: unknown })?.message).includes('Receiving end does not exist')) throw error
+    })
   } else if (isWebSocket(emitTransport)) {
     const payload = JSON.stringify(message)
     if (emitTransport.readyState === WebSocket.CONNECTING) {
