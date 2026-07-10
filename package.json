@@ -2,9 +2,21 @@
   "name": "osra",
   "version": "0.6.1",
   "description": "Easy communication between workers",
+  "homepage": "https://github.com/Banou26/osra#readme",
+  "bugs": {
+    "url": "https://github.com/Banou26/osra/issues"
+  },
+  "license": "MIT",
+  "author": "Banou26",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Banou26/osra.git"
+  },
   "files": [
     "build"
   ],
+  "type": "module",
+  "sideEffects": false,
   "main": "build/index.js",
   "types": "./build/index.d.ts",
   "exports": {
@@ -18,14 +30,13 @@
     },
     "./package.json": "./package.json"
   },
-  "type": "module",
   "scripts": {
-    "build": "vite build && tsc --declaration --emitDeclarationOnly",
-    "build-watch": "vite build --watch",
+    "build": "vp build && tsc --declaration --emitDeclarationOnly",
+    "build-watch": "vp build --watch",
     "clean": "rimraf build",
     "prepublishOnly": "npm run clean && npm run build",
-    "build-test": "vite build --config vite.test.config.ts",
-    "build-test-watch": "vite build --config vite.test.config.ts --watch",
+    "build-test": "vp build --config vite.test.config.ts",
+    "build-test-watch": "vp build --config vite.test.config.ts --watch",
     "dev": "concurrently \"npm run build-test-watch\"",
     "_dev": "concurrently \"npm run build-watch\" \"npm run build-test-watch\" \"npm run test-watch\"",
     "dev2": "concurrently \"npm run build-watch\" \"npm run build-test-watch\" \"npm run test-watch-headful\"",
@@ -41,16 +52,6 @@
     "test-extension": "npm run build-extension-test && npx playwright test -c playwright.extension.config.ts",
     "check-consumer-types": "npm run build && tsc --noEmit -p tsconfig.consumer.json"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/Banou26/osra.git"
-  },
-  "author": "Banou26",
-  "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/Banou26/osra/issues"
-  },
-  "homepage": "https://github.com/Banou26/osra#readme",
   "dependencies": {
     "@types/webextension-polyfill": "^0.12.4"
   },
@@ -70,9 +71,19 @@
     "nyc": "^17.1.0",
     "playwright": "^1.58.2",
     "typescript": "7.0.1-rc",
-    "vite": "^8.0.3",
+    "vite": "npm:@voidzero-dev/vite-plus-core@0.2.4",
     "vite-plugin-istanbul": "^8.0.0",
+    "vite-plus": "0.2.4",
     "ws": "^8.21.0"
   },
-  "sideEffects": false
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@0.2.4"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "npm",
+      "version": "12.0.1",
+      "onFail": "download"
+    }
+  }
 }
