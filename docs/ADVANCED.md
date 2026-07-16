@@ -197,6 +197,17 @@ Always set `origin` for cross-origin window messaging. Notes: events without an 
 platform stamps `event.origin`), and the filter is not applied to custom *function*
 receives, which only get key/name filtering.
 
+One outbound exception: the unsolicited announce beacon is posted with `targetOrigin`
+`'*'` regardless of the configured `origin`. Until a freshly created cross-origin iframe
+commits its document, its window still holds the initial `about:blank` (which inherits
+the embedder's origin), so a strict `targetOrigin` would be dropped by the browser with a
+mismatch error on every retry. The beacon carries only channel identifiers (`key`, `name`,
+`uuid`) - no data - and whatever answers it must still pass the inbound origin filter.
+Every other envelope (announce replies, `init`, messages, `close`) is only sent after the
+peer's own message proved its committed origin, and keeps the strict `targetOrigin`.
+Consequence: a wrong-origin embedder can observe the beacon's identifiers, but cannot
+complete a handshake or receive any data.
+
 ### `key` is namespacing, not authentication
 
 `key` (default `'__OSRA_DEFAULT_KEY__'`) is an equality check on a plaintext envelope

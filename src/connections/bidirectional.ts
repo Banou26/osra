@@ -207,11 +207,17 @@ export const init = <TModules extends readonly RevivableModule[]>(
   // A lone announce is lost when the counterpart isn't listening yet (still-loading iframe,
   // relay attached after a worker exposes) - re-announce with capped backoff until a peer
   // connects. The uuid is stable across retries, so duplicates are dropped as handshake echoes.
+  // Posted with '*' instead of the configured origin: until a cross-origin iframe commits,
+  // its window still holds the initial about:blank document (which inherits the embedder's
+  // origin), so a strict targetOrigin fails the browser's delivery check - the message is
+  // dropped and a mismatch error is logged on every retry. The bare announce carries only
+  // channel identifiers (no data), inbound replies stay origin-filtered on receive, and every
+  // other message type is sent strict after the peer's own message proved its committed origin.
   let announceDelay = 50
   let announceTimeout: ReturnType<typeof setTimeout> | undefined
   const announce = () => {
     if (ctx.unregisterSignal?.aborted || ctx.connectionContexts.size > 0) return
-    try { ctx.sendMessage({ type: 'announce' }) } catch { /* transient send failure - keep retrying */ }
+    try { ctx.sendMessage({ type: 'announce' }, '*') } catch { /* transient send failure - keep retrying */ }
     announceTimeout = setTimeout(announce, announceDelay)
     announceDelay = Math.min(announceDelay * 2, 1_000)
   }

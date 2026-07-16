@@ -94,14 +94,14 @@ export const startConnections = <
 
   const uuid: Uuid = _uuid ?? globalThis.crypto.randomUUID()
 
-  const sendEnvelope = (message: MessageVariant) => {
+  const sendEnvelope = (message: MessageVariant, targetOrigin: string = origin) => {
     const envelope = { [OSRA_KEY]: key, name, uuid, ...message }
-    sendOsraMessage(transport, envelope, origin, getTransferableObjects(envelope))
+    sendOsraMessage(transport, envelope, targetOrigin, getTransferableObjects(envelope))
   }
 
-  const sendMessage = (message: MessageVariant) => {
+  const sendMessage = (message: MessageVariant, targetOrigin?: string) => {
     if (unregisterSignal?.aborted) return
-    sendEnvelope(message)
+    sendEnvelope(message, targetOrigin)
   }
 
   const protocolEventTarget = createTypedEventTarget<{ message: CustomEvent<Message<MergedModules>> }>()

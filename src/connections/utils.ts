@@ -60,7 +60,9 @@ export type ProtocolContext<
   connectionContexts: Map<string, ConnectionContext<TModules>>
   getUuid: () => Uuid
   presetRemoteUuid?: Uuid
-  sendMessage: (message: MessageVariant) => void
+  /** targetOrigin overrides the configured origin for this one send - only
+   *  the unsolicited announce beacon broadcasts with '*'. */
+  sendMessage: (message: MessageVariant, targetOrigin?: string) => void
   protocolEventTarget: ProtocolEventTarget<TModules>
   resolveRemoteValue: (value: Capable<TModules>) => void
   rejectRemoteValue: (error: unknown) => void
