@@ -255,7 +255,7 @@ await remote.render(transfer(pixels)) // moved - pixels is detached locally
   - a protocol `close` is sent to every connected peer and per-connection state is disposed,
   - pending RPC calls reject with `'osra: connection closed'` on **both** sides (the peer receiving `close` rejects its pending calls too),
   - proxied streams on wire-routed channels (JSON transports) are cancelled/aborted with the same error.
-- Pass a signal that has not already aborted: if `unregisterSignal` is aborted before `expose()` is called, no listener is registered and the returned promise never settles (it neither resolves nor rejects).
+- An already-aborted `unregisterSignal` short-circuits: nothing starts and `expose()` rejects immediately with the signal's abort reason.
 - Promises and streams riding real transferred `MessagePort`s on structured-clone transports live independently of the connection and survive its closure; wire-routed traffic does not.
 - After aborting, calling `expose()` again on the same transport performs a fresh handshake.
 

@@ -166,10 +166,8 @@ Aborting the signal after `expose()` was called is explicit local teardown
 - per-connection state is disposed via the teardown registry (`src/utils/teardown.ts`),
 - the transport listener is removed and further sends become no-ops.
 
-Passing an *already-aborted* signal is different: the transport listener is never
-registered, and the abort event will never fire for the internally attached reject
-handler, so the returned promise stays pending forever instead of rejecting. Check
-`signal.aborted` before calling `expose()`.
+Passing an *already-aborted* signal short-circuits: nothing is registered or sent, and
+the returned promise rejects immediately with the signal's abort reason.
 
 Disposal rejects pending **wire-routed** RPC with `Error('osra: connection closed')` on
 *both* sides: the peer that receives the protocol `close` runs the same teardown, so its

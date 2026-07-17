@@ -39,7 +39,7 @@ Aborting the signal:
 - rejects in-flight RPC calls with `Error('osra: connection closed')` on **both** sides: the peer that receives `close` also tears down its connection state and rejects its own pending calls into you
 - cancels/aborts proxied streams on wire-routed channels (JSON transports) with the same error
 
-If the signal is already aborted when `expose()` is called, nothing starts: no listener is registered, no announce goes out, and the returned promise stays pending forever. It does not reject with the abort reason, because rejection is driven by the `abort` event and that event already fired before the handler existed. Abort-based rejection only covers aborts that happen after the call, so check `signal.aborted` before calling `expose()` when teardown can race startup.
+If the signal is already aborted when `expose()` is called, nothing starts: no listener is registered, no announce goes out, and the returned promise rejects immediately with the signal's abort reason. Teardown racing startup is therefore safe in both orders.
 
 The internal promise is pre-caught, so fire-and-forget `expose(value, …)` (the typical server-side pattern) never surfaces an unhandled rejection on abort; awaiting callers still observe it.
 

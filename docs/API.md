@@ -77,7 +77,7 @@ Aborting the signal:
 - rejects the pending `expose()` promise with the signal's abort reason
 - rejects in-flight RPC calls with `Error('osra: connection closed')` **on both sides**: the peer that receives `close` also tears down its connection state and rejects its own pending calls into you
 
-If the signal is already aborted when `expose()` is called, no listener is registered and the returned promise **never settles**: the rejection is driven by an `'abort'` event listener added after the fact, which never fires for a signal that was already aborted. Check `signal.aborted` before calling if this can happen. For aborts after the call, the internal promise is pre-caught, so fire-and-forget `expose(value, …)` (the typical server-side pattern) never surfaces an unhandled rejection; awaiting callers observe the rejection normally.
+If the signal is already aborted when `expose()` is called, nothing starts (no listener is registered, no announce goes out) and the returned promise rejects immediately with the signal's abort reason. In every abort path the internal promise is pre-caught, so fire-and-forget `expose(value, …)` (the typical server-side pattern) never surfaces an unhandled rejection; awaiting callers observe the rejection normally.
 
 One exception: promises riding a **real transferred `MessagePort`** on a structured-clone transport are entangled by the platform, not routed by osra, so they stay live independently of the connection. Wire-routed calls (functions, JSON-mode ports) always reject on connection death.
 

@@ -138,6 +138,14 @@ export const startConnections = <
     unregisterSignal
   })
 
+  // A signal that is already aborted at call time rejects immediately and
+  // registers nothing: its 'abort' event has fired and will never fire again,
+  // so the listener below would leave the promise pending forever.
+  if (unregisterSignal?.aborted) {
+    rejectRemoteValue(unregisterSignal.reason)
+    return remoteValuePromise as Promise<T>
+  }
+
   // Abort = explicit local teardown: notify every tracked peer, dispose
   // per-connection state, and reject the (possibly still pending) handshake.
   unregisterSignal?.addEventListener('abort', () => {

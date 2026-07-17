@@ -29,6 +29,15 @@ export const abortRejectsPendingExpose = async () => {
   await expect(pending).to.eventually.be.rejectedWith(/torn down/)
 }
 
+export const alreadyAbortedSignalRejectsImmediately = async () => {
+  const { port1 } = new MessageChannel()
+  const controller = new AbortController()
+  controller.abort(new Error('pre-aborted'))
+  await expect(
+    expose({}, { transport: port1, unregisterSignal: controller.signal }),
+  ).to.eventually.be.rejectedWith(/pre-aborted/)
+}
+
 export const abortRejectsPendingCalls = async () => {
   const { port1, port2 } = new MessageChannel()
   const value = { hang: () => new Promise<void>(() => {}) }
