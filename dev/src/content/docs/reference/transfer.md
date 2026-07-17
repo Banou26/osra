@@ -28,7 +28,7 @@ const buffer = new ArrayBuffer(1_000_000)
 await remote.process(transfer(buffer)) // buffer is detached locally
 ```
 
-Moving large buffers avoids the copy entirely — see [performance](/guides/performance/) for when this matters.
+Moving large buffers avoids the copy entirely; see [performance](/guides/performance/) for when this matters.
 
 ## JSON transports
 
@@ -51,9 +51,9 @@ A bare send still detaches them locally; `transfer()` adds nothing there.
 
 ## Streams are proxied, not moved
 
-`ReadableStream` and `WritableStream` are never transferred natively: their revivable modules claim them ahead of the transfer machinery and proxy them over a routed channel, chunk by chunk, on clone and JSON transports alike. Sending locks the source (a reader/writer is acquired) rather than detaching it, and `transfer()` is a no-op on them — see [performance](/guides/performance/) for the implications on large binary data. `TransformStream` has no proxy module, so it rides native structured-clone transfer (clone transports only).
+`ReadableStream` and `WritableStream` are never transferred natively: their revivable modules claim them ahead of the transfer machinery and proxy them over a routed channel, chunk by chunk, on clone and JSON transports alike. Sending locks the source (a reader/writer is acquired) rather than detaching it, and `transfer()` is a no-op on them; see [performance](/guides/performance/) for the implications on large binary data. `TransformStream` has no proxy module, so it rides native structured-clone transfer (clone transports only).
 
 ## See also
 
-- [Identity and transfer](/guides/identity-and-transfer/) — when to reach for `transfer()` versus [`identity()`](/reference/identity/)
-- [Supported types](/guides/supported-types/) — the full type matrix across clone and JSON transports
+- [Identity and transfer](/guides/identity-and-transfer/): when to reach for `transfer()` versus [`identity()`](/reference/identity/)
+- [Supported types](/guides/supported-types/): the full type matrix across clone and JSON transports

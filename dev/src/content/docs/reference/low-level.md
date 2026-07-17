@@ -46,5 +46,5 @@ Sends a raw envelope on any emit transport. It JSON-stringifies for WebSocket an
 
 ## See also
 
-- [Wire protocol](/reference/wire-protocol/) — the envelope format these functions carry
-- [Custom transports](/guides/custom-transports/) — wrapping your own channel in `{ emit, receive }` instead of dropping below the connection layer
+- [Wire protocol](/reference/wire-protocol/): the envelope format these functions carry
+- [Custom transports](/guides/custom-transports/): wrapping your own channel in `{ emit, receive }` instead of dropping below the connection layer

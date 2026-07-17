@@ -101,4 +101,4 @@ If multiple peers connect over the same transport, the returned promise resolves
 
 ## Where next
 
-See [transports](/guides/transports/) for every channel osra runs over — windows and iframes, SharedWorkers, WebSockets, service workers, web extensions, and custom `{ emit, receive }` pairs. [Supported types](/guides/supported-types/) lists everything that crosses the boundary, on both structured-clone and JSON transports. For the full `expose()` signature, handshake sequence, and error behavior, read the [expose() reference](/reference/expose/).
+See [transports](/guides/transports/) for every channel osra runs over: windows and iframes, SharedWorkers, WebSockets, service workers, web extensions, and custom `{ emit, receive }` pairs. [Supported types](/guides/supported-types/) lists everything that crosses the boundary, on both structured-clone and JSON transports. For the full `expose()` signature, handshake sequence, and error behavior, read the [expose() reference](/reference/expose/).

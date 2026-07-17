@@ -15,14 +15,14 @@ const identity: <T>(value: T) => T
 
 ## Semantics
 
-Without `identity()`, every send produces an independent copy — including the return trip: a revived value passed back *bare* arrives as a fresh copy, so the returning side must re-wrap it.
+Without `identity()`, every send produces an independent copy, including the return trip: a revived value passed back *bare* arrives as a fresh copy, so the returning side must re-wrap it.
 
 Wrapping changes both directions:
 
 - **Same reference on every send**: sending the same wrapped value twice revives as the same object on the peer.
 - **Round trip to the original**: when the peer wraps the revived object in `identity()` and sends it back, you receive your original reference (`===`).
 
-`identity()` also dedupes repeat sends on the wire: the first send ships the payload plus an id, later sends of the same reference ship only the id, and the peer reuses its cached revived value — see [performance](/guides/performance/).
+`identity()` also dedupes repeat sends on the wire: the first send ships the payload plus an id, later sends of the same reference ship only the id, and the peer reuses its cached revived value; see [performance](/guides/performance/).
 
 ## Example
 
@@ -40,7 +40,7 @@ await remote.register(identity(config))
 await remote.register(identity(config)) // peer sees the same object twice
 ```
 
-For a round-trip walkthrough — handing a reference to the peer and receiving the original back — see [identity and transfer](/guides/identity-and-transfer/).
+For a round-trip walkthrough (handing a reference to the peer and receiving the original back), see [identity and transfer](/guides/identity-and-transfer/).
 
 ## Garbage collection
 
@@ -48,5 +48,5 @@ Per-connection identity caches are GC-aware: when the sender of an `identity()`-
 
 ## See also
 
-- [Identity and transfer](/guides/identity-and-transfer/) — when to reach for `identity()` versus [`transfer()`](/reference/transfer/)
-- [Limitations](/reference/limitations/) — shared references duplicate unless wrapped with `identity()`
+- [Identity and transfer](/guides/identity-and-transfer/): when to reach for `identity()` versus [`transfer()`](/reference/transfer/)
+- [Limitations](/reference/limitations/): shared references duplicate unless wrapped with `identity()`

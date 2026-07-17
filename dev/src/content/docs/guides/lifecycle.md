@@ -3,15 +3,15 @@ title: Errors and lifecycle
 description: How errors cross the boundary, when expose() rejects, and how connections tear down explicitly or through garbage collection.
 ---
 
-osra connections carry errors with full fidelity and can be torn down explicitly with an `AbortSignal` or incrementally by garbage collection. This page covers what rejects, when, and with what — and what keeps working after a connection dies.
+osra connections carry errors with full fidelity and can be torn down explicitly with an `AbortSignal` or incrementally by garbage collection. This page covers what rejects, when, and with what, and what keeps working after a connection dies.
 
 ## Remote errors
 
-Remote functions that throw reject the caller's promise with the revived error, subclass and all. `TypeError`, `RangeError`, `AggregateError` (with nested errors), `DOMException`, and other subclasses cross the boundary with `cause` and `stack` preserved — see [supported types](/guides/supported-types/) for the full matrix.
+Remote functions that throw reject the caller's promise with the revived error, subclass and all. `TypeError`, `RangeError`, `AggregateError` (with nested errors), `DOMException`, and other subclasses cross the boundary with `cause` and `stack` preserved; see [supported types](/guides/supported-types/) for the full matrix.
 
 ## When `expose()` rejects
 
-`expose()` rejects rather than hanging: on an unusable transport (one that can't both emit and receive — a configuration error, rejected immediately), on a value that can't be boxed (circular structures reject with a `TypeError`), on a malformed peer `init` (the revive error surfaces), and on a peer `close` that arrives before its `init`. The exact errors are listed in the [expose() reference](/reference/expose/#errors).
+`expose()` rejects rather than hanging: on an unusable transport (one that can't both emit and receive: a configuration error, rejected immediately), on a value that can't be boxed (circular structures reject with a `TypeError`), on a malformed peer `init` (the revive error surfaces), and on a peer `close` that arrives before its `init`. The exact errors are listed in the [expose() reference](/reference/expose/#errors).
 
 ## Teardown with `unregisterSignal`
 
@@ -53,7 +53,7 @@ Beyond explicit teardown, unused resources are reclaimed through `FinalizationRe
 
 On structured-clone transports, a real transferred `MessagePort` is a platform channel independent of the osra envelope; it keeps working after the protocol connection dies. Concretely: promises boxed on a clone transport ride a real transferred port and **stay pending/live** across teardown rather than rejecting.
 
-Everything `portId`-routed — function calls always, all live values on JSON transports, synthetic ports — dies with the connection and rejects with `osra: connection closed`. See [JSON vs clone transports](/internals/json-vs-clone/) for which values ride which channel.
+Everything `portId`-routed (function calls always, all live values on JSON transports, synthetic ports) dies with the connection and rejects with `osra: connection closed`. See [JSON vs clone transports](/internals/json-vs-clone/) for which values ride which channel.
 
 ## Reconnecting after teardown
 

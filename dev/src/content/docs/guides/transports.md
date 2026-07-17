@@ -1,6 +1,6 @@
 ---
 title: Transports
-description: The built-in channels osra connects over — Workers, windows and iframes, SharedWorkers, WebSockets, service workers, and web extension messaging.
+description: "The built-in channels osra connects over: Workers, windows and iframes, SharedWorkers, WebSockets, service workers, and web extension messaging."
 ---
 
 A transport is the channel `expose()` talks over. osra accepts the platform objects below directly; anything else can be wrapped in a plain `{ emit, receive }` pair.
@@ -24,7 +24,7 @@ Transports are either **structured-clone** (Worker, Window, MessagePort, SharedW
 
 ## Worker
 
-Pass the `Worker` on the page side and `globalThis` (the `DedicatedWorkerGlobalScope`) inside the worker — the worker scope isn't part of the `Transport` type union, so cast it:
+Pass the `Worker` on the page side and `globalThis` (the `DedicatedWorkerGlobalScope`) inside the worker; the worker scope isn't part of the `Transport` type union, so cast it:
 
 ```ts twoslash
 import type { Transport } from 'osra'
@@ -55,7 +55,7 @@ The full worker walkthrough lives in [getting started](/start/getting-started/).
 
 ## Window ↔ iframe
 
-`message` events fire on the window that receives them, so each side pairs the *other* window for emit with its *own* window for receive. `origin` is applied in both directions: outbound it is the `postMessage` `targetOrigin`, inbound it drops events whose `event.origin` differs. Set it whenever you talk across origins — see [security](/guides/security/) for the trust model and the one announce-beacon exception.
+`message` events fire on the window that receives them, so each side pairs the *other* window for emit with its *own* window for receive. `origin` is applied in both directions: outbound it is the `postMessage` `targetOrigin`, inbound it drops events whose `event.origin` differs. Set it whenever you talk across origins; see [security](/guides/security/) for the trust model and the one announce-beacon exception.
 
 ```ts twoslash
 import { expose } from 'osra'
@@ -208,4 +208,4 @@ If you accept `onConnectExternal`/`onMessageExternal`, validate senders yourself
 
 ## Anything else
 
-Any plain object with `emit` and `receive` works as a transport — a `BroadcastChannel`, a native bridge, a text protocol of your own. See [custom transports](/guides/custom-transports/).
+Any plain object with `emit` and `receive` works as a transport: a `BroadcastChannel`, a native bridge, a text protocol of your own. See [custom transports](/guides/custom-transports/).

@@ -3,7 +3,7 @@ title: Security and trust
 description: What origin and key do and do not protect against, and how to reason about untrusted peers sharing your channel.
 ---
 
-osra treats peers as semi-trusted: malformed payloads are handled cleanly, `origin` filters window messages in both directions, but nothing on the wire is authentication. This page spells out exactly which guarantees each option gives you — and which it does not.
+osra treats peers as semi-trusted: malformed payloads are handled cleanly, `origin` filters window messages in both directions, but nothing on the wire is authentication. This page spells out exactly which guarantees each option gives you, and which it does not.
 
 ## `origin`: inbound and outbound
 
@@ -30,7 +30,7 @@ const host = await expose(widgetApi, {
 
 Always set `origin` for cross-origin window messaging. Two caveats:
 
-- Events without an origin (worker messages, custom transports) bypass the check — it is only meaningful where the platform stamps `event.origin`. Non-window transports (Worker, MessagePort, WebSocket, ServiceWorkerContainer, WebExtension, custom) are not origin-filtered; WebSocket/ServiceWorker events carry their own unrelated origins, so filtering there would be a footgun.
+- Events without an origin (worker messages, custom transports) bypass the check; it is only meaningful where the platform stamps `event.origin`. Non-window transports (Worker, MessagePort, WebSocket, ServiceWorkerContainer, WebExtension, custom) are not origin-filtered; WebSocket/ServiceWorker events carry their own unrelated origins, so filtering there would be a footgun.
 - The filter is not applied to [custom *function* receives](/guides/custom-transports/), which only get key/name filtering.
 
 ## The announce beacon exception
@@ -39,7 +39,7 @@ One outbound exception: the unsolicited announce beacon is posted with `targetOr
 
 This is safe because:
 
-- the beacon carries only channel identifiers (`key`, `name`, `uuid`) — no data,
+- the beacon carries only channel identifiers (`key`, `name`, `uuid`), no data,
 - whatever answers it must still pass the inbound origin filter,
 - every other envelope (announce replies, `init`, messages, `close`) is only sent after the peer's own message proved its committed origin, and keeps the strict `targetOrigin`.
 
@@ -60,7 +60,7 @@ Consequence: a wrong-origin embedder can observe the beacon's identifiers, but c
 Be honest about the model: a peer that can post on your transport is **semi-trusted**. It can:
 
 - complete the handshake first ([first wins](/guides/multi-peer/)),
-- spoof envelope `uuid`s to address your connections — including sending `{ type: 'close' }` to tear down another peer's connection,
+- spoof envelope `uuid`s to address your connections, including sending `{ type: 'close' }` to tear down another peer's connection,
 - feed malformed boxes (which reject your handshake),
 - call anything you exposed,
 - flood you with announces or port traffic.

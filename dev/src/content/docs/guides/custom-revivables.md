@@ -3,7 +3,7 @@ title: Custom revivables
 description: Teach osra to carry your own types across the wire by writing a RevivableModule.
 ---
 
-Classes and prototypes are not preserved by default — values cross as plain data. A **revivable module** fixes that for a type you own: it tells osra how to recognize the value, flatten it into a serializable box, and reconstruct it on the other side.
+Classes and prototypes are not preserved by default; values cross as plain data. A **revivable module** fixes that for a type you own: it tells osra how to recognize the value, flatten it into a serializable box, and reconstruct it on the other side.
 
 ## Anatomy of a `RevivableModule`
 
@@ -51,7 +51,7 @@ const withPoint = <TDefaults extends readonly RevivableModule[]>(defaults: TDefa
   [pointModule, ...defaults] as const
 ```
 
-The `revivableModules` option of [`expose()`](/reference/expose/) is a function over the default module list — here `withPoint` prepends `pointModule` and keeps the defaults intact.
+The `revivableModules` option of [`expose()`](/reference/expose/) is a function over the default module list; here `withPoint` prepends `pointModule` and keeps the defaults intact.
 
 ## Register on both sides
 
@@ -106,7 +106,7 @@ The `revivableModules` function receives the defaults and returns the final orde
 
 ## Box contents and nested values
 
-A box must spread `BoxBase` (`{ __OSRA_BOX__: 'revivable' }`) and carry only JSON/clone-safe fields — see the [wire protocol](/reference/wire-protocol/) for how boxes travel inside envelopes.
+A box must spread `BoxBase` (`{ __OSRA_BOX__: 'revivable' }`) and carry only JSON/clone-safe fields; see the [wire protocol](/reference/wire-protocol/) for how boxes travel inside envelopes.
 
 Nested capable values are **not** walked for you; call `recursiveBox`/`recursiveRevive` with the provided context. When your type needs a live channel, box a function or `MessagePort` through `recursiveBox` and embed the resulting box.
 

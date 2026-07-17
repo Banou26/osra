@@ -9,7 +9,7 @@ WebSocket and the WebExtension family are JSON transports; custom transports can
 
 These all still work over a text-only channel: `undefined`, `NaN`/`±Infinity`, `Date`, `BigInt`, `Map`/`Set`, TypedArrays and `ArrayBuffer` (as base64), `Error` subclasses, `Symbol`, and every live type (functions, promises, async iterables, readable/writable streams, ports, `AbortSignal`, `Request`/`Response`).
 
-Live values ride synthetic [`EventChannel` ports](/internals/architecture/) instead of transferred `MessagePort`s: fully functional, but wire-routed — so they die with the connection. See [lifecycle](/guides/lifecycle/) for what survives connection death.
+Live values ride synthetic [`EventChannel` ports](/internals/architecture/) instead of transferred `MessagePort`s: fully functional, but wire-routed, so they die with the connection. See [lifecycle](/guides/lifecycle/) for what survives connection death.
 
 ## Degrades or unavailable on JSON
 
@@ -19,4 +19,4 @@ Live values ride synthetic [`EventChannel` ports](/internals/architecture/) inst
 
 ## Unclonables fail on both kinds
 
-On both kinds of transport, values nothing can handle (e.g. `WeakMap`) coerce to `{}` at runtime via the `unclonable` catch-all and are rejected at the type level by `Capable` — see the [TypeScript reference](/reference/typescript/). The full per-type matrix for both transport kinds is in [supported types](/guides/supported-types/).
+On both kinds of transport, values nothing can handle (e.g. `WeakMap`) coerce to `{}` at runtime via the `unclonable` catch-all and are rejected at the type level by `Capable`; see the [TypeScript reference](/reference/typescript/). The full per-type matrix for both transport kinds is in [supported types](/guides/supported-types/).

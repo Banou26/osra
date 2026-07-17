@@ -36,7 +36,7 @@ Non-trivial values inside `data` are **boxes**: plain serializable objects tagge
 { "__OSRA_BOX__": 'revivable', type: '<module type>', ...fields }
 ```
 
-For example `{ "__OSRA_BOX__": 'revivable', type: 'date', ... }`. Each box is produced and revived by a revivable module; you can add your own — see [custom revivables](/guides/custom-revivables/).
+For example `{ "__OSRA_BOX__": 'revivable', type: 'date', ... }`. Each box is produced and revived by a revivable module; you can add your own. See [custom revivables](/guides/custom-revivables/).
 
 ## Exported constants
 

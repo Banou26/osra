@@ -7,7 +7,7 @@ osra hides most of the messaging boundary, but not all of it. These constraints 
 
 ## Circular structures throw
 
-A circular structure throws a `TypeError` at send time. Break the cycle or restructure — for example, send the container behind a function.
+A circular structure throws a `TypeError` at send time. Break the cycle or restructure; for example, send the container behind a function.
 
 ## Shared references duplicate
 
@@ -39,4 +39,4 @@ Synchronous return values still arrive as `Promise`s; every call across the boun
 
 ## Relay capability classes must match
 
-Relaying between a structured-clone and a JSON transport destroys embedded ports in serialization; keep both legs of a [relay()](/reference/relay/) in the same class — both structured-clone or both JSON.
+Relaying between a structured-clone and a JSON transport destroys embedded ports in serialization; keep both legs of a [relay()](/reference/relay/) in the same class: both structured-clone or both JSON.

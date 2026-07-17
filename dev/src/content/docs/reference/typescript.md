@@ -29,13 +29,13 @@ expose({ ok: async () => 1, cache: new WeakMap() }, { transport: worker })
 // type error: Value type must resolve to a Capable, with `cache` identified as the bad field
 ```
 
-The error identifies the offending path and its parent object, so a `WeakMap` buried three levels deep fails at compile time, not at runtime. (At runtime, unclonables coerce to `{}` — see [limitations](/reference/limitations/).)
+The error identifies the offending path and its parent object, so a `WeakMap` buried three levels deep fails at compile time, not at runtime. (At runtime, unclonables coerce to `{}`; see [limitations](/reference/limitations/).)
 
 Registering [custom revivables](/guides/custom-revivables/) widens the check: passing the extended module list type as the second type parameter of `expose()` teaches `Capable` that your type is now a legal value.
 
 ## JSON transports narrow `Capable`
 
-`Capable` is narrower on JSON transports: values that depend on structured clone (`RegExp`, `SharedArrayBuffer`, `ImageBitmap`, …) are rejected at the type level, so misuse fails at compile time rather than silently coercing. Everything with a dedicated revivable module (`Date`, `Map`, `ArrayBuffer` via base64, functions, streams, …) still works — see [supported types](/guides/supported-types/) for the full matrix.
+`Capable` is narrower on JSON transports: values that depend on structured clone (`RegExp`, `SharedArrayBuffer`, `ImageBitmap`, …) are rejected at the type level, so misuse fails at compile time rather than silently coercing. Everything with a dedicated revivable module (`Date`, `Map`, `ArrayBuffer` via base64, functions, streams, …) still works; see [supported types](/guides/supported-types/) for the full matrix.
 
 ## Requirements
 

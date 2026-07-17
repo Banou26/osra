@@ -1,17 +1,17 @@
 ---
 title: Architecture
-description: How osra's three layers — transports, connections, and revivables — turn any message channel into a live RPC connection.
+description: How osra's three layers (transports, connections, and revivables) turn any message channel into a live RPC connection.
 ---
 
 osra is three layers: transports normalize any channel into two messaging primitives, connections run the handshake and per-peer protocol state, and revivables translate values into wire-safe boxes and back. This page maps each layer to its place in `src/` and explains the two mechanisms everything else is built on: the box → revive walk and `portId` routing.
 
 ## The three layers
 
-1. **Transports** (`src/utils/transport.ts`, `src/utils/type-guards.ts`) normalize any supported channel — Window, Worker, `DedicatedWorkerGlobalScope`, SharedWorker, MessagePort, WebSocket, ServiceWorker/ServiceWorkerContainer, WebExtension runtime/Port/onConnect/onMessage, or a custom `{ emit, receive }` pair — into two primitives: `sendOsraMessage(transport, envelope, origin, transferables)` and `registerOsraMessageListener({ listener, transport, key, remoteName, origin, unregisterSignal })`. See [transports](/guides/transports/) for the user-facing catalogue and [low-level messaging](/reference/low-level/) for the primitives themselves.
+1. **Transports** (`src/utils/transport.ts`, `src/utils/type-guards.ts`) normalize any supported channel (Window, Worker, `DedicatedWorkerGlobalScope`, SharedWorker, MessagePort, WebSocket, ServiceWorker/ServiceWorkerContainer, WebExtension runtime/Port/onConnect/onMessage, or a custom `{ emit, receive }` pair) into two primitives: `sendOsraMessage(transport, envelope, origin, transferables)` and `registerOsraMessageListener({ listener, transport, key, remoteName, origin, unregisterSignal })`. See [transports](/guides/transports/) for the user-facing catalogue and [low-level messaging](/reference/low-level/) for the primitives themselves.
 
 2. **Connections** (`src/connections/`) own the handshake, per-peer connection state, and the envelope protocol. One `expose()` call creates one protocol instance with its own `uuid`; each discovered peer gets a `ConnectionContext` keyed by the peer's uuid. Envelope shapes are documented in the [wire protocol reference](/reference/wire-protocol/); how peers find each other is covered in [the handshake](/internals/handshake/).
 
-3. **Revivables** (`src/revivables/`) are an ordered list of modules, each owning one value type with `isType` / `box` / `revive` (and optionally `init` for per-connection state). Non-JSON values inside envelope `data` are replaced by **boxes**: plain objects tagged with `__OSRA_BOX__` that name the module that owns them. You can add, drop, reorder, or override modules — see [custom revivables](/guides/custom-revivables/).
+3. **Revivables** (`src/revivables/`) are an ordered list of modules, each owning one value type with `isType` / `box` / `revive` (and optionally `init` for per-connection state). Non-JSON values inside envelope `data` are replaced by **boxes**: plain objects tagged with `__OSRA_BOX__` that name the module that owns them. You can add, drop, reorder, or override modules; see [custom revivables](/guides/custom-revivables/).
 
 ## The box → revive walk
 
@@ -28,11 +28,11 @@ The walk's rules have direct consequences:
 
 Live values (functions, promises, streams, ports, signals, …) all reduce to MessagePort semantics. The message-port module (`src/revivables/message-port.ts`) multiplexes every such port over the *single* underlying transport: each boxed port gets a random `portId`, its traffic rides `{ type: 'message', portId, data }` envelopes, and a per-connection `Map<portId, handler>` gives O(1) dispatch. `{ type: 'message-port-close', portId }` tears one port down without touching the rest.
 
-On clone transports a real `MessagePort` is transferred directly when possible; everything else — and *everything* on [JSON transports](/internals/json-vs-clone/) — routes via `portId`. The distinction matters at teardown: wire-routed traffic dies with the connection, while real transferred ports survive it. See [lifecycle](/guides/lifecycle/).
+On clone transports a real `MessagePort` is transferred directly when possible; everything else (and *everything* on [JSON transports](/internals/json-vs-clone/)) routes via `portId`. The distinction matters at teardown: wire-routed traffic dies with the connection, while real transferred ports survive it. See [lifecycle](/guides/lifecycle/).
 
 ## EventChannel: synthetic ports
 
-`EventChannel`/`EventPort` (`src/utils/event-channel.ts`) is an in-memory MessageChannel look-alike — `postMessage` queues until `start()`, `close()` notifies the peer — that never touches structured clone. It is used wherever a real MessageChannel can't be:
+`EventChannel`/`EventPort` (`src/utils/event-channel.ts`) is an in-memory MessageChannel look-alike (`postMessage` queues until `start()`, `close()` notifies the peer) that never touches structured clone. It is used wherever a real MessageChannel can't be:
 
 - on JSON transports, where ports can't be transferred, and
 - for **every** function call channel (`src/revivables/function.ts`), even on clone transports, because revived live values appearing in call arguments aren't structured-clonable.

@@ -41,7 +41,7 @@ Transports come in two kinds: **structured-clone** (Worker, Window, MessagePort,
 
 ## Live values
 
-Functions, promises, async iterables, and streams don't cross as data — they cross as live proxies whose traffic is routed back to the original. All of them work on both transport kinds.
+Functions, promises, async iterables, and streams don't cross as data; they cross as live proxies whose traffic is routed back to the original. All of them work on both transport kinds.
 
 **Functions** become `(...args) => Promise<Awaited<R>>` on the peer. Arguments and results recurse through the same boxing as everything else, so you can pass callbacks to callbacks; throws reject the caller's promise.
 
@@ -49,7 +49,7 @@ Functions, promises, async iterables, and streams don't cross as data — they c
 
 **Async generators and async iterables** revive as `AsyncIterableIterator`: `next`/`return`/`throw` are proxied, `for await` works, and an early `break` on the consuming side propagates `return()` to the source so its `finally` blocks run.
 
-**`ReadableStream`** is proxied with credit-window backpressure — the consumer grants credit and the source pushes chunks up to the window, so a slow consumer stalls the producer — and a `cancel` reason crosses back to the source. **`WritableStream`** proxies `write`/`close`/`abort` with acks, and sink errors reject the writer. Note that a stream's body locks at first send: sending the same `ReadableStream` (or `Request`/`Response`) twice fails — see [Limitations](/reference/limitations/).
+**`ReadableStream`** is proxied with credit-window backpressure (the consumer grants credit and the source pushes chunks up to the window, so a slow consumer stalls the producer), and a `cancel` reason crosses back to the source. **`WritableStream`** proxies `write`/`close`/`abort` with acks, and sink errors reject the writer. Note that a stream's body locks at first send: sending the same `ReadableStream` (or `Request`/`Response`) twice fails; see [Limitations](/reference/limitations/).
 
 ## Error fidelity
 
@@ -65,8 +65,8 @@ An `EventTarget` revives as a **listener-only façade**: `addEventListener`/`rem
 
 ## Must-transfer types
 
-Some host objects (`OffscreenCanvas`, `MediaStreamTrack`, `RTCDataChannel`, `MediaSourceHandle`, `MIDIAccess`, and friends) can't be copied by structured clone at all, so they are always **moved** to the peer — detached locally on every send, whether or not you wrap them in `transfer()`. Clonable Transferables like `ImageBitmap`, `VideoFrame`, and `AudioData` are copied by default and only moved when wrapped; see [identity() and transfer()](/guides/identity-and-transfer/).
+Some host objects (`OffscreenCanvas`, `MediaStreamTrack`, `RTCDataChannel`, `MediaSourceHandle`, `MIDIAccess`, and friends) can't be copied by structured clone at all, so they are always **moved** to the peer, detached locally on every send, whether or not you wrap them in `transfer()`. Clonable Transferables like `ImageBitmap`, `VideoFrame`, and `AudioData` are copied by default and only moved when wrapped; see [identity() and transfer()](/guides/identity-and-transfer/).
 
 ## Unclonables coerce to `{}`
 
-Values nothing can handle — `WeakMap`, `WeakSet`, exotic host objects — coerce to `{}` at runtime, matching `JSON.stringify` behavior. You shouldn't hit this in practice: the compile-time `Capable` check rejects them at the `expose()` call site with the offending path pinpointed. See [TypeScript](/reference/typescript/).
+Values nothing can handle (`WeakMap`, `WeakSet`, exotic host objects) coerce to `{}` at runtime, matching `JSON.stringify` behavior. You shouldn't hit this in practice: the compile-time `Capable` check rejects them at the `expose()` call site with the offending path pinpointed. See [TypeScript](/reference/typescript/).

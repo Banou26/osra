@@ -3,7 +3,7 @@ title: Multi-peer connections
 description: What happens when several peers share one transport, and the per-port expose() pattern for SharedWorkers.
 ---
 
-A single `expose()` call can be reached by more than one peer — several pages connecting to one SharedWorker, several contexts on one broadcast channel. osra connects them all, but the returned promise only ever carries one value.
+A single `expose()` call can be reached by more than one peer: several pages connecting to one SharedWorker, several contexts on one broadcast channel. osra connects them all, but the returned promise only ever carries one value.
 
 ## First peer wins
 
@@ -15,7 +15,7 @@ First-wins has a security edge: on a channel where untrusted code can post, a ho
 
 ## One `expose()` per port
 
-When you need a value *per peer* — the SharedWorker case — expose once per port instead:
+When you need a value *per peer* (the SharedWorker case), expose once per port instead:
 
 ```ts twoslash
 declare global {
@@ -47,8 +47,8 @@ const worker = new SharedWorker('./shared-worker.ts', { type: 'module' })
 const remote = await expose<typeof api>({}, { transport: worker })
 ```
 
-The page passes the `SharedWorker` object itself; osra sends and listens on its `.port` (and starts it) internally. The worker side gets one `expose()` — and one first-wins promise — per connecting page, so each connection is isolated and each page's value is addressable.
+The page passes the `SharedWorker` object itself; osra sends and listens on its `.port` (and starts it) internally. The worker side gets one `expose()` (and one first-wins promise) per connecting page, so each connection is isolated and each page's value is addressable.
 
 ## Bridging peers
 
-To connect two peers that share no direct channel — two workers, or an iframe and a worker — a context that owns both transports can forward envelopes between them with [relay()](/reference/relay/).
+To connect two peers that share no direct channel (two workers, or an iframe and a worker), a context that owns both transports can forward envelopes between them with [relay()](/reference/relay/).

@@ -239,7 +239,7 @@ expose({
 
 ## `transfer()`
 
-`transfer(value)` opts a `Transferable` (`ArrayBuffer`, typed-array views, `ImageBitmap`, `OffscreenCanvas`, …) into move semantics: ownership transfers to the peer instead of copying. On JSON transports it silently degrades to a copy. `ReadableStream`/`WritableStream` are never moved — they are proxied chunk by chunk, so `transfer()` adds nothing for them.
+`transfer(value)` opts a `Transferable` (`ArrayBuffer`, typed-array views, `ImageBitmap`, `OffscreenCanvas`, …) into move semantics: ownership transfers to the peer instead of copying. On JSON transports it silently degrades to a copy. `ReadableStream`/`WritableStream` are never moved: they are proxied chunk by chunk, so `transfer()` adds nothing for them.
 
 ```ts
 import { transfer } from 'osra'

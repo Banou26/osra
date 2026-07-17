@@ -7,7 +7,7 @@ osra's overhead is small and predictable: one platform channel per connection, O
 
 ## One connection, one channel
 
-One connection = one platform channel. Every live value — functions, promises, streams, ports — multiplexes over it as `message` envelopes, with O(1) per-`portId` dispatch on each side. Adding more live values doesn't add channels; it adds routing entries in a map. See [Architecture](/internals/architecture/) for how `portId` routing works.
+One connection = one platform channel. Every live value (functions, promises, streams, ports) multiplexes over it as `message` envelopes, with O(1) per-`portId` dispatch on each side. Adding more live values doesn't add channels; it adds routing entries in a map. See [Architecture](/internals/architecture/) for how `portId` routing works.
 
 ## Per-call cost
 
@@ -21,9 +21,9 @@ Entries are dropped when the result settles. Chatty fine-grained calls are fine;
 
 ## Large binary data
 
-On structured-clone transports, wrap buffers in `transfer()` to move instead of copy — a 16 MB `ArrayBuffer` transfers without a byte copied (see [identity() and transfer()](/guides/identity-and-transfer/)).
+On structured-clone transports, wrap buffers in `transfer()` to move instead of copy: a 16 MB `ArrayBuffer` transfers without a byte copied (see [identity() and transfer()](/guides/identity-and-transfer/)).
 
-Real `MessagePort`s are must-transfer and always moved. Streams are **not**: the stream modules claim them first and replace them with a port channel, so chunks are proxied message-by-message with per-chunk boxing/copying — even under `transfer()`. For bulk binary data, prefer transferring buffers over streaming them when you can.
+Real `MessagePort`s are must-transfer and always moved. Streams are **not**: the stream modules claim them first and replace them with a port channel, so chunks are proxied message-by-message with per-chunk boxing/copying, even under `transfer()`. For bulk binary data, prefer transferring buffers over streaming them when you can.
 
 On JSON transports, `ArrayBuffer` and TypedArrays serialize to base64, which costs both size and CPU; `transfer()` degrades to a copy there. See [JSON vs clone transports](/internals/json-vs-clone/).
 

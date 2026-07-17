@@ -14,7 +14,7 @@ const expose: <T = unknown>(
 ) => Promise<Remote<T>>
 ```
 
-The value you pass is validated at compile time against `Capable`, the union of everything serializable for the inferred transport — see [Remote&lt;T&gt; and TypeScript](/reference/typescript/).
+The value you pass is validated at compile time against `Capable`, the union of everything serializable for the inferred transport; see [Remote&lt;T&gt; and TypeScript](/reference/typescript/).
 
 ## Both sides call expose()
 
@@ -62,7 +62,7 @@ With multiple peers on one transport, the promise resolves with the **first** pe
 
 ## `unregisterSignal` teardown
 
-Aborting the signal tears the connection down on both sides: the message listener stops, every tracked peer receives a protocol `close`, per-connection state is disposed, the pending `expose()` promise rejects with the abort reason, and in-flight RPC calls reject with `Error('osra: connection closed')` — on the peer too. The full teardown behavior (the already-aborted case, stream cancellation, what survives connection death) is documented in [lifecycle](/guides/lifecycle/).
+Aborting the signal tears the connection down on both sides: the message listener stops, every tracked peer receives a protocol `close`, per-connection state is disposed, the pending `expose()` promise rejects with the abort reason, and in-flight RPC calls reject with `Error('osra: connection closed')`, on the peer too. The full teardown behavior (the already-aborted case, stream cancellation, what survives connection death) is documented in [lifecycle](/guides/lifecycle/).
 
 ## Preset uuids (`uuid` + `remoteUuid`)
 
