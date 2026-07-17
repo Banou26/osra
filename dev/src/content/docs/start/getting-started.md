@@ -17,7 +17,7 @@ One ESM module, zero runtime dependencies. The published declarations require Ty
 
 Expose an API inside the worker:
 
-```ts
+```ts twoslash
 // worker.ts
 import type { Transport } from 'osra'
 
@@ -41,7 +41,24 @@ expose(api, { transport: globalThis as unknown as Transport })
 
 Consume it from the page:
 
-```ts
+```ts twoslash
+// @filename: worker.ts
+import type { Transport } from 'osra'
+import { expose } from 'osra'
+const api = {
+  add: async (a: number, b: number) => a + b,
+  makeCounter: async () => {
+    let count = 0
+    return async () => ++count
+  },
+  streamData: async function* () {
+    for (let i = 0; i < 3; i++) yield i
+  },
+}
+export type Api = typeof api
+expose(api, { transport: globalThis as unknown as Transport })
+// @filename: main.ts
+// ---cut---
 // main.ts
 import type { Api } from './worker'
 

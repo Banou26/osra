@@ -23,7 +23,7 @@ type RevivableModule = {
 
 ## Example: preserving a class instance
 
-```ts
+```ts twoslash
 import type { RevivableContext, RevivableModule } from 'osra'
 import { expose, BoxBase } from 'osra'
 
@@ -57,7 +57,35 @@ The `revivableModules` option of [`expose()`](/reference/expose/) is a function 
 
 Both sides must register the same modules; the second type parameter of `expose` carries the extended module list into the `Capable` check:
 
-```ts
+```ts twoslash
+import type { RevivableContext, RevivableModule } from 'osra'
+import { expose, BoxBase } from 'osra'
+
+class Point {
+  constructor(public x: number, public y: number) {}
+  distance() {
+    return Math.sqrt(this.x ** 2 + this.y ** 2)
+  }
+}
+
+const pointModule = {
+  type: 'point' as const,
+  isType: (value: unknown): value is Point => value instanceof Point,
+  box: (value: Point, _context: RevivableContext) => ({
+    ...BoxBase,
+    type: 'point' as const,
+    x: value.x,
+    y: value.y,
+  }),
+  revive: (value: { x: number, y: number }, _context: RevivableContext) =>
+    new Point(value.x, value.y),
+} as const satisfies RevivableModule
+
+const withPoint = <TDefaults extends readonly RevivableModule[]>(defaults: TDefaults) =>
+  [pointModule, ...defaults] as const
+
+declare const transport: Worker
+// ---cut---
 const value = async (p: Point) => new Point(p.x * 2, p.y * 2)
 expose(value, { transport, revivableModules: withPoint })
 

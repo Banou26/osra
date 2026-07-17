@@ -17,7 +17,11 @@ First-wins has a security edge: on a channel where untrusted code can post, a ho
 
 When you need a value *per peer* — the SharedWorker case — expose once per port instead:
 
-```ts
+```ts twoslash
+declare global {
+  var onconnect: ((event: MessageEvent) => void) | null
+}
+// ---cut---
 // shared-worker.ts
 import { expose } from 'osra'
 
@@ -28,7 +32,14 @@ globalThis.onconnect = (event: MessageEvent) => {
 }
 ```
 
-```ts
+```ts twoslash
+// @noEmit: true
+// @allowImportingTsExtensions: true
+// @filename: shared-worker.ts
+export const api = { add: async (a: number, b: number) => a + b }
+// @filename: main.ts
+import { expose } from 'osra'
+// ---cut---
 // page
 import type { api } from './shared-worker.ts'
 

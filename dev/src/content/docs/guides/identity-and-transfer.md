@@ -16,7 +16,9 @@ Without a wrapper, each send is a fresh copy — including the return trip. If t
 - Sending the same wrapped value twice revives as the **same object** on the peer.
 - When the peer wraps the revived object in `identity()` and sends it back, you receive your **original reference** (`===`).
 
-```ts
+```ts twoslash
+declare const worker: Worker
+// ---cut---
 import { expose, identity } from 'osra'
 
 const settings = { theme: 'dark' }
@@ -36,7 +38,14 @@ Because later sends of an already-tracked reference ship only an id instead of t
 
 `transfer(value)` opts a `Transferable` (`ArrayBuffer`, `MessagePort`, streams, `ImageBitmap`, `OffscreenCanvas`, …) into **move semantics**: ownership transfers to the peer instead of copying, and the value is detached locally.
 
-```ts
+```ts twoslash
+import { expose } from 'osra'
+declare const worker: Worker
+const remote = await expose<{ render: (pixels: ArrayBuffer) => Promise<void> }>(
+  {},
+  { transport: worker },
+)
+// ---cut---
 import { transfer } from 'osra'
 
 const pixels = new ArrayBuffer(16_000_000)

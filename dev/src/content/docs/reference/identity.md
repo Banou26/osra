@@ -28,7 +28,11 @@ Wrapping changes both directions:
 
 Repeat sends revive as one object:
 
-```ts
+```ts twoslash
+import type { Remote } from 'osra'
+type Api = { register: (config: { mode: string }) => Promise<void> }
+declare const remote: Remote<Api>
+// ---cut---
 import { identity } from 'osra'
 
 const config = { mode: 'fast' }

@@ -13,7 +13,11 @@ const relay: (transportA: Transport, transportB: Transport, options?: RelayOptio
 
 Typical use: bridging two workers, or an iframe to a worker, through a page that owns both transports.
 
-```ts
+```ts twoslash
+declare const workerA: Worker
+declare const workerB: Worker
+declare const controller: AbortController
+// ---cut---
 import { relay } from 'osra'
 
 relay(workerA, workerB, { unregisterSignal: controller.signal })

@@ -20,14 +20,14 @@ The value you pass is validated at compile time against `Capable`, the union of 
 
 There is no separate client/server entry point. A side that only consumes passes `{}`:
 
-```ts
+```ts twoslash
 // worker.ts
 import { expose } from 'osra'
 
 expose({ ping: async (n: number) => n + 1 }, { transport: globalThis })
 ```
 
-```ts
+```ts twoslash
 // main.ts
 import { expose } from 'osra'
 
@@ -68,7 +68,13 @@ Aborting the signal tears the connection down on both sides: the message listene
 
 When `remoteUuid` is set, that side skips `announce` entirely and immediately sends `init` addressed at the preset uuid. **Both sides must preset**: each side's `uuid` fixed and `remoteUuid` pointing at the other:
 
-```ts
+```ts twoslash
+import { expose } from 'osra'
+const value = { hello: async () => 'world' }
+const { port1, port2 } = new MessageChannel()
+const uuidA = crypto.randomUUID()
+const uuidB = crypto.randomUUID()
+// ---cut---
 expose(value, { transport: port1, uuid: uuidA, remoteUuid: uuidB })
 const remote = await expose({}, { transport: port2, uuid: uuidB, remoteUuid: uuidA })
 ```

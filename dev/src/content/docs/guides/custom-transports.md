@@ -9,7 +9,9 @@ When none of the [built-in transports](/guides/transports/) matches your channel
 
 A custom transport is a plain object with `emit` and/or `receive`, plus an optional `isJson` flag. Each of `emit` and `receive` may be a platform transport (a `Worker`, a `WebSocket`, a window, …) or a function:
 
-```ts
+```ts twoslash
+import type { Message, MessageContext } from 'osra'
+// ---cut---
 type EmitHandler = (message: Message, transferables?: Transferable[]) => void
 
 type ReceiveHandler = (
@@ -44,7 +46,11 @@ The `origin` option is not applied to custom *function* receives, which only get
 
 `BroadcastChannel` can't carry transferables, so mark the transport `isJson: true`:
 
-```ts
+```ts twoslash
+import { expose } from 'osra'
+type PeerApi = { ping: () => Promise<string> }
+const localApi = { echo: async (text: string) => text }
+// ---cut---
 const channel = new BroadcastChannel('app')
 
 const remote = await expose<PeerApi>(localApi, {
@@ -64,7 +70,9 @@ const remote = await expose<PeerApi>(localApi, {
 
 A function transport owns its own serialization — here, stringifying every envelope across a `MessagePort`:
 
-```ts
+```ts twoslash
+import type { Message, MessageContext } from 'osra'
+// ---cut---
 const makeJsonTransport = (port: MessagePort) => ({
   isJson: true as const,
   emit: (message: Message) => port.postMessage(JSON.stringify(message)),
@@ -81,7 +89,10 @@ const makeJsonTransport = (port: MessagePort) => ({
 
 `emit` and `receive` don't have to be functions; you can compose two platform halves. The canonical case is a page talking to its service worker — a `ServiceWorker` can only emit and a `ServiceWorkerContainer` can only receive:
 
-```ts
+```ts twoslash
+import { expose } from 'osra'
+const value = { getAssets: async () => ['index.html', 'app.js'] }
+// ---cut---
 const registration = await navigator.serviceWorker.ready
 const remote = await expose(value, {
   transport: { emit: registration.active!, receive: navigator.serviceWorker },

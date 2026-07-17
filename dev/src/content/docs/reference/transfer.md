@@ -17,7 +17,11 @@ const transfer: <T>(value: T) => T
 
 Clonable Transferables (`ArrayBuffer`, typed-array views, `ImageBitmap`, `VideoFrame`, `AudioData`, …) are copied by structured clone by default. Wrapping one with `transfer()` moves it instead: the peer receives the original, and your local value is detached.
 
-```ts
+```ts twoslash
+import type { Remote } from 'osra'
+type Api = { process: (buffer: ArrayBuffer) => Promise<void> }
+declare const remote: Remote<Api>
+// ---cut---
 import { transfer } from 'osra'
 
 const buffer = new ArrayBuffer(1_000_000)

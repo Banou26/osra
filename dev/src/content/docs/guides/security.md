@@ -9,7 +9,12 @@ osra treats peers as semi-trusted: malformed payloads are handled cleanly, `orig
 
 On window transports, `origin` (default `'*'`) does two things: it is the `postMessage` `targetOrigin` for outbound envelopes, **and** inbound messages whose `event.origin` doesn't match are dropped:
 
-```ts
+```ts twoslash
+import { expose } from 'osra'
+const hostApi = { getUser: async () => ({ name: 'Ada' }) }
+const widgetApi = { notify: async (text: string) => text }
+declare const iframe: HTMLIFrameElement & { readonly contentWindow: Window }
+// ---cut---
 // host page
 const channel = await expose(hostApi, {
   transport: { emit: iframe.contentWindow, receive: window },

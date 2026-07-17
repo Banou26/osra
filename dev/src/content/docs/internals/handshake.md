@@ -22,7 +22,15 @@ The announce dance is loss-tolerant by design: both sides announce, and every an
 
 If both sides pass fixed ids, the announce phase is skipped entirely and `init` flows immediately:
 
-```ts
+```ts twoslash
+import { expose } from 'osra'
+
+const apiA = { ping: async () => 'pong' }
+const apiB = { pong: async () => 'ping' }
+const uuidA = crypto.randomUUID()
+const uuidB = crypto.randomUUID()
+declare const transport: Worker
+// ---cut---
 expose(apiA, { transport, uuid: uuidA, remoteUuid: uuidB })
 expose(apiB, { transport, uuid: uuidB, remoteUuid: uuidA })
 ```

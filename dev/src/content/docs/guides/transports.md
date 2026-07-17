@@ -26,12 +26,26 @@ Transports are either **structured-clone** (Worker, Window, MessagePort, SharedW
 
 Pass the `Worker` on the page side and `globalThis` (the `DedicatedWorkerGlobalScope`) inside the worker — the worker scope isn't part of the `Transport` type union, so cast it:
 
-```ts
+```ts twoslash
+import type { Transport } from 'osra'
+import { expose } from 'osra'
+const api = { add: async (a: number, b: number) => a + b }
+// ---cut---
 // worker.ts
 expose(api, { transport: globalThis as unknown as Transport })
 ```
 
-```ts
+```ts twoslash
+// @filename: worker.ts
+import type { Transport } from 'osra'
+import { expose } from 'osra'
+const api = { add: async (a: number, b: number) => a + b }
+export type Api = typeof api
+expose(api, { transport: globalThis as unknown as Transport })
+// @filename: main.ts
+import type { Api } from './worker'
+import { expose } from 'osra'
+// ---cut---
 // main.ts
 const worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' })
 const remote = await expose<Api>({}, { transport: worker })
@@ -43,7 +57,17 @@ The full worker walkthrough lives in [getting started](/start/getting-started/).
 
 `message` events fire on the window that receives them, so each side pairs the *other* window for emit with its *own* window for receive. `origin` is applied in both directions: outbound it is the `postMessage` `targetOrigin`, inbound it drops events whose `event.origin` differs. Set it whenever you talk across origins — see [security](/guides/security/) for the trust model and the one announce-beacon exception.
 
-```ts
+```ts twoslash
+import { expose } from 'osra'
+
+type IframeApi = {
+  render: (theme: 'light' | 'dark') => Promise<void>
+}
+
+const parentApi = {
+  getConfig: async () => ({ locale: 'en' }),
+}
+// ---cut---
 // parent
 const iframe = document.querySelector('iframe')!
 const remote = await expose<IframeApi>(parentApi, {
@@ -52,7 +76,17 @@ const remote = await expose<IframeApi>(parentApi, {
 })
 ```
 
-```ts
+```ts twoslash
+import { expose } from 'osra'
+
+type ParentApi = {
+  getConfig: () => Promise<{ locale: string }>
+}
+
+const iframeApi = {
+  render: async (theme: 'light' | 'dark') => { document.documentElement.dataset.theme = theme },
+}
+// ---cut---
 // iframe
 const remote = await expose<ParentApi>(iframeApi, {
   transport: { emit: window.parent, receive: window },
@@ -64,13 +98,19 @@ const remote = await expose<ParentApi>(iframeApi, {
 
 Pass the `SharedWorker` instance directly on the page side; osra rides its `.port` internally. Inside the worker, expose per connected port:
 
-```ts
+```ts twoslash
+import { expose } from 'osra'
+
+type Api = {
+  add: (a: number, b: number) => Promise<number>
+}
+// ---cut---
 // page
 const sharedWorker = new SharedWorker(new URL('./shared.ts', import.meta.url), { type: 'module' })
 const remote = await expose<Api>({}, { transport: sharedWorker })
 ```
 
-```ts
+```ts twoslash
 // shared.ts
 import { expose } from 'osra'
 
@@ -87,7 +127,17 @@ Per-port `expose()` gives each connecting page its own connection; [multi-peer c
 
 JSON mode. You can `expose()` while the socket is still `CONNECTING`; outbound envelopes queue until open. The other end is anything that relays frames to a peer also running osra:
 
-```ts
+```ts twoslash
+import { expose } from 'osra'
+
+type PeerApi = {
+  broadcast: (text: string) => Promise<void>
+}
+
+const localApi = {
+  notify: async (text: string) => { console.log(text) },
+}
+// ---cut---
 const socket = new WebSocket('wss://relay.example.com')
 const remote = await expose<PeerApi>(localApi, { transport: socket })
 ```
@@ -96,7 +146,17 @@ const remote = await expose<PeerApi>(localApi, { transport: socket })
 
 A `ServiceWorker` can only emit and a `ServiceWorkerContainer` can only receive, so combine them as a custom pair:
 
-```ts
+```ts twoslash
+import { expose } from 'osra'
+
+type SwApi = {
+  getCachedUrls: () => Promise<string[]>
+}
+
+const pageApi = {
+  reload: async () => { location.reload() },
+}
+// ---cut---
 const registration = await navigator.serviceWorker.ready
 const remote = await expose<SwApi>(pageApi, {
   transport: { emit: registration.active!, receive: navigator.serviceWorker },
@@ -107,13 +167,35 @@ const remote = await expose<SwApi>(pageApi, {
 
 JSON mode. `runtime.Port`, the runtime itself (`sendMessage`/`onMessage`), `onConnect`, and `onMessage` are all accepted:
 
-```ts
+```ts twoslash
+import { expose } from 'osra'
+import type { Browser } from 'webextension-polyfill'
+
+declare const browser: Browser
+
+type BackgroundApi = {
+  fetchData: (url: string) => Promise<string>
+}
+
+const contentApi = {
+  getSelection: async () => document.getSelection()?.toString() ?? '',
+}
+// ---cut---
 // content script
 const port = browser.runtime.connect()
 const background = await expose<BackgroundApi>(contentApi, { transport: port })
 ```
 
-```ts
+```ts twoslash
+import { expose } from 'osra'
+import type { Browser } from 'webextension-polyfill'
+
+declare const browser: Browser
+
+const backgroundApi = {
+  fetchData: async (url: string) => (await fetch(url)).text(),
+}
+// ---cut---
 // background
 browser.runtime.onConnect.addListener(port => {
   expose(backgroundApi, { transport: port })

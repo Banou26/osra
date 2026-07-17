@@ -17,7 +17,11 @@ Remote functions that throw reject the caller's promise with the revived error, 
 
 Pass an `AbortSignal` as `unregisterSignal` to get an explicit teardown handle:
 
-```ts
+```ts twoslash
+import { expose } from 'osra'
+type Api = { slowCall: () => Promise<string> }
+declare const worker: Worker
+// ---cut---
 const controller = new AbortController()
 const remote = await expose<Api>({}, { transport: worker, unregisterSignal: controller.signal })
 
