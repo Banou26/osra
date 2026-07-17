@@ -3,7 +3,7 @@
 [![npm version](https://img.shields.io/npm/v/osra.svg)](https://www.npmjs.com/package/osra)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-osra is a zero-runtime-dependency TypeScript RPC library that connects two JavaScript contexts over any message channel. Both sides call `expose(value, { transport })` and each receives the other's value with live semantics: functions become callable async proxies, async generators stream with `for await`, streams keep backpressure, errors keep their built-in subclasses, `AbortSignal`s propagate aborts. It works across Workers, SharedWorkers, windows/iframes, MessagePorts, WebSockets, web extensions, and anything else you can wrap in a custom `{ emit, receive }` pair, degrading gracefully to a JSON-only mode on text channels.
+osra is a zero-runtime-dependency TypeScript RPC library. Both sides call `expose(value, { transport })` and each receives the other's value live: functions stay callable, generators stream, errors and aborts propagate, across Workers, iframes, WebSockets, extensions, or any custom channel.
 
 ## Features
 
