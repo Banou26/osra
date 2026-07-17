@@ -37,6 +37,8 @@ const isWrappableTransferable = (value: unknown): boolean => {
     globalThis.TransformStream,
     globalThis.ImageBitmap,
     globalThis.OffscreenCanvas,
+    (globalThis as { VideoFrame?: abstract new (...args: any[]) => unknown }).VideoFrame,
+    (globalThis as { AudioData?: abstract new (...args: any[]) => unknown }).AudioData,
   ])
 }
 

@@ -242,6 +242,56 @@ export const offscreenCanvasTransfersAsCanvas = async (transport: Transport) => 
   expect([result.r, result.g, result.b, result.a]).to.deep.equal([10, 20, 30, 255])
 }
 
+// Behavior 10: VideoFrame is a clonable Transferable - copied bare, MOVED under
+// transfer(). Regression: isWrappableTransferable omitted VideoFrame/AudioData,
+// so transfer() silently degraded to a copy. Feature-detected; skipped on JSON
+// (no transfer list there).
+export const videoFrameTransferDetachesSource = async (transport: Transport) => {
+  if ('isJson' in transport && transport.isJson === true) return
+  if (typeof VideoFrame === 'undefined') return
+
+  const value = async (frame: VideoFrame) => {
+    const info = { isFrame: frame instanceof VideoFrame, width: frame.codedWidth, height: frame.codedHeight }
+    frame.close()
+    return info
+  }
+  expose(value, { transport })
+  const remote = await expose<typeof value>({}, { transport })
+
+  const frame = new VideoFrame(new Uint8Array(2 * 2 * 4).fill(127), {
+    format: 'RGBA', codedWidth: 2, codedHeight: 2, timestamp: 0,
+  })
+  const result = await remote(transfer(frame))
+  expect(result.isFrame).to.equal(true)
+  expect(result.width).to.equal(2)
+  expect(result.height).to.equal(2)
+  // Moved: the transfer closes the sender-side frame.
+  expect(frame.format).to.equal(null)
+}
+
+// Behavior 10b: same for AudioData.
+export const audioDataTransferDetachesSource = async (transport: Transport) => {
+  if ('isJson' in transport && transport.isJson === true) return
+  if (typeof AudioData === 'undefined') return
+
+  const value = async (data: AudioData) => {
+    const info = { isAudioData: data instanceof AudioData, frames: data.numberOfFrames }
+    data.close()
+    return info
+  }
+  expose(value, { transport })
+  const remote = await expose<typeof value>({}, { transport })
+
+  const audio = new AudioData({
+    format: 'f32', sampleRate: 8000, numberOfFrames: 8, numberOfChannels: 1,
+    timestamp: 0, data: new Float32Array(8),
+  })
+  const result = await remote(transfer(audio))
+  expect(result.isAudioData).to.equal(true)
+  expect(result.frames).to.equal(8)
+  expect(audio.format).to.equal(null)
+}
+
 export const tests = {
   unwrappedBufferIsCopied,
   transferredBufferIsDetached,
@@ -256,4 +306,6 @@ export const tests = {
   messagePortStillTransfersWithoutWrapper,
   transferredBufferDataRoundTrips,
   offscreenCanvasTransfersAsCanvas,
+  videoFrameTransferDetachesSource,
+  audioDataTransferDetachesSource,
 }

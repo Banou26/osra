@@ -12,13 +12,16 @@ export const OSRA_BOX = '__OSRA_BOX__' as const
 
 export type Uuid = `${string}-${string}-${string}-${string}-${string}`
 
+/* `ReadonlyArray` (a supertype of `Array`) throughout these unions:
+ * `expose()` infers its value with a `const` type parameter, so inline
+ * array literals arrive as readonly tuples and must stay assignable. */
 export type Jsonable =
   | boolean
   | null
   | number
   | string
   | { [key: string]: Jsonable }
-  | Array<Jsonable>
+  | ReadonlyArray<Jsonable>
 
 export type Structurable =
   | Jsonable
@@ -35,15 +38,22 @@ export type Structurable =
   | ImageBitmap
   | ImageData
   | { [key: string]: Structurable }
-  | Array<Structurable>
+  | ReadonlyArray<Structurable>
   | Map<Structurable, Structurable>
   | Set<Structurable>
 
+/** lib.dom declares some `Transferable` members as EMPTY interfaces
+ *  (`MediaSourceHandle` as of TS 5.x/7.x). With no members they structurally
+ *  absorb every object type, which would let `WeakMap` & co. slip past the
+ *  `Capable` check unnoticed. Drop member-less types from the compile-time
+ *  union; runtime transfer of those exotic types is unaffected. */
+type NonAbsorbing<T> = T extends unknown ? keyof T extends never ? never : T : never
+
 export type StructurableTransferable =
   | Structurable
-  | Transferable
+  | NonAbsorbing<Transferable>
   | { [key: string]: StructurableTransferable }
-  | Array<StructurableTransferable>
+  | ReadonlyArray<StructurableTransferable>
   | Map<StructurableTransferable, StructurableTransferable>
   | Set<StructurableTransferable>
 
@@ -63,7 +73,7 @@ export type Capable<
   | CapableBase<Ctx>
   | InferRevivables<TModules, Ctx>
   | { [key: string]: Capable<TModules, Ctx> }
-  | Array<Capable<TModules, Ctx>>
+  | ReadonlyArray<Capable<TModules, Ctx>>
   | Map<Capable<TModules, Ctx>, Capable<TModules, Ctx>>
   | Set<Capable<TModules, Ctx>>
 
