@@ -26,6 +26,12 @@ const stripNodeModulesPaths = () =>
 // popups with the real types. Keep compilerOptions in sync with
 // scripts/check-twoslash.mjs, which is the fast per-file checker.
 export default defineEcConfig({
+  // Inline the EC styles into each page instead of the shared ec.*.css asset.
+  // The external file put every token color and code background in one extra
+  // request; when that transfer was interrupted mid-download (observed as
+  // intermittently colorless code blocks on refresh in Firefox), the parsed
+  // prefix styled the frames but the theme sections at the tail never arrived.
+  emitExternalStylesheet: false,
   themes: ['github-dark', 'github-light'],
   plugins: [
     ecTwoSlash({
