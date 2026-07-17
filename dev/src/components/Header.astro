@@ -52,15 +52,18 @@ const trail = isHome ? [] : (findTrail(sidebar) ?? [{ label: entry.data.title }]
 
   <div class="osra-crumb">
     <nav class="osra-crumb-trail" aria-label="Breadcrumb">
-      <a href="/" class="osra-crumb-home">home</a>
       {
-        trail.map((c) => (
+        trail.map((c, i) => (
           <>
-            <span class="osra-crumb-sep" aria-hidden="true">›</span>
-            {c.href && !c.href.endsWith(path) ? (
-              <a href={c.href}>{c.label}</a>
+            {i > 0 && <span class="osra-crumb-sep" aria-hidden="true">›</span>}
+            {c.href ? (
+              c.href.endsWith(path) ? (
+                <span aria-current="page">{c.label}</span>
+              ) : (
+                <a href={c.href}>{c.label}</a>
+              )
             ) : (
-              <span aria-current="page">{c.label}</span>
+              <span class="osra-crumb-cat">{c.label}</span>
             )}
           </>
         ))
@@ -176,7 +179,7 @@ const trail = isHome ? [] : (findTrail(sidebar) ?? [{ label: entry.data.title }]
     text-decoration: none;
   }
   .osra-crumb-trail a:hover { color: var(--o-brand-ink); }
-  .osra-crumb-home { font-weight: 700; color: var(--o-ink) !important; }
+  .osra-crumb-cat { font-weight: 600; color: var(--o-ink-dim); }
   .osra-crumb-sep { color: var(--o-ink-faint); flex: none; }
   .osra-crumb-trail [aria-current='page'] {
     color: var(--o-ink);
