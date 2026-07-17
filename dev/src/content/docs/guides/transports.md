@@ -49,7 +49,7 @@ const worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'modu
 const remote = await expose<Api>({}, { transport: worker })
 ```
 
-The full worker walkthrough lives in [getting started](/start/getting-started/).
+The full worker walkthrough lives in [getting started](/general/getting-started/).
 
 ## Window ↔ iframe
 

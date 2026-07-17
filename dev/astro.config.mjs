@@ -7,7 +7,8 @@ export default defineConfig({
   // static build emits a meta-refresh page for local preview, while
   // public/_redirects gives production a real 302 on Cloudflare Pages.
   redirects: {
-    '/': '/start/getting-started/',
+    '/': '/general/getting-started/',
+    '/start/getting-started/': '/general/getting-started/',
   },
   integrations: [
     starlight({
@@ -27,7 +28,7 @@ export default defineConfig({
         {
           label: 'General',
           items: [
-            { label: 'Getting started', slug: 'start/getting-started' },
+            { label: 'Getting started', slug: 'general/getting-started' },
           ],
         },
         {
