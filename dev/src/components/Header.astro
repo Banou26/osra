@@ -29,13 +29,6 @@ const findTrail = (entries: SidebarEntry[], acc: Crumb[] = []): Crumb[] | null =
 const path = Astro.url.pathname
 const isHome = path === '/' || path === import.meta.env.BASE_URL
 const trail = isHome ? [] : (findTrail(sidebar) ?? [{ label: entry.data.title }])
-
-const NAV = [
-  { label: 'Docs', href: '/start/getting-started/', matches: ['/start/', '/guides/'] },
-  { label: 'Reference', href: '/reference/expose/', matches: ['/reference/'] },
-  { label: 'Internals', href: '/internals/architecture/', matches: ['/internals/'] },
-]
-const isActive = (matches: string[]) => matches.some((match) => path.startsWith(match))
 ---
 
 <div class="osra-header">
@@ -49,17 +42,7 @@ const isActive = (matches: string[]) => matches.some((match) => path.startsWith(
           <circle cx="31" cy="42" r="4.5" fill="#3ecf8e"></circle>
         </svg>
         <span class="osra-wordmark">{siteTitle}</span>
-        <span class="osra-tag">docs</span>
       </a>
-      <nav class="osra-menu" aria-label="Main">
-        {
-          NAV.map((item) => (
-            <a href={item.href} class:list={['osra-menu-link', { active: isActive(item.matches) }]}>
-              {item.label}
-            </a>
-          ))
-        }
-      </nav>
     </div>
     <div class="osra-nav-end print:hidden">
       {shouldRenderSearch && <Search />}
@@ -153,39 +136,6 @@ const isActive = (matches: string[]) => matches.some((match) => path.startsWith(
     letter-spacing: -.02em;
     color: var(--o-ink);
   }
-  .osra-tag {
-    font-size: 0.78rem;
-    font-weight: 700;
-    text-transform: lowercase;
-    letter-spacing: .02em;
-    color: var(--o-brand-ink);
-    background: var(--o-brand-soft);
-    padding: 2px 9px;
-    border-radius: 999px;
-  }
-  .osra-menu {
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-  }
-  .osra-menu-link {
-    font-size: 1rem;
-    font-weight: 600;
-    color: var(--o-ink-dim);
-    text-decoration: none;
-    padding: 0.5rem 0.85rem;
-    border-radius: 9px;
-    white-space: nowrap;
-    transition: background-color .15s, color .15s;
-  }
-  .osra-menu-link:hover {
-    background: var(--o-card-2);
-    color: var(--o-ink);
-  }
-  .osra-menu-link.active {
-    color: var(--o-brand-ink);
-    background: var(--o-brand-soft);
-  }
   .osra-nav-end {
     display: flex;
     align-items: center;
@@ -240,8 +190,6 @@ const isActive = (matches: string[]) => matches.some((match) => path.startsWith(
   .osra-crumb-end :global(starlight-theme-select) { display: flex; }
 
   @media (max-width: 50rem) {
-    .osra-menu { display: none; }
-    .osra-tag { display: none; }
     .osra-nav-end { max-width: none; flex: none; }
     /* Reserve room on the right for Starlight's fixed sidebar toggle. */
     .osra-nav { padding-inline-end: calc(var(--sl-nav-pad-x) + var(--sl-menu-button-size) + 0.5rem); }
