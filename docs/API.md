@@ -162,7 +162,9 @@ const transfer: <T>(value: T) => T
 
 Opt-in **move** semantics for clonable Transferables (`ArrayBuffer`, typed-array views, `ImageBitmap`, `VideoFrame`, `AudioData`, …). The value is added to the transfer list instead of being cloned, detaching it locally. Idempotent; non-transferable inputs pass through. On JSON transports it silently degrades to a copy.
 
-Types that structured clone cannot copy are **always moved**, with or without `transfer()`: `MessagePort`, `ReadableStream`/`WritableStream`/`TransformStream`, `OffscreenCanvas`, `MediaSourceHandle`, `MediaStreamTrack`, `MIDIAccess`, `RTCDataChannel`, WebTransport streams. A bare send still detaches them locally; `transfer()` adds nothing there.
+Types that structured clone cannot copy are **always moved**, with or without `transfer()`: `MessagePort`, `TransformStream`, `OffscreenCanvas`, `MediaSourceHandle`, `MediaStreamTrack`, `MIDIAccess`, `RTCDataChannel`, WebTransport streams. A bare send still detaches them locally; `transfer()` adds nothing there.
+
+`ReadableStream` and `WritableStream` are never transferred natively: their revivable modules claim them ahead of the transfer machinery and proxy them over a routed channel, chunk by chunk, on clone and JSON transports alike. Sending locks the source (a reader/writer is acquired) rather than detaching it, and `transfer()` is a no-op on them. `TransformStream` has no proxy module and rides native structured-clone transfer (clone transports only).
 
 ```ts
 import { transfer } from 'osra'
@@ -346,7 +348,7 @@ e.g. `{ "__OSRA_BOX__": 'revivable', type: 'date', ... }`. The constants `OSRA_K
 | `Promise<T>` | `Promise<T>` | Settles when the source settles; rejections cross with full error fidelity. |
 | Function | `(...args) => Promise<Awaited<R>>` | Args and return value boxed recursively; throws reject the promise. |
 | Async generator / async iterable | `AsyncIterableIterator` | `next`/`return`/`throw` proxied; `for await` works; early `break` propagates `return()` to the source. |
-| `ReadableStream` | `ReadableStream` | Pull-based backpressure; `cancel` reason crosses to the source. |
+| `ReadableStream` | `ReadableStream` | Proxied chunk-by-chunk with credit-window backpressure (the reviver grants credit, the source pushes chunks); `cancel` reason crosses to the source. |
 | `WritableStream` | `WritableStream` | `write`/`close`/`abort` with acks. |
 | `MessagePort` | `MessagePort` | Transferred natively on clone transports; routed via `portId` on JSON. |
 | `AbortSignal` | `AbortSignal` | `abort` and its `reason` propagate. |

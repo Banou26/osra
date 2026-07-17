@@ -1,7 +1,7 @@
 # Advanced Guide
 
 Internals, lifecycle, security, and extension points. For the user-facing API see
-[API.md](./API.md). Everything here describes the code in `src/` as of v0.4.5.
+[API.md](./API.md). Everything here describes the code in `src/`.
 
 ## Architecture overview
 

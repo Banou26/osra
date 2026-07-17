@@ -99,7 +99,7 @@ Transports are either **structured-clone** (Worker, Window, MessagePort, SharedW
 | Function | ✅ | ✅ | becomes `(...args) => Promise<result>`; arguments and results recurse through the same boxing |
 | `Promise` | ✅ | ✅ | |
 | Async generators / async iterables | ✅ | ✅ | `next`/`return`/`throw` proxied; `for await` works; early `break` runs the source's `finally` |
-| `ReadableStream` | ✅ | ✅ | pull-based backpressure; cancel reason crosses |
+| `ReadableStream` | ✅ | ✅ | credit-window backpressure; cancel reason crosses |
 | `WritableStream` | ✅ | ✅ | write/close/abort with acks; sink errors reject the writer |
 | `MessagePort` | ✅ | ✅ | revives as a real `MessagePort` on both transport kinds |
 | `AbortSignal` | ✅ | ✅ | abort and reason propagate |
@@ -239,7 +239,7 @@ expose({
 
 ## `transfer()`
 
-`transfer(value)` opts a `Transferable` (`ArrayBuffer`, `MessagePort`, streams, `ImageBitmap`, `OffscreenCanvas`, …) into move semantics: ownership transfers to the peer instead of copying. On JSON transports it silently degrades to a copy.
+`transfer(value)` opts a `Transferable` (`ArrayBuffer`, typed-array views, `ImageBitmap`, `OffscreenCanvas`, …) into move semantics: ownership transfers to the peer instead of copying. On JSON transports it silently degrades to a copy. `ReadableStream`/`WritableStream` are never moved — they are proxied chunk by chunk, so `transfer()` adds nothing for them.
 
 ```ts
 import { transfer } from 'osra'
