@@ -32,7 +32,7 @@ let blocks = 0
 let failures = 0
 for (const file of files) {
   const source = readFileSync(file, 'utf8')
-  const fences = [...source.matchAll(/^```ts twoslash\n([\s\S]*?)^```$/gm)]
+  const fences = [...source.matchAll(/^```ts twoslash[^\n]*\n([\s\S]*?)^```$/gm)]
   for (const [i, fence] of fences.entries()) {
     blocks++
     const line = source.slice(0, fence.index).split('\n').length
