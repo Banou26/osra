@@ -28,9 +28,12 @@ Mapped types cannot preserve type parameters, so a generic remote function loses
 
 `expose()` validates the value you pass at compile time against `Capable`, the union of everything serializable for the inferred transport. Failures pinpoint the offending path:
 
-```ts
+```ts twoslash
+// @errors: 2345
+import { expose } from 'osra'
+declare const worker: Worker
+// ---cut---
 expose({ ok: async () => 1, cache: new WeakMap() }, { transport: worker })
-// type error: Value type must resolve to a Capable, with `cache` identified as the bad field
 ```
 
 The error identifies the offending path and its parent object, so a `WeakMap` buried three levels deep fails at compile time, not at runtime. (At runtime, unclonables coerce to `{}`; see [limitations](/reference/limitations/).) One caveat: inside a non-tuple array the report stops at the array itself, so the reported bad value becomes the whole array and the path ends there; only tuple types are indexed element by element.
