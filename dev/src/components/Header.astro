@@ -1,0 +1,253 @@
+---
+import config from 'virtual:starlight/user-config'
+import Search from 'virtual:starlight/components/Search'
+import SocialIcons from 'virtual:starlight/components/SocialIcons'
+import ThemeSelect from 'virtual:starlight/components/ThemeSelect'
+import type { StarlightRouteData } from '@astrojs/starlight/route-data'
+
+type SidebarEntry = StarlightRouteData['sidebar'][number]
+
+const { siteTitle, siteTitleHref, sidebar, entry, hasSidebar } = Astro.locals.starlightRoute
+
+const shouldRenderSearch =
+  config.pagefind || config.components.Search !== '@astrojs/starlight/components/Search.astro'
+
+type Crumb = { label: string; href?: string }
+
+const findTrail = (entries: SidebarEntry[], acc: Crumb[] = []): Crumb[] | null => {
+  for (const e of entries) {
+    if (e.type === 'link') {
+      if (e.isCurrent) return [...acc, { label: e.label, href: e.href }]
+    } else {
+      const hit = findTrail(e.entries, [...acc, { label: e.label }])
+      if (hit) return hit
+    }
+  }
+  return null
+}
+
+const path = Astro.url.pathname
+const isHome = path === '/' || path === import.meta.env.BASE_URL
+const trail = isHome ? [] : (findTrail(sidebar) ?? [{ label: entry.data.title }])
+
+const NAV = [
+  { label: 'Docs', href: '/start/getting-started/', matches: ['/start/', '/guides/'] },
+  { label: 'Reference', href: '/reference/expose/', matches: ['/reference/'] },
+  { label: 'Internals', href: '/internals/architecture/', matches: ['/internals/'] },
+]
+const isActive = (matches: string[]) => matches.some((match) => path.startsWith(match))
+---
+
+<div class="osra-header">
+  <div class="osra-nav">
+    <div class="osra-nav-start">
+      <a href={siteTitleHref} class="osra-brand" translate="no">
+        <svg width="27" height="27" viewBox="0 0 64 64" fill="none" aria-hidden="true" class="osra-mark">
+          <rect x="2" y="2" width="27" height="27" rx="8.5" fill="#4f9cf0"></rect>
+          <rect x="35" y="35" width="27" height="27" rx="8.5" fill="#3ecf8e"></rect>
+          <path d="M29 15.5 H42.5 A6 6 0 0 1 48.5 21.5 V35" stroke="#8b93a8" stroke-width="4.5" stroke-linecap="round"></path>
+          <path d="M35 48.5 H21.5 A6 6 0 0 1 15.5 42.5 V29" stroke="#8b93a8" stroke-width="4.5" stroke-linecap="round"></path>
+        </svg>
+        <span class="osra-wordmark">{siteTitle}</span>
+        <span class="osra-tag">docs</span>
+      </a>
+      <nav class="osra-menu" aria-label="Main">
+        {
+          NAV.map((item) => (
+            <a href={item.href} class:list={['osra-menu-link', { active: isActive(item.matches) }]}>
+              {item.label}
+            </a>
+          ))
+        }
+      </nav>
+    </div>
+    <div class="osra-nav-end print:hidden">
+      {shouldRenderSearch && <Search />}
+      <div class="osra-social"><SocialIcons /></div>
+    </div>
+  </div>
+
+  <div class="osra-crumb">
+    <nav class="osra-crumb-trail" aria-label="Breadcrumb">
+      <a href="/" class="osra-crumb-home">osra</a>
+      {
+        trail.map((c) => (
+          <>
+            <span class="osra-crumb-sep" aria-hidden="true">›</span>
+            {c.href && !c.href.endsWith(path) ? (
+              <a href={c.href}>{c.label}</a>
+            ) : (
+              <span aria-current="page">{c.label}</span>
+            )}
+          </>
+        ))
+      }
+    </nav>
+    <div class="osra-crumb-end print:hidden">
+      <ThemeSelect />
+    </div>
+  </div>
+</div>
+
+<script>
+  const wireMenuButtonState = () => {
+    const host = document.querySelector('starlight-menu-button')
+    const button = host?.querySelector('button')
+    if (!host || !button) return
+
+    const sync = () => {
+      const expanded = host.getAttribute('aria-expanded') === 'true'
+      button.setAttribute('aria-expanded', String(expanded))
+      button.setAttribute('aria-label', expanded ? 'Close menu' : 'Menu')
+    }
+
+    sync()
+    new MutationObserver(sync).observe(host, {
+      attributes: true,
+      attributeFilter: ['aria-expanded'],
+    })
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', wireMenuButtonState, { once: true })
+  } else {
+    wireMenuButtonState()
+  }
+</script>
+
+<style>
+  .osra-header {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+
+  /* ---- Row 1: nav bar ---- */
+  .osra-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    height: var(--osra-nav-row);
+    padding-inline: calc(var(--osra-gutter, 0px) + var(--sl-nav-pad-x));
+    background: var(--o-card);
+    border-bottom: 1px solid var(--o-border);
+  }
+  .osra-nav-start {
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+    min-width: 0;
+  }
+  .osra-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    text-decoration: none;
+    flex: none;
+  }
+  .osra-mark { display: block; flex: none; }
+  .osra-wordmark {
+    font-size: 1.35rem;
+    font-weight: 800;
+    letter-spacing: -.02em;
+    color: var(--o-ink);
+  }
+  .osra-tag {
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: lowercase;
+    letter-spacing: .02em;
+    color: var(--o-brand-ink);
+    background: var(--o-brand-soft);
+    padding: 2px 9px;
+    border-radius: 999px;
+  }
+  .osra-menu {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+  .osra-menu-link {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--o-ink-dim);
+    text-decoration: none;
+    padding: 0.5rem 0.85rem;
+    border-radius: 9px;
+    white-space: nowrap;
+    transition: background-color .15s, color .15s;
+  }
+  .osra-menu-link:hover {
+    background: var(--o-card-2);
+    color: var(--o-ink);
+  }
+  .osra-menu-link.active {
+    color: var(--o-brand-ink);
+    background: var(--o-brand-soft);
+  }
+  .osra-nav-end {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    flex: 1;
+    max-width: 26rem;
+    justify-content: flex-end;
+  }
+  .osra-social {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: none;
+  }
+
+  /* ---- Row 2: breadcrumb bar ---- */
+  .osra-crumb {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    height: var(--osra-crumb-row);
+    padding-inline: calc(var(--osra-gutter, 0px) + var(--sl-nav-pad-x));
+    background: var(--o-bg);
+    border-bottom: 1px solid var(--o-border);
+  }
+  .osra-crumb-trail {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    font-size: 0.95rem;
+  }
+  .osra-crumb-trail a {
+    color: var(--o-ink-dim);
+    text-decoration: none;
+  }
+  .osra-crumb-trail a:hover { color: var(--o-brand-ink); }
+  .osra-crumb-home { font-weight: 700; color: var(--o-ink) !important; }
+  .osra-crumb-sep { color: var(--o-ink-faint); flex: none; }
+  .osra-crumb-trail [aria-current='page'] {
+    color: var(--o-ink);
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .osra-crumb-end { display: flex; align-items: center; flex: none; }
+
+  /* Reused Starlight bits: trim ThemeSelect chrome to a compact control. */
+  .osra-crumb-end :global(starlight-theme-select) { display: flex; }
+
+  @media (max-width: 50rem) {
+    .osra-menu { display: none; }
+    .osra-tag { display: none; }
+    .osra-nav-end { max-width: none; flex: none; }
+    /* Reserve room on the right for Starlight's fixed sidebar toggle. */
+    .osra-nav { padding-inline-end: calc(var(--sl-nav-pad-x) + var(--sl-menu-button-size) + 0.5rem); }
+  }
+  @media (max-width: 30rem) {
+    .osra-wordmark { font-size: 1rem; }
+    .osra-crumb-trail { font-size: 0.78rem; }
+  }
+</style>

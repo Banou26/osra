@@ -1,0 +1,38 @@
+---
+title: osra
+description: Zero-dependency TypeScript RPC between JavaScript contexts — Workers, iframes, WebSockets, extensions — with live functions, streams, and full type-safety.
+template: splash
+hero:
+  tagline: "Connect two JavaScript contexts over any message channel — functions, streams, errors, and abort signals cross live, with zero runtime dependencies and full type-safety."
+  image:
+    file: ../../assets/logo.svg
+  actions:
+    - text: Get started
+      link: /start/getting-started/
+      icon: right-arrow
+    - text: View on GitHub
+      link: https://github.com/Banou26/osra
+      variant: minimal
+      icon: github
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components'
+
+## What is osra?
+
+osra is a zero-runtime-dependency TypeScript RPC library that connects two JavaScript contexts over any message channel. Both sides call `expose(value, { transport })` and each receives the other's value with live semantics: functions become callable async proxies, async generators stream with `for await`, errors keep their subclasses, `AbortSignal`s propagate aborts. It works across Workers, SharedWorkers, windows/iframes, MessagePorts, WebSockets, web extensions, and anything else you can wrap in a custom `{ emit, receive }` pair.
+
+<CardGrid stagger>
+  <Card title="Symmetric API" icon="random">
+    Both sides call [`expose()`](/reference/expose/) — there is no separate client/server entry point. Either side can pass functions, both can call, and each returned promise resolves with the peer's value once the handshake completes.
+  </Card>
+  <Card title="Deep type support" icon="approve-check">
+    Functions, promises, async generators, `ReadableStream`/`WritableStream`, `MessagePort`, `AbortSignal`, `Error` subclasses, `Map`/`Set`, typed arrays, `BigInt`, and more cross the boundary live. See [supported types](/guides/supported-types/).
+  </Card>
+  <Card title="Works over any channel" icon="puzzle">
+    Workers, windows and iframes, WebSockets, web extensions, or any custom `{ emit, receive }` pair — degrading gracefully to a JSON-only mode on text transports. See [transports](/guides/transports/).
+  </Card>
+  <Card title="Strict TypeScript" icon="seti:typescript">
+    `Remote<T>` maps your API type across the wire; a compile-time `Capable` check rejects non-serializable values with the offending path pinpointed. See the [TypeScript reference](/reference/typescript/).
+  </Card>
+</CardGrid>

@@ -1,0 +1,353 @@
+/*
+ * osra docs theme: MDN-style structure in the same spirit as the fkn.dev docs
+ * (see fkn/dev/src/styles/custom.css), painted with osra's own palette.
+ * Starlight ships its own `--sl-*` variables; we define the osra `--o-*`
+ * palette per theme and map every Starlight token onto it. Custom-property
+ * references resolve lazily on the same element, so the `--sl-* : var(--o-*)`
+ * mappings below only need to be declared once and re-resolve when the
+ * `--o-*` palette swaps per theme.
+ *
+ * Theme attribute: Starlight sets `<html data-theme="dark|light">` (dark is the
+ * default when no attribute is present). This file is loaded unlayered, so it
+ * wins over Starlight's `@layer starlight.*` component styles.
+ */
+
+/* ---- osra palette: dark (Starlight default) ------------------------------- */
+:root,
+:root[data-theme='dark'] {
+  --o-bg: #131720;
+  --o-bg-2: #0f121a;
+  --o-card: #1b202c;
+  --o-card-2: #232936;
+  --o-border: #2a303e;
+  --o-border-2: #38404f;
+  --o-ink: #e9edf5;
+  --o-ink-dim: #a3aabb;
+  --o-ink-faint: #8f96a9;
+  --o-brand: #4f9cf0;
+  --o-brand-press: #6cacf4;
+  --o-brand-soft: #1a2c47;
+  --o-brand-ink: #8ec1ff;
+  --o-mint: #3ecf8e;
+  --o-mint-soft: #16332a;
+  --o-shadow-sm: 0 1px 3px rgba(0, 0, 0, .3);
+  --o-shadow: 0 12px 32px rgba(0, 0, 0, .42);
+  --o-shadow-lg: 0 24px 58px rgba(0, 0, 0, .55);
+  --o-ring: rgba(79, 156, 240, .5);
+  --o-brand-glow: rgba(79, 156, 240, .13);
+}
+
+/* ---- osra palette: light --------------------------------------------------- */
+:root[data-theme='light'] {
+  --o-bg: #f6f7f9;
+  --o-bg-2: #edeff3;
+  --o-card: #ffffff;
+  --o-card-2: #f2f4f7;
+  --o-border: #e6e8ee;
+  --o-border-2: #d8dbe4;
+  --o-ink: #1a1c24;
+  --o-ink-dim: #5a5e6c;
+  --o-ink-faint: #6a6e7d;
+  --o-brand: #2f7cd6;
+  --o-brand-press: #2668b5;
+  --o-brand-soft: #e3eefb;
+  --o-brand-ink: #1f6cc7;
+  --o-mint: #2f9e74;
+  --o-mint-soft: #e2f3eb;
+  --o-shadow-sm: 0 1px 2px rgba(28, 29, 38, .05), 0 1px 3px rgba(28, 29, 38, .05);
+  --o-shadow: 0 10px 30px rgba(28, 29, 38, .10);
+  --o-shadow-lg: 0 24px 58px rgba(28, 29, 38, .16);
+  --o-ring: rgba(47, 124, 214, .4);
+  --o-brand-glow: rgba(47, 124, 214, .10);
+}
+
+/* ---- Map Starlight tokens onto the osra palette ---------------------------- */
+:root {
+  /* Inter (self-hosted via @fontsource), MDN's typeface; system stack fallback. */
+  --sl-font: 'Inter Variable', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+
+  /* Grayscale -> osra ink/border scale */
+  --sl-color-white: var(--o-ink);
+  --sl-color-gray-1: var(--o-ink);
+  --sl-color-gray-2: var(--o-ink-dim);
+  --sl-color-gray-3: var(--o-ink-faint);
+  --sl-color-gray-4: var(--o-border-2);
+  --sl-color-gray-5: var(--o-border-2);
+  --sl-color-gray-6: var(--o-border);
+  --sl-color-gray-7: var(--o-card-2);
+  --sl-color-black: var(--o-bg);
+
+  /* Semantic surfaces + text */
+  --sl-color-text: var(--o-ink);
+  --sl-color-bg: var(--o-bg);
+  --sl-color-bg-nav: var(--o-card);
+  --sl-color-bg-sidebar: var(--o-bg);
+  --sl-color-bg-inline-code: var(--o-card-2);
+
+  /* Accent = osra brand (links, active states) */
+  --sl-color-accent-low: var(--o-brand-soft);
+  --sl-color-accent: var(--o-brand);
+  --sl-color-accent-high: var(--o-brand-ink);
+  --sl-color-text-accent: var(--o-brand-ink);
+  --sl-color-bg-accent: var(--o-brand);
+
+  /* Hairlines */
+  --sl-color-hairline-light: var(--o-border);
+  --sl-color-hairline: var(--o-border);
+  --sl-color-hairline-shade: var(--o-border);
+
+  /* Radius scale. */
+  --or-sm: 8px;
+  --or-md: 11px;
+  --or-lg: 16px;
+  --or-xl: 20px;
+  --or-2xl: 26px;
+
+  /* Layout proportions, MDN-ish: roomy sidebar + TOC. */
+  --sl-content-width: calc(46rem + 10px);
+  --sl-sidebar-width: 19.5rem;
+  --sl-line-height: 1.65;
+  /* Max width of the whole centred shell (sidebar + content + TOC). */
+  --osra-shell-max: 88rem;
+
+  /* Header is two stacked rows (nav + breadcrumb); see below. */
+  --osra-nav-row: 3.75rem;
+  --osra-crumb-row: 3rem;
+  --sl-nav-height: calc(var(--osra-nav-row) + var(--osra-crumb-row));
+}
+
+:root[data-theme='light'] {
+  --sl-color-text-accent: var(--o-brand);
+}
+
+@media (min-width: 50rem) {
+  :root {
+    --osra-nav-row: 4.5rem;
+    --osra-crumb-row: 3.25rem;
+    --sl-sidebar-pad-x: 1.25rem;
+  }
+}
+
+/* ---- Body: subtle brand glow ------------------------------------------------ */
+html,
+body {
+  background-color: var(--o-bg);
+}
+body {
+  background-image: radial-gradient(900px 460px at 88% -8%, var(--o-brand-glow), transparent 62%);
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ===========================================================================
+ * Header: two-row MDN bar. Neutralise PageFrame's fixed `.header` wrapper so
+ * our override paints both rows edge-to-edge. (Targets the wrapper Starlight
+ * renders around the Header slot.)
+ * ======================================================================== */
+.page > header.header {
+  padding: 0;
+  background: transparent;
+  border-bottom: none;
+}
+
+/* ===========================================================================
+ * Layout: open and borderless, MDN-style. No divider between the side panels
+ * and the content; the panels just float in the page.
+ * ======================================================================== */
+.sidebar-pane {
+  border-inline-end: none;
+  background: transparent;
+}
+/* No divider on the right "In this article" panel either. */
+.right-sidebar {
+  border-inline-start: none;
+}
+
+/* ---------------------------------------------------------------------------
+ * Centred shell: on big screens, centre the whole sidebar+content+TOC group
+ * within --osra-shell-max instead of pinning the sidebar to the viewport edge.
+ * --osra-gutter is resolved from `100%` on .page (scrollbar-safe) and inherited
+ * by the fixed header and sidebar, so they line up with the centred content.
+ * ------------------------------------------------------------------------ */
+.page {
+  --osra-gutter: max(0px, (100% - var(--osra-shell-max)) / 2);
+}
+@media (min-width: 50rem) {
+  .sidebar-pane {
+    inset-inline-start: var(--osra-gutter);
+  }
+}
+@media (min-width: 72rem) {
+  .main-frame {
+    padding-inline-start: calc(var(--osra-gutter) + var(--sl-content-inline-start));
+    padding-inline-end: var(--osra-gutter);
+  }
+}
+
+/* ===========================================================================
+ * Left sidebar - soft, open: a quiet rounded highlight for the current page,
+ * no accent bars, no tree lines.
+ * ======================================================================== */
+#starlight__sidebar a {
+  font-size: 1rem;
+  line-height: 1.5;
+  padding: 0.4rem 0.65rem;
+  border-radius: 8px;
+  color: var(--o-ink-dim);
+  transition: background-color .15s, color .15s;
+}
+#starlight__sidebar a:hover,
+#starlight__sidebar a:focus-visible {
+  background-color: var(--o-card-2);
+  color: var(--o-ink);
+}
+#starlight__sidebar a[aria-current='page'],
+#starlight__sidebar a[aria-current='page']:hover,
+#starlight__sidebar a[aria-current='page']:focus {
+  font-weight: 600;
+  color: var(--o-brand-ink);
+  background-color: var(--o-brand-soft);
+}
+#starlight__sidebar .large {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--o-ink);
+  letter-spacing: -.01em;
+}
+#starlight__sidebar .top-level > li + li {
+  margin-top: 0.55rem;
+}
+#starlight__sidebar .top-level > li > details > ul {
+  margin-top: 0.35rem;
+}
+#starlight__sidebar ul ul li {
+  border-inline-start: none;
+  margin-block: 0.1rem;
+}
+
+/* ===========================================================================
+ * Right "In this article" TOC - open: no rail, just a coloured current item.
+ * ======================================================================== */
+starlight-toc nav h2 {
+  color: var(--o-ink);
+  font-size: 1.3rem;
+  font-weight: 600;
+  letter-spacing: -.01em;
+  margin-bottom: 0.6rem;
+}
+starlight-toc nav a {
+  font-size: 0.95rem;
+  line-height: 1.5;
+  padding: 0.35rem 0.55rem;
+  color: var(--o-ink-dim);
+  border-radius: 6px;
+  transition: color .15s;
+}
+starlight-toc nav a:hover {
+  color: var(--o-ink);
+}
+starlight-toc nav a[aria-current='true'] {
+  color: var(--o-brand-ink);
+  font-weight: 600;
+  background: transparent;
+}
+
+/* ===========================================================================
+ * Markdown content: MDN-flavoured links, inline code, tables, asides.
+ * ======================================================================== */
+.sl-markdown-content {
+  --sl-text-h1: 2.4rem;
+}
+.sl-markdown-content a:not(:where(.not-content *)) {
+  color: var(--o-brand-ink);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--o-brand-ink) 45%, transparent);
+  text-underline-offset: 0.18em;
+  text-decoration-thickness: 1px;
+  font-weight: 500;
+}
+.sl-markdown-content a:hover:not(:where(.not-content *)) {
+  text-decoration-color: currentColor;
+}
+
+/* Inline code - subtle tint, no border (MDN-style). */
+.sl-markdown-content :not(pre) > code:not(:where(.not-content *)) {
+  background-color: var(--o-card-2);
+  border-radius: 5px;
+  padding: 0.1em 0.35em;
+  font-size: 0.86em;
+  color: var(--o-ink);
+}
+.sl-markdown-content a code:not(:where(.not-content *)) {
+  color: var(--o-brand-ink);
+}
+
+/* Headings: anchor hierarchy with a hairline under h2 like MDN. */
+.sl-markdown-content :is(h1, h2, h3, h4, h5) {
+  color: var(--o-ink);
+  letter-spacing: -.018em;
+}
+
+/* Content tables - open, horizontal-rule style (no card, no shadow, no zebra). */
+.sl-markdown-content table:not(:where(.not-content *)) {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+.sl-markdown-content :is(th, td):not(:where(.not-content *)) {
+  border: none;
+  border-bottom: 1px solid var(--o-border);
+  padding: 0.55rem 1.1rem 0.55rem 0;
+}
+.sl-markdown-content thead th:not(:where(.not-content *)) {
+  color: var(--o-ink);
+  font-weight: 600;
+  text-align: start;
+  border-bottom: 2px solid var(--o-border-2);
+}
+
+/* Fenced code blocks (expressive-code) - quiet rounding, no extra border. */
+.expressive-code .frame pre {
+  border-radius: 10px;
+}
+
+/* Blockquotes / asides keep the brand accent. */
+.sl-markdown-content blockquote:not(:where(.not-content *)) {
+  border-inline-start: 3px solid var(--o-brand);
+  color: var(--o-ink-dim);
+}
+
+/* Starlight <Card> components (used on the splash page). */
+.card {
+  border-radius: 16px;
+  border: 1px solid var(--o-border);
+  background: color-mix(in srgb, var(--o-card) 55%, transparent);
+}
+.card .icon {
+  color: var(--o-brand-ink);
+  background: var(--o-brand-soft);
+}
+
+/* Splash hero call-to-action buttons. */
+.hero a[href].sl-flex {
+  border-radius: 14px;
+}
+
+/* ---------------------------------------------------------------------------
+ * Mobile: the header is two rows, but Starlight centres its fixed sidebar
+ * toggle against the whole --sl-nav-height. Re-centre it against the nav (top)
+ * row so it sits beside the logo and clears the breadcrumb-row theme toggle.
+ * (Header.astro reserves matching right padding on the nav row.)
+ * ------------------------------------------------------------------------ */
+@media (max-width: 50rem) {
+  .sidebar-pane {
+    background: var(--o-bg);
+    box-shadow: var(--o-shadow-lg);
+  }
+  starlight-menu-button button {
+    top: calc((var(--osra-nav-row) - var(--sl-menu-button-size)) / 2);
+  }
+}
