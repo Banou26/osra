@@ -309,9 +309,12 @@ starlight-toc nav a[aria-current='true'] {
   border-bottom: 2px solid var(--o-border-2);
 }
 
-/* Fenced code blocks (expressive-code) - quiet rounding, no extra border. */
-.expressive-code .frame pre {
-  border-radius: 10px;
+/* Fenced code blocks (expressive-code) - quiet rounding. Set EC's own radius
+ * variable instead of overriding the pre directly, so framed blocks with a
+ * header (file-name tabs, terminal bars) keep the header and code area
+ * geometry in sync: the header carries the top rounding, the pre the bottom. */
+.expressive-code {
+  --ec-brdRad: 10px;
 }
 
 /* Blockquotes / asides keep the brand accent. */
