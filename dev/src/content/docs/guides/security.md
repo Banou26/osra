@@ -28,10 +28,11 @@ const host = await expose(widgetApi, {
 })
 ```
 
-Always set `origin` for cross-origin window messaging. Two caveats:
+Always set `origin` for cross-origin window messaging. Three caveats:
 
 - Events without an origin (worker messages, custom transports) bypass the check; it is only meaningful where the platform stamps `event.origin`. Non-window transports (Worker, MessagePort, WebSocket, ServiceWorkerContainer, WebExtension, custom) are not origin-filtered; WebSocket/ServiceWorker events carry their own unrelated origins, so filtering there would be a footgun.
 - The filter is not applied to [custom *function* receives](/guides/custom-transports/), which only get key/name filtering.
+- A sandboxed iframe without `allow-same-origin` has an opaque origin: its messages arrive with `event.origin` set to the literal string `'null'`, which is truthy and never equals a real origin, so a strict filter drops them and the handshake never completes. To embed such a widget, either grant `allow-same-origin` or keep `origin: '*'` on that channel and scope it with `key`/`name` instead.
 
 ## The announce beacon exception
 
@@ -53,11 +54,11 @@ Consequence: a wrong-origin embedder can observe the beacon's identifiers, but c
 
 ## WebExtension senders
 
-`runtime.onMessage` / `onConnect` listeners receive untrusted input when paired with `onMessageExternal` / `onConnectExternal`. osra does no sender validation; the `MessageContext` passed to custom receive listeners exposes `sender`, and you must check `sender.id` / `sender.url` yourself before letting messages reach an exposed value. See [low-level messaging](/reference/low-level/) for the `MessageContext` shape.
+`runtime.onMessage` / `onConnect` listeners receive outside input when paired with `onMessageExternal` / `onConnectExternal`, and osra does no sender validation of its own. `expose()` never surfaces the per-message context, so filter senders before osra sees the message: either wrap the runtime in a custom `{ receive }` transport whose handler checks `sender.id` / `sender.url` before invoking osra's listener, or use `registerOsraMessageListener` directly, where `ctx.sender` is populated (`ctx.port` only on the `onConnect` path). See [low-level messaging](/reference/low-level/) for the `MessageContext` shape.
 
-## What a malicious same-channel peer can still do
+## What a same-channel peer can do
 
-Be honest about the model: a peer that can post on your transport is **semi-trusted**. It can:
+The model is simple: any peer that can post on your transport is **semi-trusted**. It can:
 
 - complete the handshake first ([first wins](/guides/multi-peer/)),
 - spoof envelope `uuid`s to address your connections, including sending `{ type: 'close' }` to tear down another peer's connection,
@@ -65,4 +66,4 @@ Be honest about the model: a peer that can post on your transport is **semi-trus
 - call anything you exposed,
 - flood you with announces or port traffic.
 
-DoS-hardening is not complete. Don't expose privileged functions on channels where untrusted code can post; on windows, pin `origin`; in extensions, validate senders.
+Flood-resistance hardening is incomplete. Don't expose privileged functions on channels where arbitrary code can post; on windows, pin `origin`; in extensions, validate senders.

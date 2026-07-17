@@ -5,7 +5,7 @@ description: "The built-in channels osra connects over: Workers, windows and ifr
 
 A transport is the channel `expose()` talks over. osra accepts the platform objects below directly; anything else can be wrapped in a plain `{ emit, receive }` pair.
 
-Transports are either **structured-clone** (Worker, Window, MessagePort, SharedWorker) or **JSON** (WebSocket, web extension messaging, custom transports with `isJson: true`). JSON mode forces JSON-safe boxing: values that depend on structured clone (`RegExp`, `SharedArrayBuffer`, `ImageBitmap`, …) are rejected at the type level, while everything with a dedicated revivable module (`Date`, `Map`, `ArrayBuffer` via base64, functions, streams, …) still works. osra only stringifies envelopes itself on WebSocket; custom function emitters handle their own serialization. See [JSON vs clone](/internals/json-vs-clone/) for exactly what degrades, and [supported types](/guides/supported-types/) for the full matrix.
+Transports are either **structured-clone** (Worker, Window, MessagePort, SharedWorker) or **JSON** (WebSocket, web extension messaging, custom transports with `isJson: true`). JSON mode forces JSON-safe boxing: values that depend on structured clone (`RegExp`, `File`, `ImageBitmap`, …) are rejected at the type level, while everything with a dedicated revivable module (`Date`, `Map`, `ArrayBuffer` via base64, functions, streams, …) still works. osra only stringifies envelopes itself on WebSocket; custom function emitters handle their own serialization. See [JSON vs clone](/internals/json-vs-clone/) for exactly what degrades, and [supported types](/guides/supported-types/) for the full matrix.
 
 ## Overview
 
@@ -19,29 +19,27 @@ Transports are either **structured-clone** (Worker, Window, MessagePort, SharedW
 | `WebSocket` | JSON | Envelopes are `JSON.stringify`ed; sends while `CONNECTING` queue until `open`. |
 | `ServiceWorker` | clone | **Emit only.** |
 | `ServiceWorkerContainer` | clone | **Receive only.** Combine: `{ emit: registration.active, receive: navigator.serviceWorker }`. |
-| WebExtension `runtime` / `Port` / `onConnect` / `onMessage` | JSON | `runtime`/`onConnect` are identity-matched against the `browser`/`chrome` global; `Port`/`onMessage` are detected purely structurally and work without the global (lookalike objects can misclassify as these). |
+| WebExtension `runtime` / `Port` / `onConnect` / `onMessage` | JSON | `onConnect`/`onMessage` are receive-only; combine with the runtime or a `Port` for emit. `runtime`/`onConnect` are identity-matched against the `browser`/`chrome` global; `Port`/`onMessage` are detected purely structurally and work without the global (lookalike objects can misclassify as these). |
 | Custom `{ emit?, receive?, isJson? }` | per `isJson` / probed | See [Custom transports](/guides/custom-transports/). |
 
 ## Worker
 
-Pass the `Worker` on the page side and `globalThis` (the `DedicatedWorkerGlobalScope`) inside the worker; the worker scope isn't part of the `Transport` type union, so cast it:
+Pass the `Worker` on the page side and `globalThis` (the `DedicatedWorkerGlobalScope`) inside the worker; the `Transport` union's structural `WorkerSelf` member accepts the worker scope directly:
 
 ```ts twoslash
-import type { Transport } from 'osra'
 import { expose } from 'osra'
 const api = { add: async (a: number, b: number) => a + b }
 // ---cut---
 // worker.ts
-expose(api, { transport: globalThis as unknown as Transport })
+expose(api, { transport: globalThis })
 ```
 
 ```ts twoslash
 // @filename: worker.ts
-import type { Transport } from 'osra'
 import { expose } from 'osra'
 const api = { add: async (a: number, b: number) => a + b }
 export type Api = typeof api
-expose(api, { transport: globalThis as unknown as Transport })
+expose(api, { transport: globalThis })
 // @filename: main.ts
 import type { Api } from './worker'
 import { expose } from 'osra'
@@ -165,7 +163,7 @@ const remote = await expose<SwApi>(pageApi, {
 
 ## Web extension
 
-JSON mode. `runtime.Port`, the runtime itself (`sendMessage`/`onMessage`), `onConnect`, and `onMessage` are all accepted:
+JSON mode. `runtime.Port` and the runtime itself (`sendMessage`/`onMessage`) work as standalone transports. `onConnect` and `onMessage` are receive-only: pass them as the receive half of a custom `{ emit, receive }` pair, or expose per connected port; `expose()` requires a transport that can both emit and receive.
 
 ```ts twoslash
 import { expose } from 'osra'
@@ -203,7 +201,7 @@ browser.runtime.onConnect.addListener(port => {
 ```
 
 :::caution
-If you accept `onConnectExternal`/`onMessageExternal`, validate senders yourself; osra does no sender validation. The `MessageContext` passed to custom receive listeners exposes `sender`. See [security](/guides/security/).
+If you accept `onConnectExternal`/`onMessageExternal`, validate senders yourself; osra does no sender validation, and `expose()` does not surface the per-message context. Filter inside a custom receive wrapper before invoking osra's listener; the `MessageContext` (with `sender`) reaches only direct users of `registerOsraMessageListener`. See [security](/guides/security/).
 :::
 
 ## Anything else

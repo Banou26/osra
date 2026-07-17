@@ -30,13 +30,13 @@ expose({
 }, { transport: worker })
 ```
 
-The per-connection caches behind this are GC-aware: when the sender's original gets garbage-collected, the peer is notified and drops its cached revived value. `identity()` is idempotent, and primitives pass through unchanged; see the [identity() reference](/reference/identity/) for the exact signature and the `identity-dispose` wire behavior.
+The per-connection caches behind this are GC-aware: when the sender's original gets garbage-collected, the peer is notified and drops its cached revived value. Until that notification (or connection teardown) arrives, the peer holds the revived value strongly: the receiver cannot shed that memory on its own, so its cache lifetime is driven by the sender's GC. `identity()` is idempotent, and primitives pass through unchanged; see the [identity() reference](/reference/identity/) for the exact signature and the `identity-dispose` wire behavior.
 
 Because later sends of an already-tracked reference ship only an id instead of the full payload, `identity()` also dedupes repeat sends of large objects; see [Performance](/guides/performance/).
 
 ## `transfer()`: zero-copy moves
 
-`transfer(value)` opts a `Transferable` (`ArrayBuffer`, `MessagePort`, streams, `ImageBitmap`, `OffscreenCanvas`, …) into **move semantics**: ownership transfers to the peer instead of copying, and the value is detached locally.
+`transfer(value)` opts a clonable `Transferable` (`ArrayBuffer`, typed-array views, `ImageBitmap`, `VideoFrame`, `AudioData`, …) into **move semantics**: ownership transfers to the peer instead of copying, and the value is detached locally.
 
 ```ts twoslash
 import { expose } from 'osra'
@@ -54,7 +54,7 @@ await remote.render(transfer(pixels)) // moved - pixels is detached locally
 
 On JSON transports there is nothing to transfer, so `transfer()` silently degrades to a copy.
 
-Some types are **always moved**, with or without `transfer()`, because structured clone cannot copy them: `MessagePort`, `TransformStream`, `OffscreenCanvas`, `MediaSourceHandle`, `MediaStreamTrack`, `MIDIAccess`, `RTCDataChannel`, and WebTransport streams. A bare send still detaches them locally; `transfer()` adds nothing there. It's the clonable Transferables (`ArrayBuffer`, typed-array views, `ImageBitmap`, `VideoFrame`, `AudioData`) where `transfer()` makes the difference between a copy and a move.
+Some types are **always moved**, with or without `transfer()`, because structured clone cannot copy them: `MessagePort`, `TransformStream`, `OffscreenCanvas`, `MediaSourceHandle`, `MediaStreamTrack`, `MIDIAccess`, `RTCDataChannel`, and WebTransport streams. A bare send still detaches them locally; `transfer()` adds nothing there. It's the clonable Transferables (`ArrayBuffer`, typed-array views, `ImageBitmap`, `VideoFrame`, `AudioData`) where `transfer()` makes the difference between a copy and a move. For typed-array views this applies only to full-length views (`byteOffset` 0, covering the whole buffer): a subarray is boxed by copying just its window, so `transfer()` on a subarray moves that copy and neither moves nor detaches the original buffer.
 
 :::note
 `ReadableStream` and `WritableStream` are never moved at all: their revivable modules proxy them chunk-by-chunk over the connection (sending locks the source rather than detaching it), and `transfer()` is a no-op on them; see [Performance](/guides/performance/) for the implications on large binary data.

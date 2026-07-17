@@ -25,7 +25,15 @@ Subscribes to raw osra envelopes on any receive transport, and filters them by `
 - `MessagePort.start()`
 - the WebExtension listener families
 
-`MessageContext` is `{ port?, sender?, receiveTransport?, source?, origin? }`.
+`MessageContext` is `{ port?, sender?, receiveTransport?, source?, origin? }`. Which fields are populated depends on the listener family, so do not assume `port` is always there:
+
+| Receive transport | Populated context |
+|---|---|
+| WebExtension `onConnect` / `onConnectExternal` | `port` (the connecting port) + `sender` |
+| WebExtension `runtime` / structural `onMessage` | `sender` only |
+| WebExtension `Port` passed directly | `sender` only (`port` is **not** forwarded) |
+| Window, Worker, WebSocket, `MessagePort`, SharedWorker, `ServiceWorkerContainer` | `receiveTransport` + `source` + `origin` from the event |
+| Custom `receive` handler | whatever your handler passes through, verbatim |
 
 :::caution
 osra does no WebExtension sender validation: consumers using `onConnectExternal`/`onMessageExternal` must validate `context.sender` themselves. See [security](/guides/security/).

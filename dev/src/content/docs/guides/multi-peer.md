@@ -3,14 +3,14 @@ title: Multi-peer connections
 description: What happens when several peers share one transport, and the per-port expose() pattern for SharedWorkers.
 ---
 
-A single `expose()` call can be reached by more than one peer: several pages connecting to one SharedWorker, several contexts on one broadcast channel. osra connects them all, but the returned promise only ever carries one value.
+A single `expose()` call can be reached by more than one peer when its transport is truly shared: several osra instances announcing on one channel, or a broadcast-style custom transport (the `BroadcastChannel` API is not a recognized platform transport; give it a small `{ emit, receive }` wrapper, see [custom transports](/guides/custom-transports/)). osra connects them all, but the returned promise only ever carries one value. A SharedWorker is different: each page arrives on its own port, so the worker exposes once per port (below).
 
 ## First peer wins
 
 The promise returned by `expose()` resolves with the **first** peer's value. Later peers still connect, can call your exposed value, and keep their own connection state, but there is no public accessor for their values.
 
 :::caution
-First-wins has a security edge: on a channel where untrusted code can post, a hostile peer can complete the handshake first. See [security](/guides/security/).
+First-wins means the resolved value comes from whichever peer completes the handshake first, including one you did not intend. On a channel where code you do not control can post, pin `origin` on window transports and avoid exposing privileged functions; `key` is namespacing, not access control. See [security](/guides/security/).
 :::
 
 ## One `expose()` per port

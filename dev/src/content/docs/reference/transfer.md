@@ -30,6 +30,8 @@ await remote.process(transfer(buffer)) // buffer is detached locally
 
 Moving large buffers avoids the copy entirely; see [performance](/guides/performance/) for when this matters.
 
+Detachment applies to bare `ArrayBuffer`s and to views that cover their whole buffer (`byteOffset` 0, full length). A subarray view is boxed by copying just its visible window first, and the copy is what moves: the sender's buffer is **not** detached, and the revived view is a fresh full-length view (`byteOffset` 0) over exactly the windowed bytes. There is no zero-copy move for a partial view: `transfer()` on a subarray already ships a copy of just the window. To transfer without copying, produce the data in its own dedicated buffer and transfer that whole buffer.
+
 ## JSON transports
 
 On [JSON transports](/internals/json-vs-clone/) there is no transfer list, so `transfer()` silently degrades to a copy.

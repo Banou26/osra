@@ -7,7 +7,7 @@ osra connections carry errors with full fidelity and can be torn down explicitly
 
 ## Remote errors
 
-Remote functions that throw reject the caller's promise with the revived error, subclass and all. `TypeError`, `RangeError`, `AggregateError` (with nested errors), `DOMException`, and other subclasses cross the boundary with `cause` and `stack` preserved; see [supported types](/guides/supported-types/) for the full matrix.
+Remote functions that throw reject the caller's promise with the revived error. The built-in error classes (`Error`, `TypeError`, `RangeError`, `SyntaxError`, `ReferenceError`, `EvalError`, `URIError`, `AggregateError` with its nested errors, and `DOMException`) revive as their own class; any other subclass revives as a base `Error` with `name`, `message`, `stack`, and `cause` preserved. See [supported types](/guides/supported-types/) for the full matrix.
 
 ## When `expose()` rejects
 
@@ -39,7 +39,9 @@ Aborting the signal:
 - rejects in-flight RPC calls with `Error('osra: connection closed')` on **both** sides: the peer that receives `close` also tears down its connection state and rejects its own pending calls into you
 - cancels/aborts proxied streams on wire-routed channels (JSON transports) with the same error
 
-If the signal is already aborted when `expose()` is called, no listener is registered at all. The internal promise is pre-caught, so fire-and-forget `expose(value, …)` (the typical server-side pattern) never surfaces an unhandled rejection on abort; awaiting callers still observe it.
+If the signal is already aborted when `expose()` is called, nothing starts: no listener is registered, no announce goes out, and the returned promise stays pending forever. It does not reject with the abort reason, because rejection is driven by the `abort` event and that event already fired before the handler existed. Abort-based rejection only covers aborts that happen after the call, so check `signal.aborted` before calling `expose()` when teardown can race startup.
+
+The internal promise is pre-caught, so fire-and-forget `expose(value, …)` (the typical server-side pattern) never surfaces an unhandled rejection on abort; awaiting callers still observe it.
 
 ## GC-driven cleanup
 
@@ -48,6 +50,15 @@ Beyond explicit teardown, unused resources are reclaimed through `FinalizationRe
 - Dropping a revived port (or anything built on one) lets GC fire a `message-port-close` to the origin side, which closes its local end and clears the routing entry. While a connection is alive the box side strong-holds its port through the routing map, so the registry is a safety net for the *reviving* side, not the primary cleanup path.
 - [`identity()`](/guides/identity-and-transfer/)-tracked originals that get collected send `identity-dispose`, letting the peer drop its cached revived value.
 - Dropping a revived *function proxy* does **not** reject that proxy's in-flight calls; return ports are pinned until they settle. Pending calls reject only on connection teardown.
+
+## Closing routed ports
+
+Wire-routed ports (synthetic `EventPort`s always, real `MessagePort`s on JSON transports) close asymmetrically:
+
+- Calling `close()` on a routed **real** `MessagePort` is local only: osra attaches no close listener on the routing path, so no `message-port-close` is sent. The peer's end is released by GC of your endpoint, by connection teardown, or by an application-level signal you send yourself.
+- Synthetic `EventPort`s do propagate an explicit `close()`: the wire close goes out immediately and the peer's end observably closes.
+- The `close` event you see on a routed port is dispatched by osra itself, on both ends, so close listeners work even where the platform lacks a native `MessagePort` close event.
+- Reviving an already-closed `portId` does not throw: you get a working-shaped port whose synthesized `close` fires on a later macrotask, so listeners attached right after the port is delivered still observe the closure.
 
 ## What survives connection death
 

@@ -15,21 +15,22 @@ Transports come in two kinds: **structured-clone** (Worker, Window, MessagePort,
 | `Date` | `Date` | ✅ | ✅ | |
 | `bigint` | `bigint` | ✅ | ✅ | |
 | `Map` / `Set` | `Map` / `Set` | ✅ | ✅ | Keys and values boxed recursively. |
-| TypedArrays (`Uint8Array`, …, `BigInt64Array`, `Float16Array` where supported) | same type | ✅ | ✅ | Subarray views keep `byteOffset`/`length`; subclasses (Node `Buffer`) revive as the nearest standard type. |
+| TypedArrays (`Uint8Array`, …, `BigInt64Array`, `Float16Array` where supported) | same type | ✅ | ✅ | Subarray views round-trip their visible bytes: the revived view is full-length over a fresh buffer (`byteOffset` 0, element `length` preserved). Subclasses (Node `Buffer`) revive as the nearest standard type. `Float16Array` crosses only when both platforms ship it; a receiver without it rejects with `Error('Unknown typed array type')`. |
 | `ArrayBuffer` | `ArrayBuffer` | ✅ | ✅ | base64 on JSON transports. |
 | `RegExp` | `RegExp` | ✅ | ❌ | Rides structured clone. |
 | `SharedArrayBuffer` | `SharedArrayBuffer` | ✅ | ❌ | Shared memory across the contexts. |
-| `Error` (+ subclasses) | same subclass | ✅ | ✅ | See [Error fidelity](#error-fidelity). |
+| `Error` (+ subclasses) | see note | ✅ | ✅ | Built-in subclasses revive as themselves; custom subclasses revive as base `Error` with `name` preserved. See [Error fidelity](#error-fidelity). |
 | `Promise<T>` | `Promise<T>` | ✅ | ✅ | Settles when the source settles; rejections cross with full error fidelity. |
 | Function | `(...args) => Promise<Awaited<R>>` | ✅ | ✅ | Args and return value boxed recursively; throws reject the promise. |
 | Async generator / async iterable | `AsyncIterableIterator` | ✅ | ✅ | `next`/`return`/`throw` proxied; `for await` works; early `break` propagates `return()` to the source. |
 | `ReadableStream` | `ReadableStream` | ✅ | ✅ | Proxied chunk-by-chunk with credit-window backpressure; `cancel` reason crosses to the source. |
-| `WritableStream` | `WritableStream` | ✅ | ✅ | `write`/`close`/`abort` with acks; sink errors reject the writer. |
+| `WritableStream` | `WritableStream` | ✅ | ✅ | `write`/`close`/`abort` with acks; sink errors reject the writer with a plain `Error` carrying only the message string. |
+| `TransformStream` | itself | ✅ | ❌ | Always **moved** (structured clone cannot copy it). Not proxied like `ReadableStream`/`WritableStream`: the native stream transfers to the peer and detaches locally on every send. |
 | `MessagePort` | `MessagePort` | ✅ | ✅ | Transferred natively on clone transports; routed via `portId` on JSON. |
-| `AbortSignal` | `AbortSignal` | ✅ | ✅ | `abort` and its `reason` propagate. |
-| `File` / `FileList` | `File` / `FileList` | ✅ | ❌ | Revive as themselves via structured clone; `File` keeps `name` + `lastModified`. `Blob` is **not** supported. |
-| `Request` | `Request` | ✅ | ✅ | Headers, streamed body, `mode`/`credentials`/etc.; `signal` propagates. |
-| `Response` | `Response` | ✅ | ✅ | Streamed body; `url`/`redirected` restored; opaque status-0 revives as `Response.error()`. |
+| `AbortSignal` | `AbortSignal` | ✅ | ✅ | `abort` and its `reason` propagate asynchronously; see [Live values](#live-values). |
+| `File` / `FileList` | `File` / `FileList` | ✅ | ❌ | Revive as themselves via structured clone; `File` keeps `name` + `lastModified`. `Blob` is **not** supported; see [Blob](#blob). |
+| `Request` | `Request` | ✅ | ✅ | Headers, streamed body, `mode`/`credentials`/etc.; `signal` propagates. See [Request and Response fidelity](#request-and-response-fidelity). |
+| `Response` | `Response` | ✅ | ✅ | Streamed body; `url`/`redirected` restored; opaque status-0 revives as `Response.error()`. See [Request and Response fidelity](#request-and-response-fidelity). |
 | `Headers` | `Headers` | ✅ | ✅ | |
 | `Event` / `CustomEvent` | `Event` / `CustomEvent` | ✅ | ✅ | `type`/`bubbles`/`cancelable`/`composed` + `detail` (boxed recursively). Subclass fields beyond `detail` are dropped. |
 | `EventTarget` | listener-only façade | ✅ | ✅ | See [EventTarget façades](#eventtarget-façades). |
@@ -41,19 +42,29 @@ Transports come in two kinds: **structured-clone** (Worker, Window, MessagePort,
 
 ## Live values
 
-Functions, promises, async iterables, and streams don't cross as data; they cross as live proxies whose traffic is routed back to the original. All of them work on both transport kinds.
+Functions, promises, async iterables, streams, and abort signals don't cross as data; they cross as live proxies whose traffic is routed back to the original. All of them work on both transport kinds.
 
 **Functions** become `(...args) => Promise<Awaited<R>>` on the peer. Arguments and results recurse through the same boxing as everything else, so you can pass callbacks to callbacks; throws reject the caller's promise.
 
 **Promises** settle when the source settles. Rejections cross with full error fidelity.
 
-**Async generators and async iterables** revive as `AsyncIterableIterator`: `next`/`return`/`throw` are proxied, `for await` works, and an early `break` on the consuming side propagates `return()` to the source so its `finally` blocks run.
+**Async generators and async iterables** revive as `AsyncIterableIterator`: `next`/`return`/`throw` are proxied, `for await` works, and an early `break` on the consuming side propagates `return()` to the source so its `finally` blocks run. Iteration state is captured at send time: boxing calls `[Symbol.asyncIterator]()` immediately, and a generator object returns itself from that method, so sending the same generator twice shares (and advances) one cursor. Send a fresh generator per consumer, or an async iterable whose `[Symbol.asyncIterator]` creates a new iterator each time. Each iteration step is one full RPC round trip with no batching or readahead; for throughput-sensitive pipelines, prefer `ReadableStream` and its credit window.
 
-**`ReadableStream`** is proxied with credit-window backpressure (the consumer grants credit and the source pushes chunks up to the window, so a slow consumer stalls the producer), and a `cancel` reason crosses back to the source. **`WritableStream`** proxies `write`/`close`/`abort` with acks, and sink errors reject the writer. Note that a stream's body locks at first send: sending the same `ReadableStream` (or `Request`/`Response`) twice fails; see [Limitations](/reference/limitations/).
+**`ReadableStream`** is proxied chunk-by-chunk with credit-window backpressure: the consumer grants credit, the source pushes chunks up to the window, and a slow consumer stalls the producer; a `cancel` reason crosses back to the source. The window starts at 8 chunks and adapts between 2 and 64 against a 4 MiB byte budget (streams of unmeasurable chunks, such as plain objects, stay at 8). Reviving a stream grants the initial window immediately, so the producer reads up to 8 chunks before your first `read()` call. Chunks delivered before an error or end are always readable before the terminal surfaces. A producer that pushes past its granted window fails the stream with `Error('osra: stream exceeded its credit window')` and, uniquely among the failure paths, discards delivered-but-unread chunks.
+
+**`WritableStream`** proxies `write`/`close`/`abort` with acks, one operation in flight at a time, so each write costs one round trip and the remote sink's backpressure paces the sender. Sink errors reject the writer with a plain `Error` carrying only the original message string; the error class and extra properties do not cross.
+
+**`AbortSignal`** revives as the signal of a fresh controller. A signal already aborted at send time revives synchronously aborted, with its reason; otherwise abort propagates asynchronously, so the revived signal still reads `aborted === false` until the wire message lands. Connection teardown closes the channel but never aborts a revived signal, so don't use a remote signal to detect connection death; use `unregisterSignal` or call rejections instead (see [Lifecycle](/guides/lifecycle/)).
+
+Streams lock at send time: boxing calls `getReader()`/`getWriter()` immediately, even if the peer never consumes the stream. Sending the same `ReadableStream`, or a `Request`/`Response` whose body has already been sent, twice fails; see [Limitations](/reference/limitations/).
 
 ## Error fidelity
 
-Errors revive as their own subclass: `TypeError`, `RangeError`, `SyntaxError`, `ReferenceError`, `EvalError`, `URIError`, `AggregateError` (with its nested errors), and `DOMException` all come back as themselves, with `cause` and `stack` preserved. A remote function that throws rejects the caller's promise with the revived error, subclass and all.
+The built-in error classes revive as themselves: `Error`, `TypeError`, `RangeError`, `SyntaxError`, `ReferenceError`, `EvalError`, `URIError`, `AggregateError` (with its nested errors), and `DOMException` all come back as their own class, with `cause` and `stack` preserved (`DOMException` keeps its `stack` but loses `cause`). Any other `Error` subclass revives as base `Error` with `name`, `message`, `stack`, and `cause` preserved, so it is `instanceof Error` but not `instanceof` your subclass. A remote function that throws rejects the caller's promise with the revived error.
+
+## Request and Response fidelity
+
+`Request` and `Response` revive with their headers, status fields, and streamed bodies (bodies ride the same credit-window protocol as `ReadableStream`). A few fields do not survive the trip: `Response.type` is not carried (revived responses report `'default'`, or `'error'` for a status-0 box), and the restored `url`/`redirected` are own-property shadows that `response.clone()` silently loses. A `mode: 'navigate'` `Request` revives with the constructor's default mode (`'navigate'` is not constructible via `RequestInit`), and `destination`/`priority`/`duplex` are not carried; a streaming body always revives with `duplex: 'half'`.
 
 ## Symbol semantics
 
@@ -61,11 +72,17 @@ Errors revive as their own subclass: `TypeError`, `RangeError`, `SyntaxError`, `
 
 ## EventTarget façades
 
-An `EventTarget` revives as a **listener-only façade**: `addEventListener`/`removeEventListener` proxy to the source target, so you can subscribe to its events remotely. Events do not dispatch locally on the façade, and you can't dispatch through it back to the source.
+An `EventTarget` revives as a **listener-only façade**: `addEventListener`/`removeEventListener` proxy to the source target, so you can subscribe to its events remotely. Calling `dispatchEvent` on the façade is inert: it neither fires your local listeners nor reaches the source. Event flow is strictly source to façade.
+
+Subscribing is fire-and-forget: the `addEventListener` RPC reaches the source asynchronously with no acknowledgment, so an event the source dispatches right after you subscribe can be missed; if the first event matters, have the source confirm registration through a normal call. When a façade is garbage-collected, one cleanup RPC removes every listener it registered on the source, so hold a reference to the façade for as long as its subscriptions must live.
 
 ## Must-transfer types
 
 Some host objects (`OffscreenCanvas`, `MediaStreamTrack`, `RTCDataChannel`, `MediaSourceHandle`, `MIDIAccess`, and friends) can't be copied by structured clone at all, so they are always **moved** to the peer, detached locally on every send, whether or not you wrap them in `transfer()`. Clonable Transferables like `ImageBitmap`, `VideoFrame`, and `AudioData` are copied by default and only moved when wrapped; see [identity() and transfer()](/guides/identity-and-transfer/).
+
+## Blob
+
+`Blob` support was removed in 0.6.0: the compile-time `Capable` check rejects it on every transport. At runtime the behavior splits by transport kind. On JSON transports, sending one throws `TypeError('osra: Blob support was removed in 0.6.0, send an ArrayBuffer or Uint8Array instead')`, which rejects the call whether the Blob was an argument or a return value. On structured-clone transports, a bare `Blob` that gets past the types still rides structured clone at runtime. Send an `ArrayBuffer` or `Uint8Array` instead. `File` (a `Blob` subclass) remains supported on clone transports.
 
 ## Unclonables coerce to `{}`
 

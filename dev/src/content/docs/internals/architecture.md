@@ -26,9 +26,19 @@ The walk's rules have direct consequences:
 
 ## portId routing: one logical channel
 
-Live values (functions, promises, streams, ports, signals, …) all reduce to MessagePort semantics. The message-port module (`src/revivables/message-port.ts`) multiplexes every such port over the *single* underlying transport: each boxed port gets a random `portId`, its traffic rides `{ type: 'message', portId, data }` envelopes, and a per-connection `Map<portId, handler>` gives O(1) dispatch. `{ type: 'message-port-close', portId }` tears one port down without touching the rest.
+Live values (functions, promises, streams, ports, signals, …) all reduce to MessagePort semantics. The message-port module (`src/revivables/message-port.ts`) wire-routes a port over the single underlying transport whenever it can't be transferred for real: each boxed port gets a random `portId`, its traffic rides `{ type: 'message', portId, seq, data }` envelopes, and a per-connection `Map<portId, handler>` gives O(1) dispatch. `{ type: 'message-port-close', portId }` tears one port down without touching the rest. Function calls are always wire-routed, and on JSON transports every live value is; on clone transports, promises, streams, and abort signals ride real transferred `MessageChannel` ports instead.
 
 On clone transports a real `MessagePort` is transferred directly when possible; everything else (and *everything* on [JSON transports](/internals/json-vs-clone/)) routes via `portId`. The distinction matters at teardown: wire-routed traffic dies with the connection, while real transferred ports survive it. See [lifecycle](/guides/lifecycle/).
+
+### Ordering and routing limits
+
+Each side stamps every outgoing port message with a monotonic per-port `seq`; the receiver buffers out-of-order arrivals and delivers along the contiguous run, so port traffic keeps its send order even on transports with no ordering guarantee (a WebExtension `runtime.sendMessage` round trip, a reordering relay). Messages that arrive before the box that revives their port are held in a pending, handler-less routing entry and replayed in order the moment the handler registers.
+
+Three fixed caps bound this state, each with a defined failure mode:
+
+- **Reorder buffer: 2048 entries per port.** When the buffer is full and the arrival is not the exact awaited `seq` with a live handler, the gap cannot close and the port fails closed: the buffer is cleared, the `portId` is tombstoned, and a synthesized `message-port-close` is delivered to the handler. The consumer observes an ordinary port close, not an error.
+- **Pending entries: 1024 per connection.** Past the cap, an early message for an unknown `portId` is dropped silently and no entry is allocated. The port itself still works once its handler registers, because the dropped message never created routing state.
+- **Tombstones: 128 closed portIds, FIFO eviction.** Closed portIds are remembered so late in-flight traffic cannot resurrect routing state. Once a tombstone is evicted, a very late message for that old `portId` allocates a fresh pending entry, bounded by the pending cap and cleared at connection teardown.
 
 ## EventChannel: synthetic ports
 

@@ -19,7 +19,7 @@ type ReceiveHandler = (
 ) => void | (() => void)
 ```
 
-- An `emit` function is called with the ready-to-send envelope and the collected transfer list. Serialization is yours; osra does not stringify for function emitters.
+- An `emit` function is called with the ready-to-send envelope and the collected transfer list. Serialization is yours; osra does not stringify for function emitters. If your channel delivers structured clones (you did not set `isJson: true`), forward the transfer list to the underlying channel, e.g. `(message, transferables) => port.postMessage(message, { transfer: transferables ?? [] })`: envelopes there contain real `MessagePort`s, and posting them without transferring throws `DataCloneError`. The examples below can ignore the argument only because they set `isJson: true`.
 - A `receive` function is called once with osra's listener; invoke it with parsed envelope objects. Key and `remoteName` filtering are applied for you. Optionally return an unsubscribe function; it runs when `unregisterSignal` aborts.
 
 A transport that can't both emit and receive rejects `expose()` immediately: a bare `{ emit }` or `{ receive }` alone is a configuration error.
@@ -36,7 +36,12 @@ Without it, JSON mode is auto-detected from the embedded platform transports: `{
 
 ## `MessageContext`
 
-The second argument to osra's receive listener carries whatever the channel knows: `{ port?, sender?, receiveTransport?, source?, origin? }` (`origin` and `source` from window events, `sender` and `port` from WebExtension messaging, and `receiveTransport`).
+The second argument to osra's receive listener carries whatever the channel knows about the message: `{ port?, sender?, receiveTransport?, source?, origin? }`. Who fills it depends on the transport:
+
+- Platform receive transports fill it themselves: window, worker, WebSocket, and port events get `{ receiveTransport, source, origin }`; WebExtension listeners get `{ sender }`, plus `port` on the `onConnect` path (a `Port` passed directly as the transport does not set `port`).
+- A custom `receive` function supplies whatever context it wants, `{}` included.
+
+`expose()` never reads the context; it only matters when you use the transport directly with [`registerOsraMessageListener`](/reference/low-level/).
 
 :::note
 The `origin` option is not applied to custom *function* receives, which only get key/name filtering. If your channel has a notion of sender identity, validate it yourself before passing messages through; see [security](/guides/security/).

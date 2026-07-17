@@ -11,7 +11,7 @@ description: "Reference-preserving sends: the same wrapped value revives as the 
 const identity: <T>(value: T) => T
 ```
 
-`identity()` is idempotent, and primitives pass through unchanged.
+`identity()` is idempotent (`identity(x) === identity(x)`), and primitives pass through unchanged. For objects and functions, though, the runtime return value is **not** the input: it is a memoized marker wrapper typed as `T`. Use it only as a value you send through osra (as in the example below); reading properties on it or handing it to non-osra code operates on the wrapper, not your object.
 
 ## Semantics
 

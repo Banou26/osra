@@ -8,13 +8,19 @@ description: Full reference for expose(), the single entry point that exposes a 
 ## Signature
 
 ```ts
-const expose: <T = unknown>(
-  value: Capable,
-  options: StartConnectionsOptions & { transport: Transport },
+const expose: <
+  T = unknown,
+  const TModules extends readonly RevivableModule[] = DefaultRevivableModules,
+  const TTransport extends Transport = Transport,
+>(
+  value: Capable<TModules>,
+  options: StartConnectionsOptions<TModules> & { transport: TTransport },
 ) => Promise<Remote<T>>
 ```
 
-The value you pass is validated at compile time against `Capable`, the union of everything serializable for the inferred transport; see [Remote&lt;T&gt; and TypeScript](/reference/typescript/).
+`T` is the type you declare for the peer's value; `TModules` and `TTransport` are normally inferred from the arguments. The value you pass is validated at compile time against `Capable`, the union of everything serializable for the inferred transport; see [Remote&lt;T&gt; and TypeScript](/reference/typescript/).
+
+When you both name `T` and pass `revivableModules`, supply the module list type as the second type parameter (`expose<Api, ReturnType<typeof withModules>>(...)`): TypeScript has no partial inference, so naming `T` alone resets `TModules` to the defaults and rejects the `revivableModules` option.
 
 ## Both sides call expose()
 
@@ -52,8 +58,8 @@ With multiple peers on one transport, the promise resolves with the **first** pe
 |---|---|---|---|
 | `transport` | `Transport` | required | The channel to the peer. See [transports](/guides/transports/). |
 | `name` | `string` | - | Stamped on every outgoing envelope as `name`. |
-| `remoteName` | `string` | - | Inbound filter: envelopes whose `name` differs are dropped. |
-| `key` | `string` | `OSRA_DEFAULT_KEY` (`'__OSRA_DEFAULT_KEY__'`) | **Namespacing, not authentication.** Envelopes carry it under `__OSRA_KEY__`; inbound messages with a different key are ignored, so multiple independent osra connections can share one channel. |
+| `remoteName` | `string` | - | Inbound filter: envelopes whose `name` differs are dropped, and so are envelopes with no `name` at all. Configure the two options as a pair: setting `remoteName` requires the peer to set `name` to the same string; unnamed envelopes are never admitted as wildcard matches. |
+| `key` | `string` | `OSRA_DEFAULT_KEY` (`'__OSRA_DEFAULT_KEY__'`) | **Channel namespacing.** Envelopes carry it under `__OSRA_KEY__`; inbound messages with a different key are ignored, so multiple independent osra connections can share one channel. |
 | `origin` | `string` | `'*'` | Outbound: the `targetOrigin` for `window.postMessage` (windows only). Inbound: on **window** receive transports, events whose non-empty `event.origin` differs are dropped; non-window transports are not origin-filtered. The one exception (the announce beacon broadcasts with `'*'`) and the full rationale live in [security](/guides/security/). |
 | `unregisterSignal` | `AbortSignal` | - | Teardown handle, see below. |
 | `revivableModules` | `(defaults: DefaultRevivableModules) => TModules` | defaults as-is | Configure the revivable module list. See [custom revivables](/guides/custom-revivables/). |
@@ -81,6 +87,8 @@ const remote = await expose({}, { transport: port2, uuid: uuidB, remoteUuid: uui
 
 No `announce` envelope is ever emitted; `init` flows directly.
 
+Preset mode sends `init` exactly once and installs no announce/retry loop, so both sides' listeners must already be attached when `expose()` runs. A transport that can drop an early message (for example a freshly created module worker in Firefox) hangs the handshake with no error; the announce handshake exists to tolerate exactly that loss, and preset mode trades it away.
+
 :::caution
 A one-sided preset is not supported, but the failure is asymmetric: the non-presetting peer drops the presetting side's early `init` (untracked uuid) and its `expose()` hangs forever, while the presetting side still answers the peer's broadcast `announce`, receives the peer's `init`, and resolves.
 :::
@@ -88,5 +96,6 @@ A one-sided preset is not supported, but the failure is asymmetric: the non-pres
 ## Errors
 
 - `expose()` rejects immediately if the (normalized) transport cannot both emit and receive, e.g. a bare `ServiceWorker` or a custom `{ emit }` without `receive`.
-- Boxing a value that cannot be serialized (e.g. a circular structure) rejects the returned promise with a `TypeError`; so does reviving a malformed/cyclic `init` payload from a peer.
+- Boxing a value that cannot be serialized (e.g. a circular structure) rejects the returned promise with a `TypeError`.
+- Reviving a malformed or cyclic `init` payload from a peer also rejects the promise, with whatever error the revive throws: a `TypeError` for cycles, or for example `Error('Unknown typed array type')` for unrecognized boxed data.
 - A peer's protocol `close` arriving before `init` rejects the pending promise with `Error('osra: peer closed the connection')`.

@@ -37,7 +37,7 @@ The relay is built on exactly the [low-level messaging](/reference/low-level/) p
 
 ## One-way degradation
 
-A direction is only wired when the source can receive and the destination can emit; emit-only/receive-only pairs degrade to one-way forwarding.
+A direction is only wired when the source can receive and the destination can emit; emit-only/receive-only pairs degrade to one-way forwarding. If neither direction qualifies, `relay()` silently does nothing: there is no error or warning for a misconfigured relay.
 
 ## Capability classes must match
 

@@ -10,6 +10,7 @@ osra connects two JavaScript contexts over a transport. Each side calls `expose(
 - [relay()](#relay)
 - [Custom revivables](#custom-revivables)
 - [Type guards](#type-guards)
+- [Other exports](#other-exports)
 - [Low-level messaging](#low-level-messaging)
 - [Wire protocol](#wire-protocol)
 - [Supported types](#supported-types)
@@ -18,11 +19,17 @@ osra connects two JavaScript contexts over a transport. Each side calls `expose(
 ## expose()
 
 ```ts
-const expose: <T = unknown>(
-  value: Capable,
-  options: StartConnectionsOptions & { transport: Transport },
+const expose: <
+  T = unknown,
+  const TModules extends readonly RevivableModule[] = DefaultRevivableModules,
+  const TTransport extends Transport = Transport,
+>(
+  value: Capable<TModules>,
+  options: StartConnectionsOptions<TModules> & { transport: TTransport },
 ) => Promise<Remote<T>>
 ```
+
+`T` is the type you declare for the peer's value; `TModules` and `TTransport` are normally inferred. When you both name `T` and pass `revivableModules`, supply the module list type as the second type parameter (TypeScript has no partial inference, so naming `T` alone resets `TModules` to the defaults); see [Custom revivables](#custom-revivables).
 
 Exposes `value` to the peer and resolves with the peer's exposed value. **Both sides call `expose()`**; there is no separate client/server entry point. A side that only consumes passes `{}`:
 
@@ -70,7 +77,7 @@ Aborting the signal:
 - rejects the pending `expose()` promise with the signal's abort reason
 - rejects in-flight RPC calls with `Error('osra: connection closed')` **on both sides**: the peer that receives `close` also tears down its connection state and rejects its own pending calls into you
 
-If the signal is already aborted when `expose()` is called, no listener is registered at all. The internal promise is pre-caught, so fire-and-forget `expose(value, …)` (the typical server-side pattern) never surfaces an unhandled rejection on abort; awaiting callers still observe it.
+If the signal is already aborted when `expose()` is called, no listener is registered and the returned promise **never settles**: the rejection is driven by an `'abort'` event listener added after the fact, which never fires for a signal that was already aborted. Check `signal.aborted` before calling if this can happen. For aborts after the call, the internal promise is pre-caught, so fire-and-forget `expose(value, …)` (the typical server-side pattern) never surfaces an unhandled rejection; awaiting callers observe the rejection normally.
 
 One exception: promises riding a **real transferred `MessagePort`** on a structured-clone transport are entangled by the platform, not routed by osra, so they stay live independently of the connection. Wire-routed calls (functions, JSON-mode ports) always reject on connection death.
 
@@ -85,15 +92,17 @@ const remote = await expose({}, { transport: port2, uuid: uuidB, remoteUuid: uui
 
 No `announce` envelope is ever emitted; `init` flows directly. A one-sided preset is not supported, but the failure is asymmetric: the non-presetting peer drops the presetting side's early `init` (untracked uuid) and its `expose()` hangs forever, while the presetting side still answers the peer's broadcast `announce`, receives the peer's `init`, and resolves.
 
+Preset mode has none of the announce loop's loss tolerance: `init` is sent exactly once at `expose()` time, with no retry. If the peer's listener is not attached yet (a fresh worker, a still-loading iframe) the handshake hangs, so only preset over channels that queue messages, or when both ends are known to be listening (see [ADVANCED.md](./ADVANCED.md#preset-remoteuuid-mode)).
+
 ### Errors
 
 - `expose()` rejects immediately if the (normalized) transport cannot both emit and receive, e.g. a bare `ServiceWorker` or a custom `{ emit }` without `receive`.
-- Boxing a value that cannot be serialized (e.g. a circular structure) rejects the returned promise with a `TypeError`; so does reviving a malformed/cyclic `init` payload from a peer.
+- Boxing a value that cannot be serialized (e.g. a circular structure) rejects the returned promise with a `TypeError`. Reviving a malformed or cyclic `init` payload from a peer also rejects: with a `TypeError` for cycles, and with the underlying revive error otherwise (e.g. `Error('Unknown typed array type')` for an unknown typed-array tag).
 - A peer's protocol `close` arriving before `init` rejects the pending promise with `Error('osra: peer closed the connection')`.
 
 ### TypeScript
 
-The package is strict-mode; published types need **TypeScript ≥ 5.9**. The `Capable` type-level check rejects non-serializable values at the `expose()` call site with an error that pinpoints the offending path and parent object, so a `WeakMap` buried three levels deep fails at compile time, not at runtime.
+The package is strict-mode; published types need **TypeScript ≥ 5.9**. The `Capable` type-level check rejects non-serializable values at the `expose()` call site with an error that pinpoints the offending path and parent object, so a `WeakMap` buried three levels deep fails at compile time, not at runtime. (The path reporter descends tuples and plain objects only; inside a non-tuple array it points at the array itself rather than the element.)
 
 ## Remote\<T\>
 
@@ -104,9 +113,11 @@ The type of the value as seen from the far side:
 | `(...args: P) => R` | `(...args: P) => Promise<Remote<Awaited<R>>>` |
 | `Promise<U>` | `Promise<Remote<U>>` |
 | `AsyncIterable<U>` | `AsyncIterableIterator<Remote<U>>` |
-| `Map`, `Set`, `Date`, `Error`, `RegExp`, `ArrayBuffer`, `ArrayBufferView`, `ReadableStream`, `WritableStream`, `MessagePort`, `EventTarget`, `Request`, `Response`, `Headers`, `File`, `FileList` | itself (clone transports only; `Blob` is not supported) |
+| `Map`, `Set`, `Date`, `Error`, `RegExp`, `ArrayBuffer`, `ArrayBufferView`, `ReadableStream`, `WritableStream`, `MessagePort`, `EventTarget`, `Request`, `Response`, `Headers`, `File`, `FileList` | itself |
 | arrays / objects | mapped recursively |
 | primitives | themselves |
+
+The pass-through row works on every transport except `RegExp`, `File`, `FileList`, and `DataView`, which are clone-only; `Blob` is not part of `Capable` on any transport.
 
 Generic function signatures collapse: mapped types cannot preserve type parameters, so a generic remote function loses its generics in `Remote<T>`.
 
@@ -116,13 +127,13 @@ Generic function signatures collapse: mapped types cannot preserve type paramete
 |---|---|---|
 | `Window` | clone | `origin` applies (inbound filter + outbound `targetOrigin`). |
 | `Worker` | clone | |
-| `DedicatedWorkerGlobalScope` | clone | Pass `globalThis` (or `self`) inside the worker. |
+| `DedicatedWorkerGlobalScope` | clone | Pass `globalThis` (or `self`) inside the worker; the `Transport` union accepts the worker scope structurally, no cast needed. |
 | `SharedWorker` | clone | Page side. Messages ride `.port` (handled internally). |
 | `MessagePort` | clone | `.start()` is called internally on receive. |
 | `WebSocket` | JSON | Envelopes are `JSON.stringify`ed; sends while `CONNECTING` queue until `open`. |
 | `ServiceWorker` | clone | **Emit only.** |
 | `ServiceWorkerContainer` | clone | **Receive only.** Combine: `{ emit: registration.active, receive: navigator.serviceWorker }`. |
-| WebExtension `runtime` / `Port` / `onConnect` / `onMessage` | JSON | `runtime`/`onConnect` are identity-matched against the `browser`/`chrome` global; `Port`/`onMessage` are detected purely structurally and work without the global (lookalike objects can misclassify as these). |
+| WebExtension `runtime` / `Port` / `onConnect` / `onMessage` | JSON | `onConnect`/`onMessage` are **receive only**; combine with `runtime` or a `Port` for emit, e.g. `{ emit: browser.runtime, receive: browser.runtime.onMessage }`. `runtime`/`onConnect` are identity-matched against the `browser`/`chrome` global; `Port`/`onMessage` are detected purely structurally and work without the global (lookalike objects can misclassify as these). |
 | Custom `{ emit?, receive?, isJson? }` | per `isJson` / probed | See below. |
 
 **Custom transports** are plain objects with `emit` and/or `receive`. Each may be a platform transport from the table above or a function:
@@ -136,7 +147,7 @@ A function `receive` may return an unsubscribe function, called when `unregister
 
 Custom transports **must be plain objects** (`Object.prototype` or `null` prototype). Prototype-based objects with an inherited `emit` (e.g. Node `EventEmitter`s) are deliberately not detected as custom transports.
 
-On JSON transports, values that depend on structured clone (`RegExp`, `SharedArrayBuffer`, `ImageBitmap`, …) are rejected at the type level; everything with a dedicated revivable module (`Date`, `Map`, `ArrayBuffer` via base64, functions, streams, …) still works.
+On JSON transports, values that depend on structured clone (`RegExp`, `ImageData`, `File`, …) are rejected at the type level; everything with a dedicated revivable module (`Date`, `Map`, `ArrayBuffer` via base64, functions, streams, …) still works.
 
 ## identity()
 
@@ -144,7 +155,7 @@ On JSON transports, values that depend on structured clone (`RegExp`, `SharedArr
 const identity: <T>(value: T) => T
 ```
 
-Opt-in reference identity across the connection. By default every send produces a fresh copy; wrapping with `identity()` makes the same object revive as the **same** reference on every send, and a round-trip back to the sender resolves to the **original** object. Idempotent; primitives pass through unchanged. Per-connection caches are GC-aware (a dropped reference notifies the peer via `identity-dispose`).
+Opt-in reference identity across the connection. By default every send produces a fresh copy; wrapping with `identity()` makes the same object revive as the **same** reference on every send, and a round-trip back to the sender resolves to the **original** object. Idempotent; primitives pass through unchanged. Per-connection caches are GC-aware: when the **sender's** original object is garbage collected, an `identity-dispose` message tells the peer to evict its cached revival. Until then the receiver's cache holds a strong reference; the receiver dropping its revived copy sends nothing.
 
 ```ts
 import { identity } from 'osra'
@@ -263,7 +274,7 @@ All exported from the package root:
 
 | Guard | True for |
 |---|---|
-| `isTransport(v)` | anything usable as the `transport` option |
+| `isTransport(v)` | any transport shape osra recognizes, including one-directional ones (a bare `ServiceWorker`, `runtime.onMessage`); `expose()` additionally requires both emit and receive capability |
 | `isEmitTransport(v)` / `isReceiveTransport(v)` | transports that can send / receive (note `ServiceWorker` is emit-only, `ServiceWorkerContainer` receive-only) |
 | `assertEmitTransport(v)` / `assertReceiveTransport(v)` | throwing assertion forms |
 | `isCustomTransport(v)` / `isCustomEmitTransport(v)` / `isCustomReceiveTransport(v)` | plain-object `{ emit?, receive? }` wrappers |
@@ -272,6 +283,36 @@ All exported from the package root:
 | `isWebExtensionRuntime` / `isWebExtensionPort` / `isWebExtensionOnConnect` / `isWebExtensionOnMessage` | WebExtension transports |
 | `isOsraMessage(v)` | objects carrying the `__OSRA_KEY__` envelope field |
 | `isTransferable(v)` / `isTypedArray(v)` / `isSharedArrayBuffer(v)` | value classification helpers |
+
+## Other exports
+
+The package root star-exports its internals, so the runtime surface is larger than the API above. The remaining exports, briefly:
+
+| Export | What it is |
+|---|---|
+| `startConnections(value, options)` | The engine behind `expose()`: same behavior with an untyped value, except configuration errors (e.g. a non-bidirectional transport) throw synchronously instead of rejecting the returned promise. |
+| `normalizeTransport(transport)` | Wraps any transport into `{ isJson, emit?, receive? }`. |
+| `mergeRevivableModules(configure?)` | Resolves a `revivableModules` configure function against the defaults; returns the defaults when omitted. |
+| `defaultRevivableModules` | The ordered default revivable module list. |
+| `startBidirectionalConnection(options)` | Per-peer handshake: runs module inits, sends the boxed `init`, revives the peer's. |
+| `connections` | The connection-module list (currently just the bidirectional module). |
+| `boxBuffer` / `reviveBuffer` | `ArrayBuffer` wire helpers: base64 on JSON transports, raw buffer otherwise. |
+| `isRevivableBox(v)` | Guard for `{ __OSRA_BOX__: 'revivable' }`-shaped objects. |
+| `getTransferableObjects(envelope)` | Collects the transfer list from a boxed envelope. |
+| `EventPort` / `EventChannel` | In-memory `MessageChannel` workalike backing JSON-mode ports; deliberately does not subclass `EventTarget`. |
+| `createTypedEventTarget()` | `new EventTarget()` cast to `TypedEventTarget<T>`. |
+| `trackGc(target, cleanup)` | Shared `FinalizationRegistry` helper; returns an unregister function, swallows cleanup errors. |
+| `onTeardown` / `runTeardown` | Per-connection teardown registry for revivable modules; registering on an already-torn-down scope runs the callback immediately, `runTeardown` is idempotent. |
+| `typedArrayToType` / `typedArrayTypeToTypedArrayConstructor` | Map a typed array to its wire tag and back. |
+| `checkOsraMessageKey(message, key)` | The `__OSRA_KEY__` filter used by the listener plumbing. |
+| `getWebExtensionGlobal` / `getWebExtensionRuntime` | Locate the `browser`/`chrome` global and its `runtime`. |
+| `instanceOfAny(value, ctors)` | `instanceof` against a list of (possibly undefined) constructors. |
+
+Three footnotes:
+
+- `isClonable` is a **deprecated** alias of `isSharedArrayBuffer`; it is unrelated to the clonable fallback module.
+- The star re-exports leak two bindings from the bidirectional connection module at the root: `type` (the string `'bidirectional'`) and `init` (the module's mount function). Namespace importers (`import * as osra`) will see them.
+- `ErrorMessage`, `BadValue`, `Path`, `ParentObject`, `UnderlyingType`, and `Messages` appear as consts in the published type declarations but have **no runtime binding**: a runtime named import of them fails at module link time. Use `import type` only.
 
 ## Low-level messaging
 
@@ -314,11 +355,13 @@ Every message is an **envelope**: base fields merged with one variant:
 | announce | `{ type: 'announce', remoteUuid? }` | Without `remoteUuid`: broadcast presence. With: addressed reply to a specific peer. |
 | close | `{ type: 'close', remoteUuid }` | Sender is tearing down its side of the connection. |
 | init | `{ type: 'init', remoteUuid, data }` | The sender's boxed exposed value. |
-| message | `{ type: 'message', remoteUuid, portId, data }` | Payload for a routed message port (functions, streams, JSON-mode ports all ride these). |
-| message-port-close | `{ type: 'message-port-close', remoteUuid, portId }` | A routed port closed. |
+| message | `{ type: 'message', remoteUuid, portId, seq?, data }` | Payload for a wire-routed message port. Function calls always ride these; promises, streams, and abort signals ride them on JSON transports (on clone transports those ride real transferred `MessagePort`s). |
+| message-port-close | `{ type: 'message-port-close', remoteUuid, portId, seq? }` | A routed port closed. |
 | identity-dispose | `{ type: 'identity-dispose', remoteUuid, id }` | The **sender** of an `identity()`-tracked value garbage-collected the original; the receiver evicts its cached revival. (Receivers never send this; their cache holds strong references.) |
 
 `uuid` is always the **sender**; `remoteUuid` addresses the **recipient**; peers drop variants addressed to other uuids, and drop `init`/`message` traffic from uuids they haven't completed an announce exchange with.
+
+Port messages carry a monotonic per-port `seq` (optional on the wire for compatibility with peers on 0.5.6 or earlier; current versions always stamp it). The receiver buffers by `seq` and delivers strictly in send order, so port traffic (streams, calls) survives transports that reorder or deliver messages early.
 
 Non-trivial values inside `data` are **boxes**:
 
@@ -328,7 +371,7 @@ Non-trivial values inside `data` are **boxes**:
 
 e.g. `{ "__OSRA_BOX__": 'revivable', type: 'date', ... }`. The constants `OSRA_KEY` (`'__OSRA_KEY__'`), `OSRA_DEFAULT_KEY`, and `OSRA_BOX` (`'__OSRA_BOX__'`) are exported.
 
-**Trust model**: `key` is namespacing only; `origin` filters window messages both ways; beyond that, treat peers as semi-trusted: malformed payloads reject cleanly, but DoS-hardening is not complete.
+**Scope**: `key` is namespacing, not access control; `origin` applies to window transports only (outbound `targetOrigin` plus inbound filter); malformed payloads reject cleanly rather than breaking the connection. Port routing enforces fixed buffer limits (reorder buffer, pending-port and tombstone caps), but the library does not bound every resource another peer on the same channel can consume.
 
 ## Supported types
 
@@ -336,28 +379,28 @@ e.g. `{ "__OSRA_BOX__": 'revivable', type: 'date', ... }`. The constants `OSRA_K
 |---|---|---|
 | JSON data (string, number, boolean, null, plain objects, arrays) | itself | Containers mapped recursively. |
 | `undefined` | `undefined` | Preserved, even on JSON transports. |
-| `NaN`, `±Infinity` | itself | Preserved, even on JSON transports. |
+| `NaN`, `±Infinity` | itself | Preserved, even on JSON transports. `-0` is finite so it is never boxed: clone transports preserve the sign, JSON transports deliver `0`. |
 | `Date` | `Date` | |
 | `bigint` | `bigint` | |
 | `RegExp` | `RegExp` | Clone transports only (rides structured clone). |
 | `Map` / `Set` | `Map` / `Set` | Keys and values boxed recursively. |
-| TypedArrays (`Uint8Array`, …, `BigInt64Array`, `Float16Array` where supported) | same type | Subarray views keep `byteOffset`/`length`; subclasses (Node `Buffer`) revive as the nearest standard type. |
-| `ArrayBuffer` | `ArrayBuffer` | base64 on JSON transports. |
-| `SharedArrayBuffer` | `SharedArrayBuffer` | Clone transports only. |
-| `Error` (+ subclasses) | same subclass | `TypeError`/`RangeError`/`SyntaxError`/`ReferenceError`/`EvalError`/`URIError`, `AggregateError` with nested errors, `DOMException`; `cause` and `stack` preserved. |
+| TypedArrays (`Uint8Array`, …, `BigInt64Array`, `Float16Array` where supported) | same type | Subarray views ship exactly their visible bytes: the revived view has `byteOffset` 0 and the same element length, over a fresh buffer containing just those bytes. Subclasses (Node `Buffer`) revive as the nearest standard type. |
+| `ArrayBuffer` | `ArrayBuffer` | base64 on JSON transports (uses the native `Uint8Array` base64 methods; no polyfill is included). |
+| `SharedArrayBuffer` | `SharedArrayBuffer` | Clone transports only. Runtime only: it passes through structured clone and is shared (never copied or transferred), but the compile-time `Capable` check does not admit it, so sending one from TypeScript requires a cast. |
+| `Error` (+ subclasses) | same class for built-ins | `Error`, `TypeError`/`RangeError`/`SyntaxError`/`ReferenceError`/`EvalError`/`URIError`, `AggregateError` (with nested errors), and `DOMException` revive as their own class; any other subclass revives as base `Error` with `name` preserved. `message`, `stack`, and `cause` are preserved, except `DOMException`, which drops `cause`. |
 | `Promise<T>` | `Promise<T>` | Settles when the source settles; rejections cross with full error fidelity. |
 | Function | `(...args) => Promise<Awaited<R>>` | Args and return value boxed recursively; throws reject the promise. |
-| Async generator / async iterable | `AsyncIterableIterator` | `next`/`return`/`throw` proxied; `for await` works; early `break` propagates `return()` to the source. |
+| Async generator / async iterable | `AsyncIterableIterator` | `next`/`return`/`throw` proxied; `for await` works; early `break` propagates `return()` to the source. The source iterator is obtained once at send time (`[Symbol.asyncIterator]()`), so re-sending the same generator object shares and advances one iteration state; each step is one round trip with no readahead (use `ReadableStream` for windowed prefetch). |
 | `ReadableStream` | `ReadableStream` | Proxied chunk-by-chunk with credit-window backpressure (the reviver grants credit, the source pushes chunks); `cancel` reason crosses to the source. |
 | `WritableStream` | `WritableStream` | `write`/`close`/`abort` with acks. |
 | `MessagePort` | `MessagePort` | Transferred natively on clone transports; routed via `portId` on JSON. |
 | `AbortSignal` | `AbortSignal` | `abort` and its `reason` propagate. |
 | `File` / `FileList` | `File` / `FileList` | Revive as themselves via structured clone (clone transports only, not JSON); `File` keeps `name` + `lastModified`. `Blob` is not supported. |
-| `Request` | `Request` | Headers, streamed body, `mode`/`credentials`/etc.; `signal` propagates. |
-| `Response` | `Response` | Streamed body; `url`/`redirected` restored; opaque status-0 revives as `Response.error()`. |
+| `Request` | `Request` | Headers, streamed body, `mode`/`credentials`/etc.; `signal` propagates. `mode: 'navigate'` is not constructible and revives as the constructor default; `destination`/`priority` are not carried; streaming bodies revive with `duplex: 'half'`. |
+| `Response` | `Response` | Streamed body; opaque status-0 revives as `Response.error()`. `url`/`redirected` are restored as own configurable property shadows, which `response.clone()` loses. |
 | `Headers` | `Headers` | |
 | `Event` / `CustomEvent` | `Event` / `CustomEvent` | `type`/`bubbles`/`cancelable`/`composed` + `detail` (boxed recursively). Subclass fields beyond `detail` are dropped. |
-| `EventTarget` | listener-only façade | `addEventListener`/`removeEventListener` proxy to the source; events do **not** dispatch locally on the façade. |
+| `EventTarget` | listener-only façade | `addEventListener`/`removeEventListener` proxy to the source, and events flow from the source to listeners registered on the façade. Calling `dispatchEvent` on the façade does nothing: it fires no local listeners and sends nothing to the source. |
 | `symbol` | `symbol` | `Symbol.for` registry symbols round-trip via their key; others keep per-connection identity (same symbol on every send, round-trips to the original). |
 | Other clonables (`ImageBitmap`, `ImageData`, …) | itself | Clone transports only, via structured clone. |
 | Clonable Transferables (`VideoFrame`, `AudioData`, `ImageBitmap`, …) | itself | Cloned by default; wrap with `transfer()` to move. |

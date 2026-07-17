@@ -98,6 +98,8 @@ const doubled = await remote(new Point(3, 4)) // instanceof Point, distance() ==
 
 Passing the module list type as the second type parameter (`ReturnType<typeof withPoint>`) teaches the [`Capable` check](/reference/typescript/) that `Point` is now a legal value.
 
+When the lists do not match, nothing throws. A box arriving with a `type` no local module knows falls through to plain descent, so the consumer receives the raw box literal (an object shaped like `{ __OSRA_BOX__: 'revivable', type: 'point', x: 3, y: 4 }`) instead of a `Point`. Raw `__OSRA_BOX__` objects showing up in your results are the signature of this mismatch: the receiving side lacks the module (or runs a version with a different `type` string). The flip side is intentional: duplicate `type` strings resolve first-wins in both boxing and reviving, which is exactly the prepend-to-override mechanism described below.
+
 ## Ordering matters
 
 Boxing picks the *first* module whose `isType` matches, so prepend your module ahead of the defaults; otherwise a fallback (`clonable`, `eventTarget`, the `unclonable` catch-all) may claim your instances first. The default list itself is order-sensitive for the same reason.
@@ -111,5 +113,5 @@ A box must spread `BoxBase` (`{ __OSRA_BOX__: 'revivable' }`) and carry only JSO
 Nested capable values are **not** walked for you; call `recursiveBox`/`recursiveRevive` with the provided context. When your type needs a live channel, box a function or `MessagePort` through `recursiveBox` and embed the resulting box.
 
 :::note
-The lower-level `createRevivableChannel` helper behind promises and streams is internal: not re-exported, and `package.json` `exports` blocks deep imports.
+The lower-level `createRevivableChannel` helper behind promises and streams is not re-exported from the package root; it is reachable only via a deep `osra/build/revivables/message-port.js` import, which is not a stable API.
 :::

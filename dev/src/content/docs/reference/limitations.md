@@ -7,7 +7,7 @@ osra hides most of the messaging boundary, but not all of it. These constraints 
 
 ## Circular structures throw
 
-A circular structure throws a `TypeError` at send time. Break the cycle or restructure; for example, send the container behind a function.
+A structure that contains itself fails on the sending side: boxing throws `TypeError('osra: cannot serialize a circular structure - break the cycle or send the container by reference')`. A cyclic graph arriving from a peer (structured clone can legally deliver one) fails on the receiving side with the distinct `TypeError('osra: cannot revive a circular structure')`. Only true ancestor cycles throw: the same object at two sibling positions is allowed and arrives as two copies (see below). Break the cycle or restructure; for example, send the container behind a function.
 
 ## Shared references duplicate
 
@@ -15,7 +15,7 @@ The same object appearing twice in a payload arrives as two copies. Wrap it with
 
 ## Classes and prototypes are not preserved
 
-Values cross as plain data; a class instance's methods are not proxied. Expose plain objects and functions, or write a [custom revivable](/guides/custom-revivables/) for the class.
+Values cross as plain data; a class instance's methods are not proxied. An instance whose own properties are all clonable data crosses as those properties, prototype methods silently dropped. An instance carrying function-valued own properties (for example arrow-function class fields) fails the structured-clone probe and coerces to `{}` entirely, own data properties included, via the unclonable path below. osra also never walks into non-plain objects, so revivables nested inside a class instance are not boxed: a function stored on a plain object works, the same function stored on a class instance does not. (Built-in `Error` classes are the exception: they revive as their own class, and other `Error` subclasses revive as base `Error` with `name`, `message`, `stack`, and `cause` preserved; see [supported types](/guides/supported-types/).) Expose plain objects and functions, or write a [custom revivable](/guides/custom-revivables/) for the class.
 
 ## Unclonable values coerce to `{}`
 
