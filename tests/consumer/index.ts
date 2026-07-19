@@ -5,7 +5,7 @@
 // Transport union collapses to `any` and these assertions fail.
 
 import { expose } from '../../build/index.js'
-import type { Transport, Remote } from '../../build/index.js'
+import type { Transport, Remote, DefaultRevivableModules, ErrorMessage } from '../../build/index.js'
 
 // @ts-expect-error a number must never be assignable to Transport
 const notATransport: Transport = 42
@@ -55,3 +55,32 @@ expose({
   matrix: [[1], [2]],
   nested: { deep: [{ ok: true }] },
 }, { transport: worker, key: 'capable-3' })
+
+// JSON transports narrow Capable: clone-only types (File rides the clonable
+// module, elided on JSON) must be rejected there but stay accepted on clone.
+declare const jsonTransport: { isJson: true, emit: Worker, receive: Worker }
+// @ts-expect-error File is only supported on structured-clone transports
+expose({ foo: new File([], '') }, { transport: jsonTransport, key: 'json-1' })
+expose({ foo: new File([], '') }, { transport: worker, key: 'clone-file' })
+
+// And the rejection must carry the transport-specific error text, not the
+// generic one - pin both messages via an instantiation expression on expose.
+type JsonFileError = Parameters<typeof expose<
+  unknown, DefaultRevivableModules,
+  typeof jsonTransport,
+  { foo: File }
+>>[0]
+const jsonFileMessage: JsonFileError[typeof ErrorMessage] =
+  'Value type is only supported on structured-clone transports, not on JSON transports'
+// @ts-expect-error the generic message must not be the one resolved for File
+const jsonFileWrong: JsonFileError[typeof ErrorMessage] = 'Value type must resolve to a Capable'
+
+// A type unsupported on EVERY transport keeps the generic message on JSON too.
+type JsonWeakMapError = Parameters<typeof expose<
+  unknown, DefaultRevivableModules,
+  typeof jsonTransport,
+  { cache: WeakMap<object, string> }
+>>[0]
+const jsonWeakMapMessage: JsonWeakMapError[typeof ErrorMessage] = 'Value type must resolve to a Capable'
+
+void jsonFileMessage; void jsonFileWrong; void jsonWeakMapMessage

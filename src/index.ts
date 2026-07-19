@@ -3,6 +3,7 @@ import type { DefaultRevivableModules, RevivableContext } from './revivables/ind
 import type { RevivableModule } from './revivables/index.js'
 import type { StartConnectionsOptions } from './connections/utils.js'
 import type { Transport } from './utils/transport.js'
+import type { IsJsonOnlyTransport } from './utils/type-guards.js'
 import type {
   BadFieldValue, BadFieldPath, BadFieldParent,
   ErrorMessage, BadValue, Path, ParentObject
@@ -20,6 +21,21 @@ export * from './utils/index.js'
  *  matters; the rest is stubbed with the broadest types. */
 type ContextOf<TTransport extends Transport> = RevivableContext & { transport: TTransport }
 
+/** Error text for a failed check. When the value only fails because the
+ *  transport is JSON (it would pass under the broad `RevivableContext`,
+ *  whose transport union resolves to structured-clone semantics), blame
+ *  the transport instead of the value. */
+type CapableCheckMessage<
+  T,
+  TModules extends readonly RevivableModule[],
+  Ctx extends RevivableContext,
+> =
+  IsJsonOnlyTransport<Ctx['transport']> extends true
+    ? [T] extends [Capable<TModules, RevivableContext>]
+      ? 'Value type is only supported on structured-clone transports, not on JSON transports'
+      : 'Value type must resolve to a Capable'
+    : 'Value type must resolve to a Capable'
+
 type CapableCheck<
   T,
   TModules extends readonly RevivableModule[] = DefaultRevivableModules,
@@ -28,7 +44,7 @@ type CapableCheck<
   T extends Capable<TModules, Ctx>
     ? T
     : T & {
-        [ErrorMessage]: 'Value type must resolve to a Capable'
+        [ErrorMessage]: CapableCheckMessage<T, TModules, Ctx>
         [BadValue]: BadFieldValue<T, Capable<TModules, Ctx>>
         [Path]: BadFieldPath<T, Capable<TModules, Ctx>>
         [ParentObject]: BadFieldParent<T, Capable<TModules, Ctx>>
