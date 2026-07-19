@@ -1,18 +1,10 @@
-# osra
+<p align="center">
+  <h2 align="center">Osra</h2>
+</p>
 
-Lightweight zero-runtime-dependency TypeScript RPC library. 13kb Gzip'd.
+[Documentation](https://osra.banou.dev)
 
-Offering you a seamless codebase with natural code flow between your contexts.
-
-More documentation at https://osra.banou.dev/
-
-## Install
-
-```sh
-npm install osra
-```
-
-## Preview / Quick Start
+Strictly typed, ergonomic, and lightweight (13kb gzipped) RPC library in Typescript. Send complex types and call functions across contexts with inferred typing, pluggable transports.
 
 `worker.ts`
 ```typescript
