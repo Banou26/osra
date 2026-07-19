@@ -1,12 +1,13 @@
 {
-  "name": "osra-dev",
+  "name": "osra-docs",
   "version": "0.0.1",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
-    "preview": "astro preview"
+    "preview": "astro preview",
+    "check-twoslash": "node scripts/check-twoslash.mjs"
   },
   "dependencies": {
     "@astrojs/starlight": "^0.41.1",

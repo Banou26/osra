@@ -17,6 +17,9 @@
   ],
   "type": "module",
   "sideEffects": false,
+  "workspaces": [
+    "docs"
+  ],
   "main": "build/index.js",
   "types": "./build/index.d.ts",
   "exports": {
@@ -31,7 +34,7 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "vp build && tsc --declaration --emitDeclarationOnly",
+    "build": "vp build && node ./node_modules/typescript7/bin/tsc --declaration --emitDeclarationOnly",
     "build-watch": "vp build --watch",
     "clean": "rimraf build",
     "prepublishOnly": "npm run clean && npm run build",
@@ -46,18 +49,22 @@
     "test-with-coverage": "npm run build-test && npx playwright test && npm run print-coverage && npm run clean-coverage",
     "print-coverage": "npx nyc report",
     "clean-coverage": "rimraf .nyc_output coverage",
-    "type-check": "tsc --noEmit && tsc --noEmit -p tsconfig.tests.json",
+    "type-check": "node ./node_modules/typescript7/bin/tsc --noEmit && node ./node_modules/typescript7/bin/tsc --noEmit -p tsconfig.tests.json",
     "start-server": "http-server -p 3000",
     "build-extension-test": "node build-extension-test.mjs",
     "test-extension": "npm run build-extension-test && npx playwright test -c playwright.extension.config.ts",
-    "check-consumer-types": "npm run build && tsc --noEmit -p tsconfig.consumer.json"
+    "check-consumer-types": "npm run build && node ./node_modules/typescript7/bin/tsc --noEmit -p tsconfig.consumer.json",
+    "docs-dev": "npm run dev -w docs",
+    "docs-build": "npm run build -w docs",
+    "docs-preview": "npm run preview -w docs",
+    "docs-check-twoslash": "npm run check-twoslash -w docs"
   },
   "dependencies": {
     "@types/webextension-polyfill": "^0.12.4"
   },
   "devDependencies": {
     "@istanbuljs/nyc-config-typescript": "^1.0.2",
-    "@playwright/test": "^1.58.2",
+    "@playwright/test": "1.58.2",
     "@types/chai": "^5.2.3",
     "@types/chai-as-promised": "^8.0.2",
     "@types/chrome": "^0.1.27",
@@ -69,8 +76,8 @@
     "http-server": "^14.1.1",
     "nodemon": "^3.1.10",
     "nyc": "^17.1.0",
-    "playwright": "^1.58.2",
-    "typescript": "^7.0.2",
+    "playwright": "1.58.2",
+    "typescript7": "npm:typescript@^7.0.2",
     "vite": "npm:@voidzero-dev/vite-plus-core@0.2.4",
     "vite-plugin-istanbul": "^8.0.0",
     "vite-plus": "0.2.4",
