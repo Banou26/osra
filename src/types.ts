@@ -31,6 +31,7 @@ export type Structurable =
   | bigint
   | Date
   | RegExp
+  | Blob
   | File
   | FileList
   | ArrayBuffer
@@ -85,7 +86,7 @@ export type Remote<T> =
   : T extends Promise<infer U> ? Promise<Remote<U>>
   : T extends
       | Map<any, any> | Set<any> | Date | Error | RegExp
-      | ArrayBuffer | ArrayBufferView | File | FileList
+      | ArrayBuffer | ArrayBufferView | Blob | File | FileList
       | ReadableStream | WritableStream | MessagePort | EventTarget
       | Request | Response | Headers
     ? T

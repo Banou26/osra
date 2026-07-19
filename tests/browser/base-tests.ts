@@ -1368,8 +1368,8 @@ export const userNonFinitePrimitives = async (transport: Transport) => {
   expect('maybe' in result).to.be.true
 }
 
-// Blob support was removed in 0.6.0: clone transports keep the structured-clone
-// pass-through, JSON transports must throw a clear error instead of the silent
+// Blob is clone-only (like File): structured clone carries the bytes on clone
+// transports, JSON transports must throw a clear error instead of the silent
 // `{}` coercion JSON.stringify would produce.
 export const userBlobArg = async (transport: Transport) => {
   const value = { echo: async (input: unknown) => input }
@@ -1378,11 +1378,12 @@ export const userBlobArg = async (transport: Transport) => {
 
   const blob = new Blob(['osra-blob'], { type: 'text/plain' })
   if ('isJson' in transport && transport.isJson === true) {
-    await expect(remote.echo(blob as never)).to.eventually.be.rejectedWith(TypeError, /Blob support was removed/)
+    await expect(remote.echo(blob)).to.eventually.be.rejectedWith(TypeError, /only supported on structured-clone transports/)
   } else {
-    const echoed = await remote.echo(blob as never) as Blob
+    const echoed = await remote.echo(blob) as Blob
     expect(echoed).to.be.instanceOf(Blob)
     expect(await echoed.text()).to.equal('osra-blob')
+    expect(echoed.type).to.equal('text/plain')
   }
 }
 
@@ -1393,9 +1394,9 @@ export const userBlobNestedArg = async (transport: Transport) => {
 
   const wrapped = { data: [new Blob(['nested'], { type: 'text/plain' })] }
   if ('isJson' in transport && transport.isJson === true) {
-    await expect(remote.echo(wrapped as never)).to.eventually.be.rejectedWith(TypeError, /Blob support was removed/)
+    await expect(remote.echo(wrapped)).to.eventually.be.rejectedWith(TypeError, /only supported on structured-clone transports/)
   } else {
-    const echoed = await remote.echo(wrapped as never) as typeof wrapped
+    const echoed = await remote.echo(wrapped) as typeof wrapped
     expect(echoed.data[0]).to.be.instanceOf(Blob)
     expect(await echoed.data[0]!.text()).to.equal('nested')
   }
@@ -1409,7 +1410,7 @@ export const userBlobReturnRejects = async (transport: Transport) => {
   const remote = await expose<typeof value>({}, { transport })
 
   if ('isJson' in transport && transport.isJson === true) {
-    await expect(remote.getBlob()).to.eventually.be.rejectedWith(TypeError, /Blob support was removed/)
+    await expect(remote.getBlob()).to.eventually.be.rejectedWith(TypeError, /only supported on structured-clone transports/)
   } else {
     const blob = await remote.getBlob()
     expect(blob).to.be.instanceOf(Blob)

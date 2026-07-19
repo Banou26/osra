@@ -5,7 +5,7 @@ description: "The built-in channels osra connects over: Workers, windows and ifr
 
 A transport is the channel `expose()` talks over. osra accepts the platform objects below directly; anything else can be wrapped in a plain `{ emit, receive }` pair.
 
-Transports are either **structured-clone** (Worker, Window, MessagePort, SharedWorker) or **JSON** (WebSocket, web extension messaging, custom transports with `isJson: true`). JSON mode forces JSON-safe boxing: values that depend on structured clone (`RegExp`, `File`, `ImageBitmap`, …) are rejected at the type level, while everything with a dedicated revivable module (`Date`, `Map`, `ArrayBuffer` via base64, functions, streams, …) still works. osra only stringifies envelopes itself on WebSocket; custom function emitters handle their own serialization. See [JSON vs clone](/internals/json-vs-clone/) for exactly what degrades, and [supported types](/guides/supported-types/) for the full matrix.
+Transports are either **structured-clone** (Worker, Window, MessagePort, SharedWorker) or **JSON** (WebSocket, web extension messaging, custom transports with `isJson: true`). JSON mode forces JSON-safe boxing: values that depend on structured clone (`RegExp`, `Blob`, `File`, `ImageBitmap`, …) are rejected at the type level, while everything with a dedicated revivable module (`Date`, `Map`, `ArrayBuffer` via base64, functions, streams, …) still works. osra only stringifies envelopes itself on WebSocket; custom function emitters handle their own serialization. See [JSON vs clone](/internals/json-vs-clone/) for exactly what degrades, and [supported types](/guides/supported-types/) for the full matrix.
 
 ## Overview
 

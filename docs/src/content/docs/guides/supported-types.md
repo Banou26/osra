@@ -28,7 +28,7 @@ Transports come in two kinds: **structured-clone** (Worker, Window, MessagePort,
 | `TransformStream` | itself | ✅ | ❌ | Always **moved** (structured clone cannot copy it). Not proxied like `ReadableStream`/`WritableStream`: the native stream transfers to the peer and detaches locally on every send. |
 | `MessagePort` | `MessagePort` | ✅ | ✅ | Transferred natively on clone transports; routed via `portId` on JSON. |
 | `AbortSignal` | `AbortSignal` | ✅ | ✅ | `abort` and its `reason` propagate asynchronously; see [Live values](#live-values). |
-| `File` / `FileList` | `File` / `FileList` | ✅ | ❌ | Revive as themselves via structured clone; `File` keeps `name` + `lastModified`. `Blob` is **not** supported; see [Blob](#blob). |
+| `Blob` / `File` / `FileList` | `Blob` / `File` / `FileList` | ✅ | ❌ | Revive as themselves via structured clone; `File` keeps `name` + `lastModified`. See [Blob](#blob) for the JSON-transport story. |
 | `Request` | `Request` | ✅ | ✅ | Headers, streamed body, `mode`/`credentials`/etc.; `signal` propagates. See [Request and Response fidelity](#request-and-response-fidelity). |
 | `Response` | `Response` | ✅ | ✅ | Streamed body; `url`/`redirected` restored; opaque status-0 revives as `Response.error()`. See [Request and Response fidelity](#request-and-response-fidelity). |
 | `Headers` | `Headers` | ✅ | ✅ | |
@@ -82,7 +82,9 @@ Some host objects (`OffscreenCanvas`, `MediaStreamTrack`, `RTCDataChannel`, `Med
 
 ## Blob
 
-`Blob` support was removed in 0.6.0: the compile-time `Capable` check rejects it on every transport. At runtime the behavior splits by transport kind. On JSON transports, sending one throws `TypeError('osra: Blob support was removed in 0.6.0, send an ArrayBuffer or Uint8Array instead')`, which rejects the call whether the Blob was an argument or a return value. On structured-clone transports, a bare `Blob` that gets past the types still rides structured clone at runtime. Send an `ArrayBuffer` or `Uint8Array` instead. `File` (a `Blob` subclass) remains supported on clone transports.
+`Blob` is clone-only, like `File` (its subclass): on structured-clone transports it rides structured clone and revives as itself, synchronously. JSON transports have no synchronous encoding for the bytes (`blob.arrayBuffer()` is async), so there the compile-time `Capable` check rejects it at the `expose()` call site, and a value that gets past the types throws `TypeError('osra: Blob is only supported on structured-clone transports, send an ArrayBuffer or Uint8Array instead')`, rejecting the call whether the Blob was an argument or a return value. On JSON transports, send an `ArrayBuffer` or `Uint8Array` instead.
+
+History: 0.5.x supported `Blob` on every transport by shipping the bytes through an async box, at the cost of `Remote<Blob>` being `Promise<Blob>`. 0.6.0 removed it entirely; clone-transport support later returned as the synchronous pass-through described above.
 
 ## Unclonables coerce to `{}`
 

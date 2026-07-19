@@ -9,7 +9,7 @@ osra is a zero-runtime-dependency TypeScript RPC library. Both sides call `expos
 
 - **Zero runtime dependencies**: one ESM module; the single declared dependency (`@types/webextension-polyfill`) is types-only, supporting the published declarations
 - **Symmetric API**: both sides call `expose()`; either side can pass functions, both can call
-- **Deep type support**: functions, promises, async generators, `ReadableStream`/`WritableStream`, `MessagePort`, `AbortSignal`, `Error` subclasses, `File`/`FileList`, `Request`/`Response`, `Map`/`Set`, typed arrays, `BigInt`, `Symbol`, …
+- **Deep type support**: functions, promises, async generators, `ReadableStream`/`WritableStream`, `MessagePort`, `AbortSignal`, `Error` subclasses, `Blob`/`File`/`FileList`, `Request`/`Response`, `Map`/`Set`, typed arrays, `BigInt`, `Symbol`, …
 - **JSON-mode degradation**: most value types work over text-only transports (WebSocket, extension messaging); `Date`, `Map`, typed arrays, even `NaN`/`±Infinity` survive
 - **`identity()`** for reference-preserving sends, **`transfer()`** for zero-copy moves
 - **Strict TypeScript**: `Remote<T>` maps your API type across the wire; a compile-time `Capable` check rejects non-serializable values with the offending path pinpointed
@@ -101,7 +101,7 @@ Transports are either **structured-clone** (Worker, Window, MessagePort, SharedW
 | `WritableStream` | ✅ | ✅ | write/close/abort with acks; sink errors reject the writer with an `Error` carrying the message string only |
 | `MessagePort` | ✅ | ✅ | revives as a real `MessagePort` on both transport kinds; on clone transports the sent port is moved (no longer usable on the sender), over JSON it is bridged by port-id messages |
 | `AbortSignal` | ✅ | ✅ | abort and reason propagate |
-| `File` / `FileList` | ✅ | ❌ | revive as themselves via structured clone (clone transports only); `Blob` is **not** supported |
+| `Blob` / `File` / `FileList` | ✅ | ❌ | revive as themselves via structured clone (clone transports only); over JSON send an `ArrayBuffer` instead |
 | `Request` / `Response` / `Headers` | ✅ | ✅ | streamed bodies; `Request.signal` propagates; `Response.url`/`redirected` restored; opaque status-0 revives as `Response.error()` |
 | `Event` / `CustomEvent` | ✅ | ✅ | subclass fields beyond `detail` are dropped |
 | `EventTarget` | ✅ | ✅ | revives as a listener-only façade: `add`/`removeEventListener` proxy to the source; you can't dispatch through it |

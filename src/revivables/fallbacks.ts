@@ -103,28 +103,29 @@ export const transferable = {
 } as const
 
 // -------------------------------------------------------------------------
-// blobGuard - Blob support was removed in 0.6.0; clone transports still get
-// the free structured-clone pass-through, but JSON.stringify would silently
-// coerce a Blob to `{}`, so JSON transports throw instead. Must sit after
-// clonable so File keeps riding it.
+// blob - clone-only pass-through, same deal as File on clonable: structured
+// clone carries the bytes natively. JSON has no synchronous encoding for a
+// Blob (`.arrayBuffer()` is async), so `capableOnly` elides it from Capable
+// there and the runtime throws instead of letting JSON.stringify silently
+// coerce it to `{}`. Must sit after clonable so File keeps riding it.
 // -------------------------------------------------------------------------
 
-export type BoxedBlobGuard = BoxBaseType<'blobGuard'>
+export type BoxedBlob = BoxBaseType<'blob'>
 
-// `value is never` keeps Blob out of Capable - the 0.6.0 removal stays a type error.
-const isBlob = ((value: unknown) =>
-  typeof Blob !== 'undefined' && value instanceof Blob) as (value: unknown) => value is never
+const isBlob = (value: unknown): value is Blob =>
+  typeof Blob !== 'undefined' && value instanceof Blob
 
-export const blobGuard = {
-  type: 'blobGuard',
+export const blob = {
+  type: 'blob',
+  capableOnly: true,
   isType: isBlob,
-  box: (value: never, context: RevivableContext<any>): Blob => {
+  box: (value: Blob, context: RevivableContext<any>): Blob => {
     if (isJsonOnlyTransport(context.transport)) {
-      throw new TypeError('osra: Blob support was removed in 0.6.0, send an ArrayBuffer or Uint8Array instead')
+      throw new TypeError('osra: Blob is only supported on structured-clone transports, send an ArrayBuffer or Uint8Array instead')
     }
-    return value as unknown as Blob
+    return value
   },
-  revive: (value: BoxedBlobGuard, _context: RevivableContext<any>): Blob => value as unknown as Blob,
+  revive: (value: BoxedBlob, _context: RevivableContext<any>): Blob => value as unknown as Blob,
 } as const
 
 // -------------------------------------------------------------------------

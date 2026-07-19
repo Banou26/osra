@@ -75,6 +75,19 @@ const jsonFileMessage: JsonFileError[typeof ErrorMessage] =
 // @ts-expect-error the generic message must not be the one resolved for File
 const jsonFileWrong: JsonFileError[typeof ErrorMessage] = 'Value type must resolve to a Capable'
 
+// Blob is clone-only too, riding its own `blob` module instead of clonable:
+// accepted on clone transports, rejected on JSON with the same message.
+expose({ blob: new Blob(['x']) }, { transport: worker, key: 'clone-blob' })
+// @ts-expect-error Blob is only supported on structured-clone transports
+expose({ blob: new Blob(['x']) }, { transport: jsonTransport, key: 'json-2' })
+type JsonBlobError = Parameters<typeof expose<
+  unknown, DefaultRevivableModules,
+  typeof jsonTransport,
+  { blob: Blob }
+>>[0]
+const jsonBlobMessage: JsonBlobError[typeof ErrorMessage] =
+  'Value type is only supported on structured-clone transports, not on JSON transports'
+
 // A type unsupported on EVERY transport keeps the generic message on JSON too.
 type JsonWeakMapError = Parameters<typeof expose<
   unknown, DefaultRevivableModules,
@@ -83,4 +96,4 @@ type JsonWeakMapError = Parameters<typeof expose<
 >>[0]
 const jsonWeakMapMessage: JsonWeakMapError[typeof ErrorMessage] = 'Value type must resolve to a Capable'
 
-void jsonFileMessage; void jsonFileWrong; void jsonWeakMapMessage
+void jsonFileMessage; void jsonFileWrong; void jsonBlobMessage; void jsonWeakMapMessage

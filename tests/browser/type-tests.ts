@@ -84,21 +84,24 @@ type _CapableSymbol = [
 type JsonCtx = RevivableContext & { transport: { isJson: true; emit: any; receive: any } }
 type CloneCtx = RevivableContext & { transport: typeof window }
 
-// On a clone transport, File / OffscreenCanvas / RegExp / ImageBitmap
-// are all assignable to Capable (File / FileList ride the clonable fallback).
+// On a clone transport, Blob / File / OffscreenCanvas / RegExp / ImageBitmap
+// are all assignable to Capable (File / FileList ride the clonable fallback,
+// Blob rides the clone-only `blob` module).
 type _CapableCloneCtxPositives = [
+  Expect<Assignable<Blob, Capable<DefaultRevivableModule[], CloneCtx>>>,
   Expect<Assignable<File, Capable<DefaultRevivableModule[], CloneCtx>>>,
   Expect<Assignable<RegExp, Capable<DefaultRevivableModule[], CloneCtx>>>,
   Expect<Assignable<ImageData, Capable<DefaultRevivableModule[], CloneCtx>>>,
 ]
 
 // On a JSON-only transport, those same types are NOT assignable -
-// the type system rejects them at the `expose()` call site. File / FileList
-// ride the clone-only `clonable` fallback, so they are NOT Capable on JSON
-// either. (Blob is no longer supported at all - callers send ArrayBuffers.)
+// the type system rejects them at the `expose()` call site. Blob / File /
+// FileList are clone-only, so they are NOT Capable on JSON either (callers
+// send ArrayBuffers there).
 type _CapableJsonCtxNegatives = [
   Expect<Equals<RegExp extends Capable<DefaultRevivableModule[], JsonCtx> ? true : false, false>>,
   Expect<Equals<ImageData extends Capable<DefaultRevivableModule[], JsonCtx> ? true : false, false>>,
+  Expect<Equals<Blob extends Capable<DefaultRevivableModule[], JsonCtx> ? true : false, false>>,
   Expect<Equals<File extends Capable<DefaultRevivableModule[], JsonCtx> ? true : false, false>>,
 ]
 
