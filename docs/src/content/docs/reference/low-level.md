@@ -3,7 +3,7 @@ title: Low-level API
 description: relay(), the raw message helpers, and the type guards osra uses internally.
 ---
 
-Everything below `expose()`. You need none of it for normal use, and it is there when you are building something around osra rather than with it.
+The primitives `expose()` is built on, for building infrastructure around osra rather than calling it.
 
 ## relay()
 

@@ -95,7 +95,7 @@ transfer(new Uint8Array(buffer))          // moves, buffer is detached
 transfer(new Uint8Array(buffer, 8, 4))    // copies those 4 bytes, buffer is fine
 ```
 
-**Streams are already better than moved.** `ReadableStream` and `WritableStream` are proxied chunk by chunk, so wrapping them adds nothing.
+**Streams are proxied, not moved.** `ReadableStream` and `WritableStream` cross chunk by chunk, so wrapping them adds nothing.
 
 **JSON transports cannot move anything.** There is no ownership to hand over in a text protocol, so `transfer()` quietly falls back to a copy. Same code, no error.
 

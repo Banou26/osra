@@ -3,9 +3,9 @@ title: Transports
 description: Every channel osra runs over, from workers and iframes to WebSockets and web extensions.
 ---
 
-A transport is the channel `expose()` talks over. You hand osra a platform object and it figures out how to send and listen on it.
+A transport is the channel `expose()` talks over. osra detects the platform object you pass and binds the right send and listen calls for it.
 
-Whatever you pass has to be able to both send and receive. When one object can only do half of it (a `ServiceWorker` can only send, `navigator.serviceWorker` can only listen) you pair two of them yourself: `{ emit, receive }`.
+A transport has to do both directions. Where the platform splits them across objects (`ServiceWorker` only posts, `navigator.serviceWorker` only receives), pair them as `{ emit, receive }`.
 
 | Transport | Mode | Notes |
 |---|---|---|
@@ -128,7 +128,7 @@ globalThis.addEventListener('connect', event => {
 })
 ```
 
-One connection per port keeps the pages independent. See [multiple peers](/guides/multiple-peers/) for the alternative and why this one is usually what you want.
+One connection per port keeps the pages independent. See [multiple peers](/guides/multiple-peers/) for the single-connection alternative and its trade-off.
 
 ## Service worker
 
@@ -193,4 +193,4 @@ If you handle `onConnectExternal` or `onMessageExternal`, check the sender yours
 
 ## Anything else
 
-Any plain object with `emit` and `receive` is a transport. That covers `BroadcastChannel`, a Node `worker_threads` port, a native bridge, or a protocol you made up. See [custom transports](/guides/custom-transports/).
+Any plain object with `emit` and `receive` is a transport: a `BroadcastChannel`, a Node `worker_threads` port, a native bridge, a protocol of your own. See [custom transports](/guides/custom-transports/).

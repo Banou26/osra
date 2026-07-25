@@ -3,7 +3,7 @@ title: Supported types
 description: What you can send across a connection, and which types need a structured-clone transport.
 ---
 
-Almost every platform type crosses a connection. The ones that do not are rejected while you type, not at runtime.
+Almost every platform type crosses a connection. The ones that do not are rejected at compile time rather than at runtime.
 
 The `Clone` and `JSON` columns are the two [transport modes](/guides/transports/). Clone covers workers, windows and ports, JSON covers WebSockets and extension messaging.
 
@@ -34,7 +34,7 @@ The `Clone` and `JSON` columns are the two [transport modes](/guides/transports/
 | Transferable host objects (`ImageBitmap`, `VideoFrame`, `AudioData`, `OffscreenCanvas`, `MediaStreamTrack`, …) | ✅ | ❌ | Copied by default, [`transfer()`](/guides/identity-and-transfer/) to move |
 | `WeakMap`, `WeakSet`, other unclonables | ❌ | ❌ | |
 
-Missing a type? Write a [custom revivable](/guides/custom-revivables/) for it.
+Anything not listed can be added with a [custom revivable](/guides/custom-revivables/).
 
 ## Errors
 

@@ -3,9 +3,9 @@ title: How it works
 description: The handshake, the boxing walk, and the port routing underneath every live value.
 ---
 
-You do not need any of this to use osra. It is here because the design is small enough to explain, and because knowing it makes the odd behaviors obvious.
+Implementation notes. None of it is API, but it accounts for the behaviors the guides describe.
 
-There are two layers. The **connection** layer finds a peer and moves envelopes. The **revivable** layer turns values into something sendable and back.
+Two layers. The **connection** layer finds a peer and moves envelopes. The **revivable** layer boxes values into something sendable and revives them on arrival.
 
 ## The handshake
 
@@ -83,7 +83,7 @@ Three bounds keep a misbehaving peer from growing that state without limit: 2048
 
 A boxed `ReadableStream` uses a credit window. The consumer grants credit, the producer pushes up to it without waiting for anything, and tops up happen at half a window so there is roughly one credit message per half window of chunks.
 
-The window starts at 8 and adapts between 2 and 64, tracking an exponential moving average of chunk size against a 4 MiB budget of data in flight. Chunks whose size cannot be measured stay at the initial window rather than jumping to the maximum, which is how memory blows up.
+The window starts at 8 and adapts between 2 and 64, tracking an exponential moving average of chunk size against a 4 MiB budget of data in flight. Chunks whose size cannot be measured hold at the initial window rather than jumping to the maximum, where the byte budget would no longer bound anything.
 
 Delivered chunks are buffered outside the stream controller, because `controller.error()` discards whatever is queued in it, and an error arriving mid-stream must not eat data that already made it across.
 

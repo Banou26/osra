@@ -3,9 +3,9 @@ title: Getting started
 description: Install osra and connect a page to a worker, with one expose() call on each side.
 ---
 
-osra lets two JavaScript contexts use each other's values directly. Functions stay callable, promises resolve, generators stream, errors throw where you called them.
+osra is an RPC library for JavaScript contexts. It carries most of the common JS and platform value types across the boundary, and keeps functions, promises, async generators and streams live instead of flattening them to data.
 
-Both sides call `expose()`. Each one gets back what the other exposed.
+Both sides call `expose()`. Each resolves with the other's value, typed.
 
 ## Install
 
@@ -77,20 +77,20 @@ for await (const n of await streamData()) {
 
 ## What expose() gives you
 
-`expose(value, options)` sends your value to the peer and returns a promise for the peer's value. It resolves once both sides have found each other.
+`expose(value, options)` boxes your value, sends it, and returns a promise for the peer's. It resolves once the handshake completes.
 
-The worker above never uses its returned promise, which is fine. A side that only serves can ignore it, and a side that only consumes passes `{}` as its own value.
+The worker above ignores its returned promise. A side that only serves can, and a side that only consumes passes `{}` as its own value.
 
-Data gets copied, everything else gets proxied. `hash` arrives as a real `Uint8Array` you can read synchronously. `add` arrives as a function returning a promise, because the call has to cross the boundary. Same for the counter that `makeCounter` hands back: it stays a live function in the worker, so calling it from the page runs it in the worker.
+Data is copied, live values are proxied. `hash` arrives as a real `Uint8Array`, readable synchronously. `add` arrives as `(a, b) => Promise<number>`, since the call is a round trip. The counter `makeCounter` returns stays a closure in the worker, so calling it from the page mutates the worker's `count`.
 
-The type parameter (`expose<Payload>`) is what the peer exposed. osra maps it through [`Remote<T>`](/reference/typescript/) so your side sees the types that actually arrive.
+`expose<Payload>` declares what the peer exposed. osra maps it through [`Remote<T>`](/reference/typescript/), which is the same type after proxying.
 
 ## The two transport modes
 
-`transport` is the channel the two sides talk over. Every transport is one of two modes, and the mode decides which types can cross:
+`transport` is the channel the two sides talk over. Its mode determines which types can cross:
 
-- **Structured-clone**, for [`Worker`](https://developer.mozilla.org/en-US/docs/Web/API/Worker), [`Window`](https://developer.mozilla.org/en-US/docs/Web/API/Window), [`MessagePort`](https://developer.mozilla.org/en-US/docs/Web/API/MessagePort) and friends. The fast one, and the only one that can move values instead of copying them.
-- **JSON**, for [`WebSocket`](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket) and web extension messaging. Slower and a bit more limited, but it reaches contexts the other mode cannot.
+- **Structured-clone**, for [`Worker`](https://developer.mozilla.org/en-US/docs/Web/API/Worker), [`Window`](https://developer.mozilla.org/en-US/docs/Web/API/Window), [`MessagePort`](https://developer.mozilla.org/en-US/docs/Web/API/MessagePort) and friends. Carries the full clonable set, and is the only mode that can transfer ownership instead of copying.
+- **JSON**, for [`WebSocket`](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket) and web extension messaging. Binary goes base64 and the clone-only types are unavailable, in exchange for reaching contexts structured clone cannot.
 
 Most types work on both. See [transports](/guides/transports/) for the list of channels, and [supported types](/guides/supported-types/) for what crosses on each mode.
 

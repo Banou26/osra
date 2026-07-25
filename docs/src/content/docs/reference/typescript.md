@@ -3,9 +3,9 @@ title: TypeScript
 description: How Remote<T> maps your types across the connection, and how the Capable check rejects the rest.
 ---
 
-Two types do the work. `Remote<T>` describes what the peer's value looks like on your side. `Capable` describes what you are allowed to send.
+Two types do the work. `Remote<T>` maps the peer's value to what it becomes after proxying. `Capable` is the set of values a given transport can carry.
 
-You rarely write either of them. `expose()` applies both.
+`expose()` applies both, so you rarely write either.
 
 ## Remote&lt;T&gt;
 
@@ -26,7 +26,7 @@ Three edges worth knowing:
 
 **Generic functions lose their generics.** Mapped types cannot carry type parameters, so `<T>(x: T) => T` collapses.
 
-**`Remote<unknown>` is `unknown`.** Calling `expose()` with no type argument gives you `Promise<unknown>`, which is the compiler telling you it has no idea what the peer sent.
+**`Remote<unknown>` is `unknown`.** `expose()` with no type argument resolves to `Promise<unknown>`.
 
 ## The Capable check
 
@@ -55,7 +55,7 @@ import { expose } from 'osra'
 expose({ foo: new File([], '') }, { transport: new WebSocket('') })
 ```
 
-The same code with a `Worker` transport compiles. That is the whole point: the check knows which channel you are on.
+The same code with a `Worker` transport compiles. `Capable` resolves against the inferred transport, so the check tracks the channel.
 
 Types with a dedicated module (`Date`, `Map`, `ArrayBuffer`, functions, streams) work on both modes. See [supported types](/guides/supported-types/) for the split.
 
@@ -70,7 +70,7 @@ expose<PeerApi, ReturnType<typeof myModules>>(value, {
 })
 ```
 
-Without the second type argument the modules still work at runtime, but the check does not know about them and will reject your type.
+Without the second type argument the modules still run, but `Capable` falls back to the defaults and rejects your type. TypeScript has no partial inference, so naming `Peer` alone resets it.
 
 ## Requirements
 

@@ -3,9 +3,9 @@ title: Custom revivables
 description: Teach osra how to send a type it does not know, like your own class.
 ---
 
-Every type osra supports is a small module: a guard, a way to flatten the value, and a way to rebuild it. The built-in list is just an array of those, and you can add to it.
+Every type osra supports is a module: a type guard, a `box` that flattens the value, and a `revive` that rebuilds it. The defaults are an ordered array of those, and `revivableModules` lets you extend or replace it.
 
-This is also the answer to "classes are not preserved". They are not, by default, because osra cannot know how to rebuild yours. Tell it, and they are.
+This is also how you get classes across. They are dropped by default because osra has no way to reconstruct an arbitrary prototype, which a module supplies.
 
 ## A module
 
@@ -134,7 +134,7 @@ const result = {
 }
 ```
 
-In practice you rarely need this. Returning a plain object from `box` gets the same result, because osra descends into it anyway.
+Rarely necessary: osra descends into plain objects on its own, so returning one from `box` boxes its fields anyway.
 
 ## The context
 
@@ -148,4 +148,4 @@ Both `box` and `revive` receive the connection context:
 | `eventTarget` | Incoming messages for this connection. |
 | `revivableModules` | The resolved module list. |
 
-Modules with a live side (functions, streams, ports) all work this way. Read `src/revivables/` if you need one, they are short.
+Every live value (functions, streams, ports) is built this way. The modules in `src/revivables/` are the reference implementations.

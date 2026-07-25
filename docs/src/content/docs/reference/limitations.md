@@ -3,7 +3,7 @@ title: Limitations
 description: What osra cannot hide about the boundary between two contexts, and what to do about it.
 ---
 
-osra hides most of the messaging boundary. Here is the part it cannot, and the workaround where there is one.
+Where the message boundary stays visible, and the workaround where there is one.
 
 ## Values
 

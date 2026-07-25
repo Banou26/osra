@@ -3,9 +3,9 @@ title: Live values
 description: How functions, promises, generators, streams and abort signals behave once they cross a connection.
 ---
 
-Data gets copied. Functions, promises, generators, streams, abort signals and event targets do not: they stay where they are and you get a handle that talks back to the original.
+Data is copied. Functions, promises, generators, streams, abort signals and event targets are not: the original stays in its context, and the peer gets a proxy whose traffic routes back to it over a dedicated channel.
 
-That is what makes the whole thing feel local, and it is also where the surprises live. This page is those surprises.
+Which means their semantics are not quite the local ones. This page is the differences.
 
 ## Functions
 
@@ -49,13 +49,13 @@ await each([1, 2, 3], item => console.log(item)) // 1, 2, 3
 
 A throw on the far side rejects your promise, with the error revived as its own class where possible. See [errors and lifecycle](/guides/lifecycle/).
 
-Every call is one round trip. That is cheap, but it is not free, and it adds up in a loop. If you are calling the same function a thousand times, expose one that takes the thousand inputs.
+Every call is one round trip. Cheap individually, linear in a loop. Expose a function that takes the batch rather than calling one a thousand times.
 
 ## Promises
 
-A promise settles when the original settles, rejection included. Nothing else to it.
+A promise settles when the original settles, rejection included.
 
-Note that `Remote<T>` already wraps every function result in a promise, so a function returning `Promise<number>` is still just `Promise<number>` on your side, not `Promise<Promise<number>>`.
+`Remote<T>` already wraps every function result in a promise, so a function returning `Promise<number>` is `Promise<number>` on your side, not `Promise<Promise<number>>`.
 
 ## Async generators
 
@@ -71,18 +71,18 @@ Two things to watch:
 
 **Iteration starts when you send it.** osra calls `[Symbol.asyncIterator]()` at send time. A generator object returns itself from that method, so sending the same generator to two places gives them one shared cursor that both advance. Expose a function that makes a fresh generator per call instead, like `streamData()` above, or send an async iterable whose `[Symbol.asyncIterator]` builds a new iterator each time.
 
-**One item is one round trip.** There is no batching and no readahead. That is fine for a handful of items and wasteful for ten thousand. Use a `ReadableStream` when throughput matters.
+**One item is one round trip.** No batching, no readahead. Use a `ReadableStream` when throughput matters, its credit window pipelines.
 
 ## ReadableStream
 
 Streams are proxied chunk by chunk, never moved, and they pipeline. The reader grants the producer a credit window, the producer pushes up to it without waiting, and a slow reader naturally slows the producer down.
 
-The window starts at 8 chunks and adapts between 2 and 64 against a 4 MiB budget of data in flight, so small chunks go deep and big ones stay shallow. Chunks it cannot measure (plain objects, `Map`s) stay at 8.
+The window starts at 8 chunks and adapts between 2 and 64 against a 4 MiB budget of data in flight, so small chunks go deep and large ones stay shallow. Chunks whose size cannot be measured (plain objects, `Map`s) hold at 8.
 
-Two consequences worth knowing:
+Two consequences:
 
-- The producer starts reading as soon as the stream is revived, up to that first window, before your first `read()`.
-- Cancelling propagates. Your `cancel(reason)` reaches the source stream with the reason intact.
+- The producer starts reading on revival, up to that first window, before your first `read()`.
+- `cancel(reason)` reaches the source stream with the reason intact.
 
 **A stream locks when you send it.** osra calls `getReader()` at send time, even if the peer never reads. Sending the same `ReadableStream` twice fails, and so does sending a `Request` or `Response` whose body already went out.
 
@@ -96,14 +96,14 @@ An error in the sink rejects your writer with a plain `Error` carrying the origi
 
 A signal arrives as the signal of a fresh controller on the other side. Abort it at the source and the reason propagates.
 
-One detail: if the signal was already aborted when you sent it, the revived one is aborted immediately. Otherwise abort arrives asynchronously, so right after revival the peer still reads `aborted === false` until the message lands.
+A signal already aborted at send time revives aborted, synchronously. Otherwise abort arrives asynchronously, so the revived signal reads `aborted === false` until the message lands.
 
-Connection teardown does not abort revived signals. Do not use a remote signal to detect a dead connection, use `unregisterSignal` or the rejection of your pending calls. See [errors and lifecycle](/guides/lifecycle/).
+Connection teardown does not abort revived signals, so a remote signal is not a liveness check. Use `unregisterSignal` or the rejection of your pending calls. See [errors and lifecycle](/guides/lifecycle/).
 
 ## Making it fast
 
-- **Batch your calls.** One call that returns 1000 rows beats 1000 calls.
-- **Prefer streams over generators** for anything high volume, so the credit window can pipeline.
-- **Prefer a clone transport** where you have the choice. JSON has to base64 your binary data, which costs both size and time.
-- **[`transfer()`](/guides/identity-and-transfer/) your big buffers** to move them instead of copying them.
-- **Send data as data.** A `Map` of 10000 entries is one message. 10000 remote function calls is 10000 messages.
+- **Batch calls.** One call returning 1000 rows is one round trip, 1000 calls are 1000.
+- **Streams over generators** for high volume, so the credit window can pipeline.
+- **Clone transport over JSON** where you have the choice, JSON base64s binary data.
+- **[`transfer()`](/guides/identity-and-transfer/) large buffers** to move rather than copy.
+- **Send data as data.** A `Map` of 10000 entries is one message.

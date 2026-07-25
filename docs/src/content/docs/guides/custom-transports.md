@@ -40,7 +40,7 @@ const remote = await expose<PeerApi>(localApi, {
 })
 ```
 
-You do not have to filter anything in `receive`. osra ignores messages that are not its own, and drops the ones that belong to a different `key` or `name`.
+`receive` does not need to filter. osra ignores foreign messages, and drops envelopes whose `key` or `name` do not match.
 
 ## isJson
 
@@ -48,7 +48,7 @@ You do not have to filter anything in `receive`. osra ignores messages that are 
 
 Leave it out and osra guesses by looking at what you passed. A `{ emit: someWebSocket }` is JSON, a `{ emit: somePort }` is not. Set it explicitly when your channel serializes behind your back, which is the case for anything that ends up in `JSON.stringify`, a text protocol, or a native bridge.
 
-Getting it wrong in the optimistic direction is the one that hurts: osra will try to send a `RegExp` or a `File` through a channel that cannot carry it. See [supported types](/guides/supported-types/) for what each mode allows.
+The optimistic direction is the one that fails: left unset, osra will box a `RegExp` or a `File` for a channel that cannot carry it. See [supported types](/guides/supported-types/) for what each mode allows.
 
 ## Transferables
 
