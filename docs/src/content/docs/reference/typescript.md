@@ -1,32 +1,36 @@
 ---
-title: "Remote<T> and TypeScript"
-description: How Remote<T> maps your API type across the wire and how the Capable check rejects non-serializable values at compile time.
+title: TypeScript
+description: How Remote<T> maps your types across the connection, and how the Capable check rejects the rest.
 ---
 
-`Remote<T>` is the type of your value as the other side sees it: functions become async, containers map recursively, platform objects revive as themselves. At the [expose()](/reference/expose/) call site, a compile-time `Capable` check rejects values that can't cross the wire.
+Two types do the work. `Remote<T>` describes what the peer's value looks like on your side. `Capable` describes what you are allowed to send.
 
-## The `Remote<T>` mapping
+You rarely write either of them. `expose()` applies both.
 
-| Local type | Remote type |
+## Remote&lt;T&gt;
+
+| You have | The peer sees |
 |---|---|
 | `(...args: P) => R` | `(...args: P) => Promise<Remote<Awaited<R>>>` |
 | `Promise<U>` | `Promise<Remote<U>>` |
 | `AsyncIterable<U>` | `AsyncIterableIterator<Remote<U>>` |
-| `Map`, `Set`, `Date`, `Error`, `RegExp`, `ArrayBuffer`, `ArrayBufferView`, `ReadableStream`, `WritableStream`, `MessagePort`, `EventTarget`, `Request`, `Response`, `Headers`, `Blob`, `File`, `FileList` | itself |
-| arrays / objects | mapped recursively |
-| primitives | themselves |
+| `Map`, `Set`, `Date`, `Error`, `RegExp`, `ArrayBuffer` and views, `Blob`, `File`, `FileList`, `ReadableStream`, `WritableStream`, `MessagePort`, `EventTarget`, `Request`, `Response`, `Headers` | itself |
+| Arrays and objects | mapped field by field |
+| Everything else | itself |
 
-The pass-through row works on every transport, with five exceptions: `RegExp`, `Blob`, `File`, `FileList`, and `DataView` depend on structured clone, so they are excluded from `Capable` on JSON transports.
+Only two rules really matter: functions become async, and everything else stays what it was.
 
-Two edges of the mapping are worth knowing. The pass-through branch matches structurally, so any type assignable to `EventTarget` (an `AbortSignal`, a `Worker`, a class exposing `addEventListener`/`removeEventListener`/`dispatchEvent`) passes through completely unmapped: its function properties stay synchronous at the type level even though calls are proxied at runtime. Other class instances collapse to their structural mapped shape; prototype identity is not represented. And `Remote<unknown>` is `unknown`, so `expose()` without a type argument resolves to `Promise<unknown>`.
+Three edges worth knowing:
 
-## Generic signatures collapse
+**Anything shaped like an `EventTarget` passes through unmapped.** The pass-through row matches structurally, so an `AbortSignal`, a `Worker`, or your own class with `addEventListener` and `dispatchEvent` keeps its exact type. Its methods will still be async at runtime, the type just does not say so.
 
-Mapped types cannot preserve type parameters, so a generic remote function loses its generics in `Remote<T>`.
+**Generic functions lose their generics.** Mapped types cannot carry type parameters, so `<T>(x: T) => T` collapses.
 
-## The `Capable` compile-time check
+**`Remote<unknown>` is `unknown`.** Calling `expose()` with no type argument gives you `Promise<unknown>`, which is the compiler telling you it has no idea what the peer sent.
 
-`expose()` validates the value you pass at compile time against `Capable`, the union of everything serializable for the inferred transport. Failures pinpoint the offending path:
+## The Capable check
+
+`expose()` checks your value against `Capable`, the set of everything sendable over the transport you passed. Anything else is a compile error where you wrote it, pointing at the field:
 
 ```ts twoslash
 // @errors: 2345
@@ -36,14 +40,38 @@ declare const worker: Worker
 expose({ ok: async () => 1, cache: new WeakMap() }, { transport: worker })
 ```
 
-The error identifies the offending path and its parent object, so a `WeakMap` buried three levels deep fails at compile time, not at runtime. (At runtime, unclonables coerce to `{}`; see [limitations](/reference/limitations/).) One caveat: inside a non-tuple array the report stops at the array itself, so the reported bad value becomes the whole array and the path ends there; only tuple types are indexed element by element.
+The error carries the bad value, its path, and its parent object, so a `WeakMap` buried three objects deep is reported at the `expose()` call rather than turning into `{}` at runtime.
 
-Registering [custom revivables](/guides/custom-revivables/) widens the check: passing the extended module list type as the second type parameter of `expose()` teaches `Capable` that your type is now a legal value.
+One gap: inside a plain array the report stops at the array itself, so you get the array as the bad value and a path that ends there. Tuples are reported element by element.
 
-## JSON transports narrow `Capable`
+## JSON transports check harder
 
-`Capable` is narrower on JSON transports: values that depend on structured clone (`RegExp`, `File`, `ImageBitmap`, …) are rejected at the type level, so misuse fails at compile time rather than silently coercing. Everything with a dedicated revivable module (`Date`, `Map`, `ArrayBuffer` via base64, functions, streams, …) still works; see [supported types](/guides/supported-types/) for the full matrix.
+`Capable` narrows with the transport. On a JSON transport, everything that depends on structured clone is not a legal value, so this fails before it can fail at runtime:
+
+```ts twoslash
+// @errors: 2345
+import { expose } from 'osra'
+// ---cut---
+expose({ foo: new File([], '') }, { transport: new WebSocket('') })
+```
+
+The same code with a `Worker` transport compiles. That is the whole point: the check knows which channel you are on.
+
+Types with a dedicated module (`Date`, `Map`, `ArrayBuffer`, functions, streams) work on both modes. See [supported types](/guides/supported-types/) for the split.
+
+## Custom types
+
+Registering a [custom revivable](/guides/custom-revivables/) widens `Capable`, as long as you tell the call site about it:
+
+```ts
+expose<PeerApi, ReturnType<typeof myModules>>(value, {
+  transport,
+  revivableModules: myModules
+})
+```
+
+Without the second type argument the modules still work at runtime, but the check does not know about them and will reject your type.
 
 ## Requirements
 
-The package is strict-mode; the published declarations require **TypeScript ≥ 5.9** with `strict` mode.
+TypeScript 5.9 or newer, with `strict` on. The types lean on that heavily.

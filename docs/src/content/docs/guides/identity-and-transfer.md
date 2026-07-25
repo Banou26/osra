@@ -1,63 +1,106 @@
 ---
-title: "identity() and transfer()"
-description: Opt out of osra's default copy semantics. Preserve reference identity across the connection with identity(), or move Transferables zero-copy with transfer().
+title: identity() and transfer()
+description: Keep a reference stable across a connection, or move a buffer instead of copying it.
 ---
 
-By default, every send produces an independent copy of the value on the peer. `identity()` and `transfer()` are the two opt-outs: `identity()` preserves reference identity across the connection, and `transfer()` moves ownership of a `Transferable` instead of copying it.
+Two small wrappers that change how a value crosses. Both are no-ops on values they do not apply to, and both lie a little at the type level: `identity(x)` and `transfer(x)` have the same type as `x`, so they slot in anywhere.
 
-## Default: everything copies
+## identity()
 
-Without a wrapper, each send is a fresh copy, including the return trip. If the peer receives a revived value and passes it back *bare*, it arrives as yet another copy, so the returning side must re-wrap it. Two fields pointing at the same object also arrive as two copies (see [Limitations](/reference/limitations/)).
+By default every send is a copy. Send the same object twice and the peer gets two unrelated objects.
 
-## `identity()`: reference-preserving sends
+`identity(value)` pins it to a reference instead. The peer sees one object however many times you send it, and it stays the same object on later sends.
 
-`identity(value)` preserves reference identity across the connection:
+```ts twoslash title="worker.ts"
+import { expose, identity } from 'osra'
 
-- Sending the same wrapped value twice revives as the **same object** on the peer.
-- When the peer wraps the revived object in `identity()` and sends it back, you receive your **original reference** (`===`).
+const value = { foo: 'bar' }
+const payload = { value, ref1: identity(value), ref2: identity(value) }
+export type Payload = typeof payload
 
-```ts twoslash
+expose(payload, { transport: globalThis })
+```
+
+```ts twoslash title="main.ts"
+// @filename: worker.ts
+import { expose, identity } from 'osra'
+const value = { foo: 'bar' }
+const payload = { value, ref1: identity(value), ref2: identity(value) }
+export type Payload = typeof payload
+expose(payload, { transport: globalThis })
+// @filename: main.ts
 declare const worker: Worker
 // ---cut---
+import type { Payload } from './worker'
+import { expose } from 'osra'
+
+const { value, ref1, ref2 } = await expose<Payload>({}, { transport: worker })
+
+value === ref1 // false, one is a copy
+ref1 === ref2 // true, same reference
+```
+
+### The return trip
+
+Sending a revived value back gives its origin a fresh copy, like any other send. Wrap it in `identity()` again and the origin gets its actual original object back:
+
+```ts twoslash
 import { expose, identity } from 'osra'
 
 const settings = { theme: 'dark' }
+
 expose({
-  getSettings: async () => identity(settings),
-  saveSettings: async (saved: typeof settings) => {
-    // when the remote sends back identity(saved): saved === settings
-  },
-}, { transport: worker })
+  getSettings: () => identity(settings),
+  saveSettings: (saved: typeof settings) => {
+    saved === settings // true, only when the peer sent it back wrapped
+  }
+}, { transport: globalThis })
 ```
 
-The per-connection caches behind this are GC-aware: when the sender's original gets garbage-collected, the peer is notified and drops its cached revived value. Until that notification (or connection teardown) arrives, the peer holds the revived value strongly: the receiver cannot shed that memory on its own, so its cache lifetime is driven by the sender's GC. `identity()` is idempotent, and primitives pass through unchanged; see the [identity() reference](/reference/identity/) for the exact signature and the `identity-dispose` wire behavior.
+This is what makes remote callbacks removable: `removeEventListener` needs the same function reference the source registered, and osra's own [`EventTarget`](/guides/supported-types/#eventtarget) façade uses `identity()` internally for exactly that.
 
-Because later sends of an already-tracked reference ship only an id instead of the full payload, `identity()` also dedupes repeat sends of large objects; see [Performance](/guides/performance/).
+### Housekeeping
 
-## `transfer()`: zero-copy moves
+Primitives pass through untouched, since there is no reference to keep. Wrapping twice does nothing extra.
 
-`transfer(value)` opts a clonable `Transferable` (`ArrayBuffer`, typed-array views, `ImageBitmap`, `VideoFrame`, `AudioData`, …) into **move semantics**: ownership transfers to the peer instead of copying, and the value is detached locally.
+Each side holds the other's identities only for as long as the original is alive. When your value is garbage collected, osra tells the peer to drop its copy.
+
+Non-registry symbols go through this automatically, which is why `Symbol()` keeps its identity across a connection without you doing anything.
+
+## transfer()
+
+osra copies transferable values by default. `transfer(value)` moves them instead, which is the difference between duplicating 16 MB and handing over a pointer.
 
 ```ts twoslash
-import { expose } from 'osra'
-declare const worker: Worker
-const remote = await expose<{ render: (pixels: ArrayBuffer) => Promise<void> }>(
-  {},
-  { transport: worker },
-)
-// ---cut---
 import { transfer } from 'osra'
-
+declare const render: (pixels: ArrayBuffer) => Promise<void>
+// ---cut---
 const pixels = new ArrayBuffer(16_000_000)
-await remote.render(transfer(pixels)) // moved - pixels is detached locally
+
+await render(transfer(pixels))
+
+pixels.byteLength // 0, it now belongs to the peer
 ```
 
-On JSON transports there is nothing to transfer, so `transfer()` silently degrades to a copy.
+[Transfer semantics](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Transferable_objects) are the platform's, so the value is detached on your side afterwards. Reading it is an error, which is the point: there is only ever one owner.
 
-Some types are **always moved**, with or without `transfer()`, because structured clone cannot copy them: `MessagePort`, `TransformStream`, `OffscreenCanvas`, `MediaSourceHandle`, `MediaStreamTrack`, `MIDIAccess`, `RTCDataChannel`, and WebTransport streams. A bare send still detaches them locally; `transfer()` adds nothing there. It's the clonable Transferables (`ArrayBuffer`, typed-array views, `ImageBitmap`, `VideoFrame`, `AudioData`) where `transfer()` makes the difference between a copy and a move. For typed-array views this applies only to full-length views (`byteOffset` 0, covering the whole buffer): a subarray is boxed by copying just its window, so `transfer()` on a subarray moves that copy and neither moves nor detaches the original buffer.
+Works on `ArrayBuffer` and its views, `MessagePort`, `ImageBitmap`, `OffscreenCanvas`, `VideoFrame`, `AudioData` and `TransformStream`. Anything else passes through unchanged, so wrapping a plain object is harmless rather than an error.
 
-:::note
-`ReadableStream` and `WritableStream` are never moved at all: their revivable modules proxy them chunk-by-chunk over the connection (sending locks the source rather than detaching it), and `transfer()` is a no-op on them; see [Performance](/guides/performance/) for the implications on large binary data.
-:::
+### What it does not do
 
-Like `identity()`, `transfer()` is idempotent, and non-transferable inputs pass through; see the [transfer() reference](/reference/transfer/) for the exact signature.
+**Partial views get copied.** A view over part of a buffer only ships the bytes it can see, so there is nothing to detach and your buffer stays intact. Only a view spanning its whole buffer actually moves.
+
+```ts
+transfer(new Uint8Array(buffer))          // moves, buffer is detached
+transfer(new Uint8Array(buffer, 8, 4))    // copies those 4 bytes, buffer is fine
+```
+
+**Streams are already better than moved.** `ReadableStream` and `WritableStream` are proxied chunk by chunk, so wrapping them adds nothing.
+
+**JSON transports cannot move anything.** There is no ownership to hand over in a text protocol, so `transfer()` quietly falls back to a copy. Same code, no error.
+
+### Values that always move
+
+Some host objects cannot be copied at all, so they are moved whether or not you ask: `MessagePort`, `TransformStream`, `OffscreenCanvas`, `MediaStreamTrack`, `RTCDataChannel`, `MIDIAccess`. Sending one detaches it locally, every time.
+
+`SharedArrayBuffer` is the opposite case. It is neither copied nor moved, both contexts end up looking at the same memory.

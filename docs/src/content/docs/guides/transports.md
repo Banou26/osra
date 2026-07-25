@@ -1,209 +1,196 @@
 ---
 title: Transports
-description: "The built-in channels osra connects over: Workers, windows and iframes, SharedWorkers, WebSockets, service workers, and web extension messaging."
+description: Every channel osra runs over, from workers and iframes to WebSockets and web extensions.
 ---
 
-A transport is the channel `expose()` talks over. osra accepts the platform objects below directly; anything else can be wrapped in a plain `{ emit, receive }` pair.
+A transport is the channel `expose()` talks over. You hand osra a platform object and it figures out how to send and listen on it.
 
-Transports are either **structured-clone** (Worker, Window, MessagePort, SharedWorker) or **JSON** (WebSocket, web extension messaging, custom transports with `isJson: true`). JSON mode forces JSON-safe boxing: values that depend on structured clone (`RegExp`, `Blob`, `File`, `ImageBitmap`, …) are rejected at the type level, while everything with a dedicated revivable module (`Date`, `Map`, `ArrayBuffer` via base64, functions, streams, …) still works. osra only stringifies envelopes itself on WebSocket; custom function emitters handle their own serialization. See [JSON vs clone](/internals/json-vs-clone/) for exactly what degrades, and [supported types](/guides/supported-types/) for the full matrix.
-
-## Overview
+Whatever you pass has to be able to both send and receive. When one object can only do half of it (a `ServiceWorker` can only send, `navigator.serviceWorker` can only listen) you pair two of them yourself: `{ emit, receive }`.
 
 | Transport | Mode | Notes |
 |---|---|---|
-| `Window` | clone | `origin` applies (inbound filter + outbound `targetOrigin`). |
-| `Worker` | clone | |
-| `DedicatedWorkerGlobalScope` | clone | Pass `globalThis` (or `self`) inside the worker. |
-| `SharedWorker` | clone | Page side. Messages ride `.port` (handled internally). |
-| `MessagePort` | clone | `.start()` is called internally on receive. |
-| `WebSocket` | JSON | Envelopes are `JSON.stringify`ed; sends while `CONNECTING` queue until `open`. |
-| `ServiceWorker` | clone | **Emit only.** |
-| `ServiceWorkerContainer` | clone | **Receive only.** Combine: `{ emit: registration.active, receive: navigator.serviceWorker }`. |
-| WebExtension `runtime` / `Port` / `onConnect` / `onMessage` | JSON | `onConnect`/`onMessage` are receive-only; combine with the runtime or a `Port` for emit. `runtime`/`onConnect` are identity-matched against the `browser`/`chrome` global; `Port`/`onMessage` are detected purely structurally and work without the global (lookalike objects can misclassify as these). |
-| Custom `{ emit?, receive?, isJson? }` | per `isJson` / probed | See [Custom transports](/guides/custom-transports/). |
+| [`Worker`](https://developer.mozilla.org/en-US/docs/Web/API/Worker) | clone | Page side. |
+| Worker global scope | clone | Pass `globalThis` inside the worker. |
+| [`Window`](https://developer.mozilla.org/en-US/docs/Web/API/Window) | clone | Pair the other window with your own, see below. |
+| [`MessagePort`](https://developer.mozilla.org/en-US/docs/Web/API/MessagePort) | clone | osra calls `.start()` for you. |
+| [`SharedWorker`](https://developer.mozilla.org/en-US/docs/Web/API/SharedWorker) | clone | Page side. Rides its `.port` internally. |
+| [`ServiceWorker`](https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorker) | clone | Send only, pair it with `navigator.serviceWorker`. |
+| [`WebSocket`](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket) | JSON | Sends before `open` are queued. |
+| WebExtension `runtime` and `Port` | JSON | `onConnect` and `onMessage` are receive only. |
+| `{ emit, receive }` | either | Your own channel, see [custom transports](/guides/custom-transports/). |
 
 ## Worker
 
-Pass the `Worker` on the page side and `globalThis` (the `DedicatedWorkerGlobalScope`) inside the worker; the `Transport` union's structural `WorkerSelf` member accepts the worker scope directly:
+Pass the `Worker` on the page side, `globalThis` inside the worker.
 
-```ts twoslash
+```ts twoslash title="worker.ts"
 import { expose } from 'osra'
-const api = { add: async (a: number, b: number) => a + b }
-// ---cut---
-// worker.ts
+
+const api = { add: (a: number, b: number) => a + b }
+export type Api = typeof api
+
 expose(api, { transport: globalThis })
 ```
 
-```ts twoslash
+```ts twoslash title="main.ts"
 // @filename: worker.ts
 import { expose } from 'osra'
-const api = { add: async (a: number, b: number) => a + b }
+const api = { add: (a: number, b: number) => a + b }
 export type Api = typeof api
 expose(api, { transport: globalThis })
 // @filename: main.ts
+// ---cut---
 import type { Api } from './worker'
 import { expose } from 'osra'
-// ---cut---
-// main.ts
+
 const worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' })
-const remote = await expose<Api>({}, { transport: worker })
+const { add } = await expose<Api>({}, { transport: worker })
+
+await add(1, 2) // 3
 ```
 
-The full worker walkthrough lives in [getting started](/general/getting-started/).
+`globalThis` typechecks as a transport even in worker code compiled with the DOM lib, so you never need a cast.
 
-## Window ↔ iframe
+## Window and iframe
 
-`message` events fire on the window that receives them, so each side pairs the *other* window for emit with its *own* window for receive. `origin` is applied in both directions: outbound it is the `postMessage` `targetOrigin`, inbound it drops events whose `event.origin` differs. Set it whenever you talk across origins; see [security](/guides/security/) for the trust model and the one announce-beacon exception.
+A `message` event fires on the window that *receives* it, not on the one you posted to. So each side pairs the other window to send with its own window to listen.
 
-```ts twoslash
+Set `origin` whenever the two documents are on different origins. It becomes the [`targetOrigin`](https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage#targetorigin) on the way out, and drops incoming messages from any other origin on the way in.
+
+```ts title="parent.ts"
 import { expose } from 'osra'
+import type { IframeApi } from './iframe'
 
-type IframeApi = {
-  render: (theme: 'light' | 'dark') => Promise<void>
-}
-
-const parentApi = {
-  getConfig: async () => ({ locale: 'en' }),
-}
-// ---cut---
-// parent
 const iframe = document.querySelector('iframe')!
-const remote = await expose<IframeApi>(parentApi, {
+const parentApi = { getConfig: () => ({ locale: 'en' }) }
+export type ParentApi = typeof parentApi
+
+const { render } = await expose<IframeApi>(parentApi, {
   transport: { emit: iframe.contentWindow!, receive: window },
-  origin: 'https://app.example.com',
+  origin: 'https://app.example.com'
 })
 ```
 
-```ts twoslash
+```ts title="iframe.ts"
 import { expose } from 'osra'
-
-type ParentApi = {
-  getConfig: () => Promise<{ locale: string }>
-}
+import type { ParentApi } from './parent'
 
 const iframeApi = {
-  render: async (theme: 'light' | 'dark') => { document.documentElement.dataset.theme = theme },
+  render: (theme: 'light' | 'dark') => { document.documentElement.dataset.theme = theme }
 }
-// ---cut---
-// iframe
-const remote = await expose<ParentApi>(iframeApi, {
+export type IframeApi = typeof iframeApi
+
+const { getConfig } = await expose<ParentApi>(iframeApi, {
   transport: { emit: window.parent, receive: window },
-  origin: 'https://host.example.com',
+  origin: 'https://host.example.com'
 })
+```
+
+There is one exception to the strict origin. While the two sides are still looking for each other, osra broadcasts a small announce message with `'*'`. A freshly created iframe still holds its initial `about:blank` document, and the browser would silently drop a strictly targeted message to it. That announce carries nothing but the channel's key, name and uuid. Everything with data in it goes out with your `origin`, and incoming filtering always applies.
+
+## MessagePort
+
+Both ends of a [`MessageChannel`](https://developer.mozilla.org/en-US/docs/Web/API/MessageChannel) work as transports, which is handy for connecting two contexts that have no direct reference to each other.
+
+```ts twoslash
+import { expose } from 'osra'
+
+const api = { ping: () => 'pong' }
+// ---cut---
+const { port1, port2 } = new MessageChannel()
+
+expose(api, { transport: port1 })
+const remote = await expose<typeof api>({}, { transport: port2 })
 ```
 
 ## SharedWorker
 
-Pass the `SharedWorker` instance directly on the page side; osra rides its `.port` internally. Inside the worker, expose per connected port:
+Pass the `SharedWorker` itself on the page side. Inside the worker, every page shows up as a port, so expose once per port.
 
-```ts twoslash
+```ts title="page.ts"
 import { expose } from 'osra'
+import type { Api } from './shared'
 
-type Api = {
-  add: (a: number, b: number) => Promise<number>
-}
-// ---cut---
-// page
 const sharedWorker = new SharedWorker(new URL('./shared.ts', import.meta.url), { type: 'module' })
-const remote = await expose<Api>({}, { transport: sharedWorker })
+const { add } = await expose<Api>({}, { transport: sharedWorker })
 ```
 
-```ts twoslash
-// shared.ts
+```ts title="shared.ts"
 import { expose } from 'osra'
 
-const api = { add: async (a: number, b: number) => a + b }
+const api = { add: (a: number, b: number) => a + b }
+export type Api = typeof api
 
 globalThis.addEventListener('connect', event => {
-  for (const port of (event as MessageEvent).ports) expose(api, { transport: port })
+  for (const port of (event as MessageEvent).ports) {
+    expose(api, { transport: port })
+  }
 })
 ```
 
-Per-port `expose()` gives each connecting page its own connection; [multi-peer connections](/guides/multi-peer/) explains why this is the recommended pattern.
-
-## WebSocket
-
-JSON mode. You can `expose()` while the socket is still `CONNECTING`; outbound envelopes queue until open. The other end is anything that relays frames to a peer also running osra:
-
-```ts twoslash
-import { expose } from 'osra'
-
-type PeerApi = {
-  broadcast: (text: string) => Promise<void>
-}
-
-const localApi = {
-  notify: async (text: string) => { console.log(text) },
-}
-// ---cut---
-const socket = new WebSocket('wss://relay.example.com')
-const remote = await expose<PeerApi>(localApi, { transport: socket })
-```
+One connection per port keeps the pages independent. See [multiple peers](/guides/multiple-peers/) for the alternative and why this one is usually what you want.
 
 ## Service worker
 
-A `ServiceWorker` can only emit and a `ServiceWorkerContainer` can only receive, so combine them as a custom pair:
+The `ServiceWorker` object can post but not listen, and `navigator.serviceWorker` can listen but not post. Pair them.
 
-```ts twoslash
+```ts title="page.ts"
 import { expose } from 'osra'
+import type { SwApi } from './service-worker'
 
-type SwApi = {
-  getCachedUrls: () => Promise<string[]>
-}
-
-const pageApi = {
-  reload: async () => { location.reload() },
-}
-// ---cut---
+const pageApi = { reload: () => location.reload() }
 const registration = await navigator.serviceWorker.ready
-const remote = await expose<SwApi>(pageApi, {
-  transport: { emit: registration.active!, receive: navigator.serviceWorker },
+
+const { getCachedUrls } = await expose<SwApi>(pageApi, {
+  transport: { emit: registration.active!, receive: navigator.serviceWorker }
 })
+```
+
+## WebSocket
+
+JSON mode. You can call `expose()` on a socket that is still connecting, outgoing messages wait for `open` and then flush.
+
+The other end can be anything that runs osra and relays frames back, a Node server for example.
+
+```ts
+import { expose } from 'osra'
+import type { ServerApi } from './server'
+
+const clientApi = { onUpdate: (payload: string) => { console.log(payload) } }
+
+const socket = new WebSocket('wss://relay.example.com')
+const { subscribe } = await expose<ServerApi>(clientApi, { transport: socket })
 ```
 
 ## Web extension
 
-JSON mode. `runtime.Port` and the runtime itself (`sendMessage`/`onMessage`) work as standalone transports. `onConnect` and `onMessage` are receive-only: pass them as the receive half of a custom `{ emit, receive }` pair, or expose per connected port; `expose()` requires a transport that can both emit and receive.
+JSON mode. A [`runtime.Port`](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/runtime/Port) works on its own, and so does the runtime itself through `sendMessage` and `onMessage`.
 
-```ts twoslash
+```ts title="content.ts"
 import { expose } from 'osra'
-import type { Browser } from 'webextension-polyfill'
+import type { BackgroundApi } from './background'
 
-declare const browser: Browser
+const contentApi = { getSelection: () => document.getSelection()?.toString() ?? '' }
 
-type BackgroundApi = {
-  fetchData: (url: string) => Promise<string>
-}
-
-const contentApi = {
-  getSelection: async () => document.getSelection()?.toString() ?? '',
-}
-// ---cut---
-// content script
 const port = browser.runtime.connect()
-const background = await expose<BackgroundApi>(contentApi, { transport: port })
+const { fetchData } = await expose<BackgroundApi>(contentApi, { transport: port })
 ```
 
-```ts twoslash
+```ts title="background.ts"
 import { expose } from 'osra'
-import type { Browser } from 'webextension-polyfill'
 
-declare const browser: Browser
+const backgroundApi = { fetchData: async (url: string) => (await fetch(url)).text() }
+export type BackgroundApi = typeof backgroundApi
 
-const backgroundApi = {
-  fetchData: async (url: string) => (await fetch(url)).text(),
-}
-// ---cut---
-// background
 browser.runtime.onConnect.addListener(port => {
   expose(backgroundApi, { transport: port })
 })
 ```
 
-:::caution
-If you accept `onConnectExternal`/`onMessageExternal`, validate senders yourself; osra does no sender validation, and `expose()` does not surface the per-message context. Filter inside a custom receive wrapper before invoking osra's listener; the `MessageContext` (with `sender`) reaches only direct users of `registerOsraMessageListener`. See [security](/guides/security/).
-:::
+`onConnect` and `onMessage` only receive, so they can be the `receive` half of a pair but never a transport on their own.
+
+If you handle `onConnectExternal` or `onMessageExternal`, check the sender yourself in a custom `receive` wrapper before handing the message to osra. `expose()` does not surface the per-message sender, only [`registerOsraMessageListener`](/reference/low-level/) does.
 
 ## Anything else
 
-Any plain object with `emit` and `receive` works as a transport: a `BroadcastChannel`, a native bridge, a text protocol of your own. See [custom transports](/guides/custom-transports/).
+Any plain object with `emit` and `receive` is a transport. That covers `BroadcastChannel`, a Node `worker_threads` port, a native bridge, or a protocol you made up. See [custom transports](/guides/custom-transports/).

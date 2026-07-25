@@ -1,101 +1,81 @@
 ---
-title: "expose()"
-description: Full reference for expose(), the single entry point that exposes a value to a peer and resolves with the peer's exposed value.
+title: expose()
+description: The full signature, every option, and what the returned promise does.
 ---
 
-`expose()` is osra's single entry point. It exposes `value` to the peer on the other side of a transport and resolves with the peer's exposed value.
+```ts
+expose<Peer>(value, options): Promise<Remote<Peer>>
+```
 
-## Signature
+Sends `value` to the peer and returns a promise for the peer's value. Both sides call it. There is no client and no server, only two ends that each expose something.
+
+`Peer` is the type the peer exposed. osra maps it through [`Remote<T>`](/reference/typescript/) so what you get back matches what actually arrives. Leave it out on a side that only serves.
+
+`value` is checked against [`Capable`](/reference/typescript/), which is every type osra can send over the transport you passed. A value it cannot send is a compile error at the call site, with the path to the offending field.
+
+## Options
+
+| Option | Default | |
+|---|---|---|
+| `transport` | required | The channel to talk over. See [transports](/guides/transports/). |
+| `key` | `'__OSRA_DEFAULT_KEY__'` | Which logical channel this connection is on. Both sides need the same one. |
+| `origin` | `'*'` | On window transports, the origin allowed in both directions. Sets `targetOrigin` going out, filters `event.origin` coming in. |
+| `name` | | A label for your side. |
+| `remoteName` | | Only accept a peer with this `name`. |
+| `unregisterSignal` | | Abort it to tear this side down. See [lifecycle](/guides/lifecycle/). |
+| `uuid` | random | Pin this instance's id instead of generating one. |
+| `remoteUuid` | | Pin the peer's id and skip the handshake. Set it on both sides or neither. See [multiple peers](/guides/multiple-peers/#uuid-and-remoteuuid). |
+| `revivableModules` | defaults | `defaults => modules`, to add or replace types. See [custom revivables](/guides/custom-revivables/). |
+
+## The returned promise
+
+It resolves once a peer has connected, with that peer's value.
+
+If several peers answer, it resolves with the **first** one. The others still connect and can call into your value, you just have no handle on them. See [multiple peers](/guides/multiple-peers/).
+
+It rejects when:
+
+- the transport cannot both send and receive
+- your value cannot be boxed, a circular structure for example
+- the peer's first message is malformed
+- the peer closes before the handshake completes
+- `unregisterSignal` aborts, with the abort reason
+
+It stays pending while nobody is there. osra keeps announcing itself, so a peer that appears later still connects.
+
+A side that only serves can ignore the promise entirely. It will not produce an unhandled rejection.
+
+```ts twoslash
+import { expose } from 'osra'
+const api = { ping: () => 'pong' }
+// ---cut---
+expose(api, { transport: globalThis }) // fine, nothing to await
+```
+
+## Both directions
+
+Both sides can pass a value and both can call. The worker below serves and consumes at once:
+
+```ts twoslash title="worker.ts"
+import { expose } from 'osra'
+
+type PageApi = { log: (line: string) => void }
+
+const workerApi = { work: () => 42 }
+export type WorkerApi = typeof workerApi
+
+const { log } = await expose<PageApi>(workerApi, { transport: globalThis })
+
+await log('worker ready')
+```
+
+## Custom module lists
+
+When you pass `revivableModules`, pass the module list as the second type argument too, so the value check knows about your types:
 
 ```ts
-const expose: <
-  T = unknown,
-  const TModules extends readonly RevivableModule[] = DefaultRevivableModules,
-  const TTransport extends Transport = Transport,
->(
-  value: Capable<TModules>,
-  options: StartConnectionsOptions<TModules> & { transport: TTransport },
-) => Promise<Remote<T>>
+expose<PeerApi, ReturnType<typeof myModules>>(value, {
+  transport,
+  revivableModules: myModules
+})
 ```
-
-`T` is the type you declare for the peer's value; `TModules` and `TTransport` are normally inferred from the arguments. The value you pass is validated at compile time against `Capable`, the union of everything serializable for the inferred transport; see [Remote&lt;T&gt; and TypeScript](/reference/typescript/).
-
-When you both name `T` and pass `revivableModules`, supply the module list type as the second type parameter (`expose<Api, ReturnType<typeof withModules>>(...)`): TypeScript has no partial inference, so naming `T` alone resets `TModules` to the defaults and rejects the `revivableModules` option.
-
-## Both sides call expose()
-
-There is no separate client/server entry point. A side that only consumes passes `{}`:
-
-```ts twoslash
-// worker.ts
-import { expose } from 'osra'
-
-expose({ ping: async (n: number) => n + 1 }, { transport: globalThis })
-```
-
-```ts twoslash
-// main.ts
-import { expose } from 'osra'
-
-type Api = { ping: (n: number) => Promise<number> }
-
-const worker = new Worker('./worker.js', { type: 'module' })
-const api = await expose<Api>({}, { transport: worker })
-await api.ping(41) // 42
-```
-
-A side that only serves can ignore the returned promise.
-
-## Handshake
-
-The handshake is announce → announce-reply → init: each side broadcasts `announce`, peers reply with an addressed `announce`, then each side sends `init` carrying its boxed value. The returned promise resolves once the peer's `init` arrives and revives. The full dance, including its loss tolerance, is described in [handshake internals](/internals/handshake/).
-
-With multiple peers on one transport, the promise resolves with the **first** peer's value (first wins); later peers still connect and can call into your value, but there is no public accessor for their values. See [multi-peer](/guides/multi-peer/) for patterns that give you a value per peer.
-
-## Options (`StartConnectionsOptions`)
-
-| Option | Type | Default | Semantics |
-|---|---|---|---|
-| `transport` | `Transport` | required | The channel to the peer. See [transports](/guides/transports/). |
-| `name` | `string` | - | Stamped on every outgoing envelope as `name`. |
-| `remoteName` | `string` | - | Inbound filter: envelopes whose `name` differs are dropped, and so are envelopes with no `name` at all. Configure the two options as a pair: setting `remoteName` requires the peer to set `name` to the same string; unnamed envelopes are never admitted as wildcard matches. |
-| `key` | `string` | `OSRA_DEFAULT_KEY` (`'__OSRA_DEFAULT_KEY__'`) | **Channel namespacing.** Envelopes carry it under `__OSRA_KEY__`; inbound messages with a different key are ignored, so multiple independent osra connections can share one channel. |
-| `origin` | `string` | `'*'` | Outbound: the `targetOrigin` for `window.postMessage` (windows only). Inbound: on **window** receive transports, events whose non-empty `event.origin` differs are dropped; non-window transports are not origin-filtered. The one exception (the announce beacon broadcasts with `'*'`) and the full rationale live in [security](/guides/security/). |
-| `unregisterSignal` | `AbortSignal` | - | Teardown handle, see below. |
-| `revivableModules` | `(defaults: DefaultRevivableModules) => TModules` | defaults as-is | Configure the revivable module list. See [custom revivables](/guides/custom-revivables/). |
-| `uuid` | `Uuid` | `crypto.randomUUID()` | This side's identity, stamped on every envelope. Own messages looped back on the channel are ignored by uuid match. |
-| `remoteUuid` | `Uuid` | - | Preset the peer's uuid to skip the announce handshake, see below. |
-
-## `unregisterSignal` teardown
-
-Aborting the signal tears the connection down on both sides: the message listener stops, every tracked peer receives a protocol `close`, per-connection state is disposed, the pending `expose()` promise rejects with the abort reason, and in-flight RPC calls reject with `Error('osra: connection closed')`, on the peer too. The full teardown behavior (the already-aborted case, stream cancellation, what survives connection death) is documented in [lifecycle](/guides/lifecycle/).
-
-## Preset uuids (`uuid` + `remoteUuid`)
-
-When `remoteUuid` is set, that side skips `announce` entirely and immediately sends `init` addressed at the preset uuid. **Both sides must preset**: each side's `uuid` fixed and `remoteUuid` pointing at the other:
-
-```ts twoslash
-import { expose } from 'osra'
-const value = { hello: async () => 'world' }
-const { port1, port2 } = new MessageChannel()
-const uuidA = crypto.randomUUID()
-const uuidB = crypto.randomUUID()
-// ---cut---
-expose(value, { transport: port1, uuid: uuidA, remoteUuid: uuidB })
-const remote = await expose({}, { transport: port2, uuid: uuidB, remoteUuid: uuidA })
-```
-
-No `announce` envelope is ever emitted; `init` flows directly.
-
-Preset mode sends `init` exactly once and installs no announce/retry loop, so both sides' listeners must already be attached when `expose()` runs. A transport that can drop an early message (for example a freshly created module worker in Firefox) hangs the handshake with no error; the announce handshake exists to tolerate exactly that loss, and preset mode trades it away.
-
-:::caution
-A one-sided preset is not supported, but the failure is asymmetric: the non-presetting peer drops the presetting side's early `init` (untracked uuid) and its `expose()` hangs forever, while the presetting side still answers the peer's broadcast `announce`, receives the peer's `init`, and resolves.
-:::
-
-## Errors
-
-- `expose()` rejects immediately if the (normalized) transport cannot both emit and receive, e.g. a bare `ServiceWorker` or a custom `{ emit }` without `receive`.
-- Boxing a value that cannot be serialized (e.g. a circular structure) rejects the returned promise with a `TypeError`.
-- Reviving a malformed or cyclic `init` payload from a peer also rejects the promise, with whatever error the revive throws: a `TypeError` for cycles, or for example `Error('Unknown typed array type')` for unrecognized boxed data.
-- A peer's protocol `close` arriving before `init` rejects the pending promise with `Error('osra: peer closed the connection')`.

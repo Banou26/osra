@@ -1,9 +1,11 @@
 ---
 title: Getting started
-description: Install osra and connect a page to a Web Worker with a single symmetric, fully typed expose() call.
+description: Install osra and connect a page to a worker, with one expose() call on each side.
 ---
 
-osra is a zero-runtime-dependency TypeScript RPC library that connects two JavaScript contexts over any message channel. This page installs the package and wires a page to a Web Worker; the same `expose()` call works over every other [transport](/guides/transports/).
+osra lets two JavaScript contexts use each other's values directly. Functions stay callable, promises resolve, generators stream, errors throw where you called them.
+
+Both sides call `expose()`. Each one gets back what the other exposed.
 
 ## Install
 
@@ -11,91 +13,90 @@ osra is a zero-runtime-dependency TypeScript RPC library that connects two JavaS
 npm install osra
 ```
 
-One ESM module, zero runtime dependencies. The published declarations require TypeScript >= 5.9 with `strict` mode.
+One ESM module, no runtime dependencies, 13kb gzipped. The published types need TypeScript 5.9+ with `strict` on.
 
-## Quick start
+## A worker, in two files
 
-Expose an API inside the worker:
-
-```ts twoslash
-// worker.ts
+```ts twoslash title="worker.ts"
 import { expose } from 'osra'
 
-const api = {
-  add: async (a: number, b: number) => a + b,
-  makeCounter: async () => {
+const payload = {
+  hash: crypto.getRandomValues(new Uint8Array(10)),
+  add: (a: number, b: number) => a + b,
+  makeCounter: () => {
     let count = 0
-    return async () => ++count
+    return () => ++count
   },
-  streamData: async function* () {
-    for (let i = 0; i < 3; i++) yield i
-  },
+  streamData: async function* () { yield* [0, 1, 2] }
 }
+export type Payload = typeof payload
 
-export type Api = typeof api
-
-expose(api, { transport: globalThis })
+expose(payload, { transport: globalThis })
 ```
 
-Consume it from the page:
-
-```ts twoslash
+```ts twoslash title="main.ts"
 // @filename: worker.ts
 import { expose } from 'osra'
-const api = {
-  add: async (a: number, b: number) => a + b,
-  makeCounter: async () => {
+const payload = {
+  hash: crypto.getRandomValues(new Uint8Array(10)),
+  add: (a: number, b: number) => a + b,
+  makeCounter: () => {
     let count = 0
-    return async () => ++count
+    return () => ++count
   },
-  streamData: async function* () {
-    for (let i = 0; i < 3; i++) yield i
-  },
+  streamData: async function* () { yield* [0, 1, 2] }
 }
-export type Api = typeof api
-expose(api, { transport: globalThis })
+export type Payload = typeof payload
+expose(payload, { transport: globalThis })
 // @filename: main.ts
 // ---cut---
-// main.ts
-import type { Api } from './worker'
-
+import type { Payload } from './worker'
 import { expose } from 'osra'
 
 const worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' })
 
-const remote = await expose<Api>({}, { transport: worker })
+export const {
+  hash, // Uint8Array
+  add, // (a: number, b: number) => Promise<number>
+  makeCounter, // () => Promise<() => Promise<number>>
+  streamData, // () => Promise<AsyncIterableIterator<number>>
+} = await expose<Payload>({}, { transport: worker })
 
-await remote.add(40, 2) // 42
+hash.byteLength // 10
 
-const counter = await remote.makeCounter()
+await add(40, 2) // 42
+
+const counter = await makeCounter()
 await counter() // 1
 await counter() // 2
 
-for await (const n of await remote.streamData()) {
+for await (const n of await streamData()) {
   console.log(n) // 0, 1, 2
 }
 ```
 
-Both sides call `expose()`; the returned promise resolves with the remote side's value once the handshake completes. A side that only serves (like the worker above) can ignore the returned promise, and a side that only consumes passes `{}`. Functions returned across the boundary stay callable (`makeCounter` hands back a live counter), and async generators stream with `for await`.
+## What expose() gives you
 
-:::note
-Inside the worker, the transport is `globalThis` (the `DedicatedWorkerGlobalScope`). The `Transport` union includes a structural `WorkerSelf` member that covers worker globals under both `lib.webworker` and `lib.dom`, so `globalThis` is accepted directly; no cast is needed.
-:::
+`expose(value, options)` sends your value to the peer and returns a promise for the peer's value. It resolves once both sides have found each other.
 
-## Options
+The worker above never uses its returned promise, which is fine. A side that only serves can ignore it, and a side that only consumes passes `{}` as its own value.
 
-| Option | Default | Description |
-|---|---|---|
-| `transport` | required | The channel to communicate over (see [Transports](/guides/transports/)) |
-| `key` | `'__OSRA_DEFAULT_KEY__'` | Namespacing tag that lets multiple independent osra connections share one channel; any peer on the channel using the same key is accepted |
-| `origin` | `'*'` | On window transports: sets the outbound `postMessage` target origin **and** filters inbound messages by `event.origin`. The initial announce beacon alone goes out with `'*'` (see [Transports](/guides/transports/)) |
-| `name` / `remoteName` | - | Label your endpoint / only accept envelopes from a matching peer name |
-| `unregisterSignal` | - | `AbortSignal` that tears the connection down (see [Lifecycle](/guides/lifecycle/)) |
-| `uuid` / `remoteUuid` | random / - | Pin instance uuids. Setting `remoteUuid` makes that side skip announcing and send its init exactly once, so preset it on both sides (`{ uuid: A, remoteUuid: B }` / `{ uuid: B, remoteUuid: A }`); a one-sided preset leaves the other side waiting forever, and preset mode has none of the announce loop's retry tolerance for late-attaching peers |
-| `revivableModules` | - | `defaults => modules` function to add, drop, reorder, or override revivable modules (see [Custom revivables](/guides/custom-revivables/)) |
+Data gets copied, everything else gets proxied. `hash` arrives as a real `Uint8Array` you can read synchronously. `add` arrives as a function returning a promise, because the call has to cross the boundary. Same for the counter that `makeCounter` hands back: it stays a live function in the worker, so calling it from the page runs it in the worker.
 
-If multiple peers connect over the same transport, the returned promise resolves with the **first** peer's value; later peers still connect and can call your exposed value. See [multi-peer](/guides/multi-peer/).
+The type parameter (`expose<Payload>`) is what the peer exposed. osra maps it through [`Remote<T>`](/reference/typescript/) so your side sees the types that actually arrive.
 
-## Where next
+## The two transport modes
 
-See [transports](/guides/transports/) for every channel osra runs over: windows and iframes, SharedWorkers, WebSockets, service workers, web extensions, and custom `{ emit, receive }` pairs. [Supported types](/guides/supported-types/) lists everything that crosses the boundary, on both structured-clone and JSON transports. For the full `expose()` signature, handshake sequence, and error behavior, read the [expose() reference](/reference/expose/).
+`transport` is the channel the two sides talk over. Every transport is one of two modes, and the mode decides which types can cross:
+
+- **Structured-clone**, for [`Worker`](https://developer.mozilla.org/en-US/docs/Web/API/Worker), [`Window`](https://developer.mozilla.org/en-US/docs/Web/API/Window), [`MessagePort`](https://developer.mozilla.org/en-US/docs/Web/API/MessagePort) and friends. The fast one, and the only one that can move values instead of copying them.
+- **JSON**, for [`WebSocket`](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket) and web extension messaging. Slower and a bit more limited, but it reaches contexts the other mode cannot.
+
+Most types work on both. See [transports](/guides/transports/) for the list of channels, and [supported types](/guides/supported-types/) for what crosses on each mode.
+
+## Where to go next
+
+- [Transports](/guides/transports/) covers workers, iframes, WebSockets, service workers and extensions.
+- [Supported types](/guides/supported-types/) is the table of everything you can send.
+- [Live values](/guides/live-values/) explains how functions, streams and generators behave once proxied.
+- [expose()](/reference/expose/) is the full option list.

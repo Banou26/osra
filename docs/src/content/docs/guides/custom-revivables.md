@@ -1,117 +1,151 @@
 ---
 title: Custom revivables
-description: Teach osra to carry your own types across the wire by writing a RevivableModule.
+description: Teach osra how to send a type it does not know, like your own class.
 ---
 
-Classes and prototypes are not preserved by default; values cross as plain data. A **revivable module** fixes that for a type you own: it tells osra how to recognize the value, flatten it into a serializable box, and reconstruct it on the other side.
+Every type osra supports is a small module: a guard, a way to flatten the value, and a way to rebuild it. The built-in list is just an array of those, and you can add to it.
 
-## Anatomy of a `RevivableModule`
+This is also the answer to "classes are not preserved". They are not, by default, because osra cannot know how to rebuild yours. Tell it, and they are.
 
-A revivable module owns one type: `type` (unique string, identical on both sides), `isType` (runtime guard used for boxing), `box` (value → JSON/clone-safe box), `revive` (box → value), and optionally `init` (per-connection setup):
-
-```ts
-type RevivableModule = {
-  readonly type: string
-  readonly isType: (value: unknown) => value is T
-  readonly box: (value: T, context: RevivableContext) => BoxBase & { type: string }
-  readonly revive: (boxed, context: RevivableContext) => T
-  readonly init?: (context: RevivableContext) => void
-}
-```
-
-`box` turns a matched value into a plain serializable box (spread `BoxBase` in to tag it); `revive` reconstructs it on the other side. `context` gives access to `sendMessage`/`eventTarget` for modules that need their own wire traffic, and `recursiveBox`/`recursiveRevive` (exported) handle nested values.
-
-## Example: preserving a class instance
+## A module
 
 ```ts twoslash
 import type { RevivableContext, RevivableModule } from 'osra'
-import { expose, BoxBase } from 'osra'
+import { BoxBase } from 'osra'
 
 class Point {
   constructor(public x: number, public y: number) {}
-  distance() {
-    return Math.sqrt(this.x ** 2 + this.y ** 2)
-  }
+  distance() { return Math.hypot(this.x, this.y) }
 }
 
-const pointModule = {
+const point = {
   type: 'point' as const,
   isType: (value: unknown): value is Point => value instanceof Point,
   box: (value: Point, _context: RevivableContext) => ({
     ...BoxBase,
     type: 'point' as const,
     x: value.x,
-    y: value.y,
+    y: value.y
   }),
   revive: (value: { x: number, y: number }, _context: RevivableContext) =>
-    new Point(value.x, value.y),
+    new Point(value.x, value.y)
 } as const satisfies RevivableModule
-
-const withPoint = <TDefaults extends readonly RevivableModule[]>(defaults: TDefaults) =>
-  [pointModule, ...defaults] as const
 ```
 
-The `revivableModules` option of [`expose()`](/reference/expose/) is a function over the default module list; here `withPoint` prepends `pointModule` and keeps the defaults intact.
+- `type` names the box on the wire. It has to be unique in the list.
+- `isType` decides whether this module handles a value on the way out.
+- `box` turns it into something sendable. Spread `BoxBase` so osra recognises the result as a box, and keep `type` on it.
+- `revive` rebuilds it on the other side.
 
-## Register on both sides
+Whatever `box` returns is itself boxed recursively, so the fields can hold anything osra already supports: a `Date`, a function, a stream, another `Point`.
 
-Both sides must register the same modules; the second type parameter of `expose` carries the extended module list into the `Capable` check:
+## Using it
+
+`revivableModules` takes the default list and returns the one you want.
 
 ```ts twoslash
+// @filename: point.ts
 import type { RevivableContext, RevivableModule } from 'osra'
-import { expose, BoxBase } from 'osra'
-
-class Point {
+import { BoxBase } from 'osra'
+export class Point {
   constructor(public x: number, public y: number) {}
-  distance() {
-    return Math.sqrt(this.x ** 2 + this.y ** 2)
-  }
+  distance() { return Math.hypot(this.x, this.y) }
 }
-
-const pointModule = {
+export const point = {
   type: 'point' as const,
   isType: (value: unknown): value is Point => value instanceof Point,
   box: (value: Point, _context: RevivableContext) => ({
-    ...BoxBase,
-    type: 'point' as const,
-    x: value.x,
-    y: value.y,
+    ...BoxBase, type: 'point' as const, x: value.x, y: value.y
   }),
   revive: (value: { x: number, y: number }, _context: RevivableContext) =>
-    new Point(value.x, value.y),
+    new Point(value.x, value.y)
 } as const satisfies RevivableModule
-
-const withPoint = <TDefaults extends readonly RevivableModule[]>(defaults: TDefaults) =>
-  [pointModule, ...defaults] as const
-
+// @filename: main.ts
 declare const transport: Worker
 // ---cut---
-const value = async (p: Point) => new Point(p.x * 2, p.y * 2)
-expose(value, { transport, revivableModules: withPoint })
+import type { RevivableModule } from 'osra'
+import { expose } from 'osra'
+import { Point, point } from './point'
 
-const remote = await expose<typeof value, ReturnType<typeof withPoint>>(
+const withPoint = <TDefaults extends readonly RevivableModule[]>(defaults: TDefaults) =>
+  [point, ...defaults] as const
+
+const payload = { scale: (p: Point) => new Point(p.x * 2, p.y * 2) }
+
+expose(payload, { transport, revivableModules: withPoint })
+
+const remote = await expose<typeof payload, ReturnType<typeof withPoint>>(
   {},
-  { transport, revivableModules: withPoint },
+  { transport, revivableModules: withPoint }
 )
-const doubled = await remote(new Point(3, 4)) // instanceof Point, distance() === 10
+
+const doubled = await remote.scale(new Point(3, 4))
+doubled.distance() // 10, a real Point with its methods
 ```
 
-Passing the module list type as the second type parameter (`ReturnType<typeof withPoint>`) teaches the [`Capable` check](/reference/typescript/) that `Point` is now a legal value.
+Pass the module list as the second type argument so the `Capable` check knows about your type. Without it, `Point` is not a value osra thinks it can send, and the call site will say so.
 
-When the lists do not match, nothing throws. A box arriving with a `type` no local module knows falls through to plain descent, so the consumer receives the raw box literal (an object shaped like `{ __OSRA_BOX__: 'revivable', type: 'point', x: 3, y: 4 }`) instead of a `Point`. Raw `__OSRA_BOX__` objects showing up in your results are the signature of this mismatch: the receiving side lacks the module (or runs a version with a different `type` string). The flip side is intentional: duplicate `type` strings resolve first-wins in both boxing and reviving, which is exactly the prepend-to-override mechanism described below.
+**Both sides need the same list.** The peer needs your `revive` to rebuild the value, and the same `type` string to find it.
 
-## Ordering matters
+## Ordering
 
-Boxing picks the *first* module whose `isType` matches, so prepend your module ahead of the defaults; otherwise a fallback (`clonable`, `eventTarget`, the `unclonable` catch-all) may claim your instances first. The default list itself is order-sensitive for the same reason.
+Boxing walks the list in order and takes the first `isType` that matches. Reviving matches on `type`, so order does not matter there.
 
-The `revivableModules` function receives the defaults and returns the final ordered list, so you can also drop, reorder, or replace built-ins, not just prepend.
+Putting your module first, like above, lets it win over the defaults. That is what you want when your class extends something a default already handles, an `Error` subclass for example, and you want your own fields to survive.
 
-## Box contents and nested values
+Dropping or replacing a default works the same way, since you get the whole list and return whatever you like:
 
-A box must spread `BoxBase` (`{ __OSRA_BOX__: 'revivable' }`) and carry only JSON/clone-safe fields; see the [wire protocol](/reference/wire-protocol/) for how boxes travel inside envelopes.
+```ts twoslash
+import type { RevivableModule } from 'osra'
+declare const myDate: RevivableModule
+// ---cut---
+const modules = <T extends readonly RevivableModule[]>(defaults: T) =>
+  [myDate, ...defaults.filter(m => m.type !== 'date')] as const
+```
 
-Nested capable values are **not** walked for you; call `recursiveBox`/`recursiveRevive` with the provided context. When your type needs a live channel, box a function or `MessagePort` through `recursiveBox` and embed the resulting box.
+Be careful reordering the defaults. A few of them depend on their position: the `eventTarget` module sits last because `MessagePort`, `AbortSignal` and `Window` all extend `EventTarget` and need first pick, and the catch-all that turns unclonable values into `{}` sits after everything.
 
-:::note
-The lower-level `createRevivableChannel` helper behind promises and streams is not re-exported from the package root; it is reachable only via a deep `osra/build/revivables/message-port.js` import, which is not a stable API.
-:::
+## Nested values
+
+To box a field yourself, use `recursiveBox` and `recursiveRevive` with the context you were handed:
+
+```ts twoslash
+import type { RevivableContext } from 'osra'
+import { BoxBase, recursiveBox, recursiveRevive } from 'osra'
+
+class Result {
+  constructor(public value: unknown, public at: Date) {}
+}
+// ---cut---
+const result = {
+  type: 'result' as const,
+  isType: (value: unknown): value is Result => value instanceof Result,
+  box: (value: Result, context: RevivableContext) => ({
+    ...BoxBase,
+    type: 'result' as const,
+    value: recursiveBox(value.value as never, context),
+    at: recursiveBox(value.at as never, context)
+  }),
+  revive: (value: { value: unknown, at: unknown }, context: RevivableContext) =>
+    new Result(
+      recursiveRevive(value.value as never, context),
+      recursiveRevive(value.at as never, context) as unknown as Date
+    )
+}
+```
+
+In practice you rarely need this. Returning a plain object from `box` gets the same result, because osra descends into it anyway.
+
+## The context
+
+Both `box` and `revive` receive the connection context:
+
+| Field | |
+|---|---|
+| `transport` | The normalized transport, useful for `isJsonOnlyTransport(context.transport)` when your encoding differs per mode. |
+| `remoteUuid` | The peer this connection belongs to. |
+| `sendMessage` | Send your own message type. Pair it with the optional `init(context)` hook and a listener on `eventTarget` for anything that needs a live channel. |
+| `eventTarget` | Incoming messages for this connection. |
+| `revivableModules` | The resolved module list. |
+
+Modules with a live side (functions, streams, ports) all work this way. Read `src/revivables/` if you need one, they are short.

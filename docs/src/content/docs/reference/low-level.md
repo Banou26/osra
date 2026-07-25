@@ -1,58 +1,119 @@
 ---
-title: "Low-level messaging"
-description: "registerOsraMessageListener and sendOsraMessage: send and receive raw osra envelopes under the connection layer."
+title: Low-level API
+description: relay(), the raw message helpers, and the type guards osra uses internally.
 ---
 
-`registerOsraMessageListener` and `sendOsraMessage` are escape hatches under the connection layer: they move raw [wire-protocol](/reference/wire-protocol/) envelopes over any transport without a handshake or connection state. [`relay()`](/reference/relay/) is built on exactly these.
+Everything below `expose()`. You need none of it for normal use, and it is there when you are building something around osra rather than with it.
 
-## registerOsraMessageListener
+## relay()
 
 ```ts
-const registerOsraMessageListener: (options: {
-  listener: (message: Message, context: MessageContext) => void
-  transport: ReceiveTransport
-  remoteName?: string
-  key?: string        // default OSRA_DEFAULT_KEY
-  origin?: string     // default '*'
-  unregisterSignal?: AbortSignal
-}) => void
+relay(transportA, transportB, options?)
 ```
 
-Subscribes to raw osra envelopes on any receive transport, and filters them by `key`, `remoteName`, and `origin`. It handles the per-transport quirks for you:
+Forwards osra traffic between two channels. Use it when two contexts cannot see each other but both can see you.
 
-- JSON string parsing on WebSocket
-- `.port` indirection on SharedWorker
-- `MessagePort.start()`
-- the WebExtension listener families
+```ts twoslash
+import { relay } from 'osra'
+declare const worker: Worker
+declare const iframe: HTMLIFrameElement
+// ---cut---
+relay(worker, { emit: iframe.contentWindow!, receive: window }, { key: 'app' })
+```
 
-`MessageContext` is `{ port?, sender?, receiveTransport?, source?, origin? }`. Which fields are populated depends on the listener family, so do not assume `port` is always there:
+Only envelopes matching `key` are forwarded, and nothing is ever revived in the middle, so no value exists in the relay context. The two real ends still handshake directly with each other.
 
-| Receive transport | Populated context |
+| Option | |
 |---|---|
-| WebExtension `onConnect` / `onConnectExternal` | `port` (the connecting port) + `sender` |
-| WebExtension `runtime` / structural `onMessage` | `sender` only |
-| WebExtension `Port` passed directly | `sender` only (`port` is **not** forwarded) |
-| Window, Worker, WebSocket, `MessagePort`, SharedWorker, `ServiceWorkerContainer` | `receiveTransport` + `source` + `origin` from the event |
-| Custom `receive` handler | whatever your handler passes through, verbatim |
+| `key` | Which channel to forward. Defaults to osra's default key. |
+| `origin` | Applies to both sides. |
+| `originA` / `originB` | Per side, overriding `origin`. |
+| `nameA` / `nameB` | Only forward from a peer with this `name`. |
+| `unregisterSignal` | Abort to unhook both directions. |
 
-:::caution
-osra does no WebExtension sender validation: consumers using `onConnectExternal`/`onMessageExternal` must validate `context.sender` themselves. See [security](/guides/security/).
-:::
+More context in [custom transports](/guides/custom-transports/#bridging-two-transports).
 
-## sendOsraMessage
+## registerOsraMessageListener()
 
 ```ts
-const sendOsraMessage: (
-  transport: EmitTransport,
-  message: Message,
-  origin?: string,            // default '*', Window targetOrigin
-  transferables?: Transferable[],
-) => void
+registerOsraMessageListener({ listener, transport, key?, remoteName?, origin?, unregisterSignal? })
 ```
 
-Sends a raw envelope on any emit transport. It JSON-stringifies for WebSocket and queues while the socket is `CONNECTING`, and routes via `.port` for SharedWorker.
+Subscribes to osra messages on a transport and hands them to you raw, still boxed. It knows how to listen on every transport kind, and it filters by key, name and origin the same way `expose()` does.
 
-## See also
+The reason to reach for it is the second argument your listener gets, which `expose()` does not surface:
 
-- [Wire protocol](/reference/wire-protocol/): the envelope format these functions carry
-- [Custom transports](/guides/custom-transports/): wrapping your own channel in `{ emit, receive }` instead of dropping below the connection layer
+| `MessageContext` | |
+|---|---|
+| `sender` | Web extension sender, when there is one. |
+| `port` | The `MessagePort` or extension `Port` it arrived on. |
+| `source` | The `MessageEventSource`, for window and worker messages. |
+| `origin` | The `event.origin`, for window messages. |
+| `receiveTransport` | The transport it came from. |
+
+That makes it the way to check extension senders, since `expose()` has no hook for it:
+
+```ts
+import { expose, registerOsraMessageListener } from 'osra'
+
+expose(api, {
+  transport: {
+    isJson: true,
+    emit: message => browser.runtime.sendMessage(message),
+    receive: listener =>
+      registerOsraMessageListener({
+        transport: browser.runtime,
+        listener: (message, context) => {
+          if (context.sender?.id !== browser.runtime.id) return
+          listener(message, context)
+        }
+      })
+  }
+})
+```
+
+## sendOsraMessage()
+
+```ts
+sendOsraMessage(transport, message, origin?, transferables?)
+```
+
+The other half. Picks the right send call for the transport: `postMessage` with an origin for windows, `.port` for a `SharedWorker`, `JSON.stringify` with an open-queue for a `WebSocket`, `sendMessage` for the extension runtime.
+
+## getTransferableObjects()
+
+```ts
+getTransferableObjects(message): Transferable[]
+```
+
+Walks a boxed message and collects what should be moved rather than copied. `sendOsraMessage` calls it for you. It is exported for custom transports that forward the transfer list themselves.
+
+## Type guards
+
+The guards osra uses to recognise transports and values. All of them tolerate a platform where the constructor does not exist.
+
+**Transports:** `isTransport`, `isEmitTransport`, `isReceiveTransport`, `isCustomTransport`, `isCustomEmitTransport`, `isCustomReceiveTransport`, `isJsonOnlyTransport`, plus `assertEmitTransport` and `assertReceiveTransport`.
+
+**Platform objects:** `isWindow`, `isWorker`, `isDedicatedWorker`, `isSharedWorker`, `isServiceWorker`, `isServiceWorkerContainer`, `isWebSocket`.
+
+**Web extension:** `isWebExtensionRuntime`, `isWebExtensionPort`, `isWebExtensionOnConnect`, `isWebExtensionOnMessage`.
+
+**Values:** `isTypedArray`, `isTransferable`, `isSharedArrayBuffer`, `isOsraMessage`, `isRevivableBox`, `instanceOfAny`.
+
+`isWindow` is worth knowing about: it handles cross-origin windows, which throw a `SecurityError` on most property access, by probing only the properties that do not.
+
+## Boxing
+
+`recursiveBox(value, context)` and `recursiveRevive(boxed, context)` are the two halves of the value walker, for [custom revivables](/guides/custom-revivables/) that box their own fields. `BoxBase` is the marker every box spreads.
+
+## Constants
+
+| | |
+|---|---|
+| `OSRA_KEY` | The envelope field holding the channel key. |
+| `OSRA_DEFAULT_KEY` | The default `key`. |
+| `OSRA_BOX` | The field marking an object as a box. |
+
+## Types
+
+`Transport`, `PlatformTransport`, `CustomTransport`, `EmitTransport`, `ReceiveTransport`, `Message`, `MessageContext`, `Capable`, `Remote`, `RevivableModule`, `RevivableContext`, `Uuid`.
