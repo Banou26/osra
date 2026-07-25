@@ -104,6 +104,6 @@ Connection teardown does not abort revived signals, so a remote signal is not a 
 
 - **Batch calls.** One call returning 1000 rows is one round trip, 1000 calls are 1000.
 - **Streams over generators** for high volume, so the credit window can pipeline.
-- **Clone transport over JSON** where you have the choice, JSON base64s binary data.
+- **Structured transport over JSON** where you have the choice, JSON base64s binary data.
 - **[`transfer()`](/guides/identity-and-transfer/) large buffers** to move rather than copy.
 - **Send data as data.** A `Map` of 10000 entries is one message.

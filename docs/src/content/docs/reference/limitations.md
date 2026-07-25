@@ -41,9 +41,9 @@ Use plain objects and functions, or write a [custom revivable](/guides/custom-re
 
 ## JSON transports
 
-**Clone-only types are rejected.** `RegExp`, `Blob`, `File`, `FileList`, `DataView`, `SharedArrayBuffer`, `ImageBitmap` and the rest of the structured-clone family cannot cross a text protocol. The check catches it at compile time. Send an `ArrayBuffer` instead.
+**Structured-only types are rejected.** `RegExp`, `Blob`, `File`, `FileList`, `DataView`, `SharedArrayBuffer`, `ImageBitmap` and the rest of the structured-clone family cannot cross a text protocol. The check catches it at compile time. Send an `ArrayBuffer` instead.
 
-**Binary data is base64.** Which costs roughly a third more bytes, plus the encoding time. Prefer a clone transport for anything large.
+**Binary data is base64.** Which costs roughly a third more bytes, plus the encoding time. Prefer a structured transport for anything large.
 
 **`transfer()` degrades to a copy.** There is no ownership to hand over. The code still runs, it just copies.
 

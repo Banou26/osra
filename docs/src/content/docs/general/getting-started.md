@@ -89,8 +89,8 @@ Data is copied, live values are proxied. `hash` arrives as a real `Uint8Array`, 
 
 `transport` is the channel the two sides talk over. Its mode determines which types can cross:
 
-- **Structured-clone**, for [`Worker`](https://developer.mozilla.org/en-US/docs/Web/API/Worker), [`Window`](https://developer.mozilla.org/en-US/docs/Web/API/Window), [`MessagePort`](https://developer.mozilla.org/en-US/docs/Web/API/MessagePort) and friends. Carries the full clonable set, and is the only mode that can transfer ownership instead of copying.
-- **JSON**, for [`WebSocket`](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket) and web extension messaging. Binary goes base64 and the clone-only types are unavailable, in exchange for reaching contexts structured clone cannot.
+- **Structured**, for [`Worker`](https://developer.mozilla.org/en-US/docs/Web/API/Worker), [`Window`](https://developer.mozilla.org/en-US/docs/Web/API/Window), [`MessagePort`](https://developer.mozilla.org/en-US/docs/Web/API/MessagePort) and friends. Rides [structured clone](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Structured_clone_algorithm), so it carries the full clonable set and is the only mode that can transfer ownership instead of copying.
+- **JSON**, for [`WebSocket`](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket) and web extension messaging. Binary goes base64 and the structured-only types are unavailable, in exchange for reaching contexts structured clone cannot.
 
 Most types work on both. See [transports](/guides/transports/) for the list of channels, and [supported types](/guides/supported-types/) for what crosses on each mode.
 

@@ -1,13 +1,13 @@
 ---
 title: Supported types
-description: What you can send across a connection, and which types need a structured-clone transport.
+description: What you can send across a connection, and which types need a structured transport.
 ---
 
 Almost every platform type crosses a connection. The ones that do not are rejected at compile time rather than at runtime.
 
-The `Clone` and `JSON` columns are the two [transport modes](/guides/transports/). Clone covers workers, windows and ports, JSON covers WebSockets and extension messaging.
+The `Structured` and `JSON` columns are the two [transport modes](/guides/transports/). Structured covers workers, windows and ports, JSON covers WebSockets and extension messaging.
 
-| Type | Clone | JSON | Notes |
+| Type | Structured | JSON | Notes |
 |---|---|---|---|
 | Strings, numbers, booleans, `null`, plain objects, arrays | ✅ | ✅ | |
 | `undefined`, `NaN`, `±Infinity` | ✅ | ✅ | Kept intact on JSON too, where `JSON.stringify` would lose them |
@@ -59,7 +59,7 @@ Subclasses (Node's `Buffer`, for example) come back as the nearest standard type
 
 ## Blob
 
-`Blob` and `File` ride structured clone, which is why they are clone only. JSON has no way to read their bytes without going async, so osra rejects them at the `expose()` call site and throws a `TypeError` if one slips through at runtime. Send an `ArrayBuffer` or a `Uint8Array` instead.
+`Blob` and `File` ride structured clone, which is why they are structured only. JSON has no way to read their bytes without going async, so osra rejects them at the `expose()` call site and throws a `TypeError` if one slips through at runtime. Send an `ArrayBuffer` or a `Uint8Array` instead.
 
 ## Events
 

@@ -69,7 +69,7 @@ Aborting does not poison the transport. Calling `expose()` on it again starts a 
 
 ## What survives a close
 
-On a structured-clone transport, promises and streams that ride a real transferred `MessagePort` are independent of the osra connection and keep working after it closes. Anything routed through the connection itself, which is everything on a JSON transport, dies with it.
+On a structured transport, promises and streams that ride a real transferred `MessagePort` are independent of the osra connection and keep working after it closes. Anything routed through the connection itself, which is everything on a JSON transport, dies with it.
 
 So a remote `AbortSignal` is not a liveness check, it will not fire on teardown. Use your own `unregisterSignal`, or the rejection of a pending call.
 

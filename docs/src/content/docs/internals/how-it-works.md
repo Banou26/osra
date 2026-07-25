@@ -65,7 +65,7 @@ Every live value rides its own channel. A boxed function is a channel that carri
 
 How that channel is built depends on the transport:
 
-**On a clone transport** it is a real `MessageChannel`. One port is transferred to the peer inside the box. It is wrapped so that anything posted through it is boxed on the way out and revived on the way in, which is what lets a function argument itself be a function.
+**On a structured transport** it is a real `MessageChannel`. One port is transferred to the peer inside the box. It is wrapped so that anything posted through it is boxed on the way out and revived on the way in, which is what lets a function argument itself be a function.
 
 **On a JSON transport** there is nothing to transfer, so the channel is synthetic. Each port gets a `portId`, and its traffic is multiplexed onto the main connection as `{ type: 'message', portId, seq, data }`.
 

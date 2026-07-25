@@ -107,4 +107,4 @@ relay(a, b, {
 
 `origin` sets both sides at once, `originA` and `originB` override one each. `nameA` and `nameB` restrict which peer name each side accepts. Aborting `unregisterSignal` unhooks both listeners.
 
-Keep both legs in the same mode. Each peer picks its boxing from its own transport, so a clone-mode peer relayed onto a JSON leg will produce values that leg cannot carry. If one side has to be JSON, mark the other one `isJson: true` as well.
+Keep both legs in the same mode. Each peer picks its boxing from its own transport, so a structured-mode peer relayed onto a JSON leg will produce values that leg cannot carry. If one side has to be JSON, mark the other one `isJson: true` as well.

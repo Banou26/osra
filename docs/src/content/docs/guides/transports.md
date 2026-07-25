@@ -9,12 +9,12 @@ A transport has to do both directions. Where the platform splits them across obj
 
 | Transport | Mode | Notes |
 |---|---|---|
-| [`Worker`](https://developer.mozilla.org/en-US/docs/Web/API/Worker) | clone | Page side. |
-| Worker global scope | clone | Pass `globalThis` inside the worker. |
-| [`Window`](https://developer.mozilla.org/en-US/docs/Web/API/Window) | clone | Pair the other window with your own, see below. |
-| [`MessagePort`](https://developer.mozilla.org/en-US/docs/Web/API/MessagePort) | clone | osra calls `.start()` for you. |
-| [`SharedWorker`](https://developer.mozilla.org/en-US/docs/Web/API/SharedWorker) | clone | Page side. Rides its `.port` internally. |
-| [`ServiceWorker`](https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorker) | clone | Send only, pair it with `navigator.serviceWorker`. |
+| [`Worker`](https://developer.mozilla.org/en-US/docs/Web/API/Worker) | structured | Page side. |
+| Worker global scope | structured | Pass `globalThis` inside the worker. |
+| [`Window`](https://developer.mozilla.org/en-US/docs/Web/API/Window) | structured | Pair the other window with your own, see below. |
+| [`MessagePort`](https://developer.mozilla.org/en-US/docs/Web/API/MessagePort) | structured | osra calls `.start()` for you. |
+| [`SharedWorker`](https://developer.mozilla.org/en-US/docs/Web/API/SharedWorker) | structured | Page side. Rides its `.port` internally. |
+| [`ServiceWorker`](https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorker) | structured | Send only, pair it with `navigator.serviceWorker`. |
 | [`WebSocket`](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket) | JSON | Sends before `open` are queued. |
 | WebExtension `runtime` and `Port` | JSON | `onConnect` and `onMessage` are receive only. |
 | `{ emit, receive }` | either | Your own channel, see [custom transports](/guides/custom-transports/). |
