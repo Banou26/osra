@@ -83,13 +83,14 @@ export const startConnections = <
     // synchronously instead and blown past every one of those handlers.
     const queue = createConnectionQueue<T>()
     queue.close()
-    return asConnections(
-      Promise.reject(new Error(
-        'osra: transport must be able to both emit and receive to establish a connection'
-        + '; pass a bidirectional platform transport or a custom { emit, receive } pair',
-      )),
-      queue,
-    )
+    // same fire-and-forget guard the normal path gets below: `expose(...)` with no await must not
+    // surface an unhandled rejection, while an awaiting caller still sees the error
+    const rejected = Promise.reject(new Error(
+      'osra: transport must be able to both emit and receive to establish a connection'
+      + '; pass a bidirectional platform transport or a custom { emit, receive } pair',
+    ))
+    rejected.catch(() => {})
+    return asConnections(rejected, queue)
   }
   const mergedRevivableModules = mergeRevivableModules<TModules>(configureRevivableModules)
   type MergedModules = typeof mergedRevivableModules
@@ -127,7 +128,7 @@ export const startConnections = <
 
   const ctx: ProtocolContext<MergedModules> = {
     transport,
-    declaredContext: contextBuilder()?.({}) ?? {},
+    declaredContext: () => contextBuilder()?.({}) ?? {},
     valueFor: (peer: Context) =>
       (isContextual<Capable<MergedModules>>(value)
         ? value[CONTEXT](peer as Context & Record<string, unknown>)
@@ -145,6 +146,9 @@ export const startConnections = <
       connectionContexts.delete(remoteUuid)
       sendEnvelope({ type: 'close', remoteUuid })
       runTeardown(connectionContext.connection.revivableContext)
+      // Same reason the peer-initiated close rejects: an abort that beats the peer's init drops that
+      // init at the untracked-peer guard, so nothing would ever settle the caller's promise.
+      rejectRemoteValue(new Error('osra: connection aborted'))
     },
     addConnection: (ctx, value) => {
       const connection = { ...ctx, value: value as T } as Connection<T>
@@ -206,6 +210,9 @@ export const startConnections = <
       runTeardown(connectionContext.connection.revivableContext)
     }
     connectionContexts.clear()
+    // the other two exit paths close the queue; without this a `for await` over connections never
+    // terminates and its async function never resumes
+    connectionQueue.close()
     rejectRemoteValue(unregisterSignal.reason)
   }, { once: true })
 

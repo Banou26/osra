@@ -60,9 +60,11 @@ export type ProtocolContext<
   /** The exposed value for ONE peer. A factory rather than a value so a server can answer each realm
    *  differently (scoped resolvers per origin) instead of sharing one object across every connection. */
   valueFor: (peer: Context) => Capable<TModules>
-  /** the caller's declared values, resolved for a connection established without an inbound message
-   *  to read (a preset remote uuid), where nothing was observed */
-  declaredContext: Context
+  /** the caller's declared values for a connection established without an inbound message to read (a
+   *  preset remote uuid), where nothing was observed. A getter: building it eagerly would run the
+   *  caller's builder on every expose, including the paths that never need it, and a builder that
+   *  throws would then throw synchronously out of expose */
+  declaredContext: () => Context
   revivableModules: TModules
   connectionContexts: Map<string, ConnectionContext<TModules>>
   getUuid: () => Uuid
@@ -159,16 +161,37 @@ export const createConnectionQueue = <TRemote, TDeclared = unknown>(): Connectio
       closed = true
       for (const wake of waiting.splice(0)) wake(done())
     },
-    iterate: () => ({
-      [Symbol.asyncIterator]() { return this },
-      next: () => {
-        const next = buffered.shift()
-        if (next) return Promise.resolve({ value: next, done: false as const })
-        if (closed) return Promise.resolve(done())
-        return new Promise<IteratorResult<Connection<TRemote, TDeclared>>>((resolve) => waiting.push(resolve))
-      },
-      return: () => Promise.resolve(done()),
-    }),
+    iterate: () => {
+      // Per iterator, not shared: abandoning a waiter in `waiting` would hand the next connection to
+      // a dead iterator, which then drops it, and a fresh iterator would never see that peer.
+      let finished = false
+      let pending: ((result: IteratorResult<Connection<TRemote, TDeclared>>) => void) | undefined
+      const settleOwn = () => {
+        if (!pending) return
+        const index = waiting.indexOf(pending)
+        if (index !== -1) waiting.splice(index, 1)
+        pending(done())
+        pending = undefined
+      }
+      return {
+        [Symbol.asyncIterator]() { return this },
+        next: () => {
+          if (finished) return Promise.resolve(done())
+          const next = buffered.shift()
+          if (next) return Promise.resolve({ value: next, done: false as const })
+          if (closed) return Promise.resolve(done())
+          return new Promise<IteratorResult<Connection<TRemote, TDeclared>>>((resolve) => {
+            pending = resolve
+            waiting.push(resolve)
+          })
+        },
+        return: () => {
+          finished = true
+          settleOwn()
+          return Promise.resolve(done())
+        },
+      }
+    },
   }
 }
 

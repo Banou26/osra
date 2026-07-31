@@ -1,4 +1,4 @@
-import type { Transport } from '../utils/transport.js'
+import type { Context, Transport } from '../utils/transport.js'
 import type { DefaultRevivableModules, RevivableModule } from '../revivables/index.js'
 import type { DeepReplaceWithBox } from '../utils/replace.js'
 import type { ProtocolContext } from './utils.js'
@@ -181,10 +181,13 @@ export const init = <TModules extends readonly RevivableModule[]>(
 
   if (ctx.presetRemoteUuid !== undefined) {
     const presetRemoteUuid = ctx.presetRemoteUuid
-    const presetContextValues = { ...ctx.declaredContext, abort: () => ctx.abortConnection(presetRemoteUuid) }
     const eventTarget = ctx.createConnectionEventTarget()
     let connection: ReturnType<typeof startBidirectionalConnection<TModules>>
+    let presetContextValues: Context
     try {
+      // inside the try: the caller's context builder runs here, and a throw from it must reject like
+      // any other setup failure rather than escaping synchronously out of expose
+      presetContextValues = { ...ctx.declaredContext(), abort: () => ctx.abortConnection(presetRemoteUuid) }
       connection = startBidirectionalConnection<TModules>({
         transport: ctx.transport,
         // no inbound message to read here, so all this connection knows is what the caller declared
