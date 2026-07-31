@@ -132,9 +132,18 @@ export const init = <TModules extends readonly RevivableModule[]>(
       const connectionContextValues = { ...peer(), abort: () => ctx.abortConnection(message.uuid) }
       let connection: ReturnType<typeof startBidirectionalConnection<TModules>>
       try {
+        // Built BEFORE the connection starts, because starting it sends our value. A factory that
+        // calls ctx.abort() is refusing this peer, so the refusal has to be observable before the
+        // value goes out: sending first and closing after handed the peer a resolved connection it
+        // then had to discover was dead.
+        const built = ctx.valueFor(connectionContextValues)
+        if (ctx.claimPendingAbort(message.uuid)) {
+          ctx.sendMessage({ type: 'close', remoteUuid: message.uuid })
+          return
+        }
         connection = startBidirectionalConnection<TModules>({
           transport: ctx.transport,
-          value: ctx.valueFor(connectionContextValues),
+          value: built,
           remoteUuid: message.uuid,
           eventTarget,
           send: (m) => ctx.sendMessage(m as MessageVariant),
@@ -153,13 +162,6 @@ export const init = <TModules extends readonly RevivableModule[]>(
         eventTarget,
         connection,
       } satisfies ConnectionContext<TModules>
-      // The factory ran above and may have called ctx.abort(). Refuse here rather than register a
-      // connection the value's own author already rejected.
-      if (ctx.claimPendingAbort(message.uuid)) {
-        ctx.sendMessage({ type: 'close', remoteUuid: message.uuid })
-        runTeardown(connection.revivableContext)
-        return
-      }
       ctx.connectionContexts.set(message.uuid, connectionContext)
       connectionContext.connection.remoteValue.then(
         (remoteValue) => ctx.addConnection(connectionContextValues, remoteValue),
@@ -197,10 +199,16 @@ export const init = <TModules extends readonly RevivableModule[]>(
       // inside the try: the caller's context builder runs here, and a throw from it must reject like
       // any other setup failure rather than escaping synchronously out of expose
       presetContextValues = { ...ctx.declaredContext(), abort: () => ctx.abortConnection(presetRemoteUuid) }
+      // no inbound message to read here, so all this connection knows is what the caller declared
+      const built = ctx.valueFor(presetContextValues)
+      // same ordering as the announce branch: refuse before the value is sent, not after
+      if (ctx.claimPendingAbort(presetRemoteUuid)) {
+        ctx.sendMessage({ type: 'close', remoteUuid: presetRemoteUuid })
+        return
+      }
       connection = startBidirectionalConnection<TModules>({
         transport: ctx.transport,
-        // no inbound message to read here, so all this connection knows is what the caller declared
-        value: ctx.valueFor(presetContextValues),
+        value: built,
         remoteUuid: ctx.presetRemoteUuid,
         eventTarget,
         send: (m) => ctx.sendMessage(m as MessageVariant),
@@ -216,11 +224,6 @@ export const init = <TModules extends readonly RevivableModule[]>(
       eventTarget,
       connection,
     } satisfies ConnectionContext<TModules>
-    if (ctx.claimPendingAbort(presetRemoteUuid)) {
-      ctx.sendMessage({ type: 'close', remoteUuid: presetRemoteUuid })
-      runTeardown(connection.revivableContext)
-      return
-    }
     ctx.connectionContexts.set(ctx.presetRemoteUuid, connectionContext)
     connectionContext.connection.remoteValue.then(
       (remoteValue) => ctx.addConnection(presetContextValues, remoteValue),

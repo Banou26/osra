@@ -82,22 +82,45 @@ export const abortClosesOnlyThatConnection = async () => {
 }
 
 // Calling abort from inside the factory used to be a silent no-op AND the value had already been
-// sent, so the obvious deny pattern handed the peer a working connection.
+// sent, so the obvious deny pattern handed the peer a working connection. The value is now built
+// before the connection starts, so a refusal beats it out the door and the peer never resolves at all.
 export const abortInsideTheFactoryRefusesTheConnection = async () => {
   const { port1, port2 } = newPair()
   expose(
     context(ctx => { ctx.abort?.(); return { ping: async () => 'pong' } }),
     { transport: port1 },
   )
-  const { value: remote } = await expose<{ ping: () => Promise<string> }>({}, { transport: port2 })
-  await expect(remote.ping()).to.eventually.be.rejected
+  await expect(expose<{ ping: () => Promise<string> }>({}, { transport: port2 })).to.eventually.be.rejected
 }
 
-// KNOWN GAP, deliberately not asserted here: when the factory throws, the value is refused locally
-// and a close is sent, but the peer may not have registered this side yet, so its close handler drops
-// the message at the untracked-peer guard and its own expose() waits forever. Fixing that needs the
-// handshake to carry a refusal the peer can act on before registration. Do not add a test asserting
-// client-side rejection until that lands; it will hang rather than fail.
+// A throwing factory has to settle BOTH sides. The close carries our uuid, and the peer only tracks
+// us once it has seen our announce - which the announce branch sends before it builds anything, so
+// channel ordering guarantees the peer is tracking us by the time the close lands.
+export const throwingContextFactoryRejectsBothSides = async () => {
+  const { port1, port2 } = newPair()
+  const server = expose(
+    context(() => { throw new Error('refused by policy') }),
+    { transport: port1 },
+  )
+  const client = expose<{ ping: () => Promise<string> }>({}, { transport: port2 })
+  await expect(server).to.eventually.be.rejectedWith('refused by policy')
+  await expect(client).to.eventually.be.rejected
+}
+
+// Same, on the preset-uuid path, which skips the announce exchange entirely and registers the peer
+// synchronously instead.
+export const throwingContextFactoryRejectsBothSidesWithPresetUuids = async () => {
+  const { port1, port2 } = newPair()
+  const a = globalThis.crypto.randomUUID()
+  const b = globalThis.crypto.randomUUID()
+  const server = expose(
+    context(() => { throw new Error('refused by policy') }),
+    { transport: port1, uuid: a, remoteUuid: b },
+  )
+  const client = expose({}, { transport: port2, uuid: b, remoteUuid: a })
+  await expect(server).to.eventually.be.rejectedWith('refused by policy')
+  await expect(client).to.eventually.be.rejected
+}
 
 // Aborting the whole expose has to end iteration; leaving the queue open hung the loop forever.
 export const unregisterAbortEndsIteration = async () => {
