@@ -1,7 +1,7 @@
 import type { Capable, Remote } from './types.js'
 import type { DefaultRevivableModules, RevivableContext } from './revivables/index.js'
 import type { RevivableModule } from './revivables/index.js'
-import type { ContextBuilder, Contextual, Exposed, StartConnectionsOptions } from './connections/utils.js'
+import type { Connected, ContextBuilder, Contextual, Exposed, StartConnectionsOptions } from './connections/utils.js'
 import type { Context, Transport } from './utils/transport.js'
 import type { IsJsonOnlyTransport } from './utils/type-guards.js'
 import type {
@@ -59,20 +59,28 @@ type CapableCheck<
  * each realm differently (scoped resolvers per app) instead of sharing one object across all of them.
  * A bare function stays a plain exposed endpoint, so the wrapper is what disambiguates the two.
  *
- * The result is both awaitable and async-iterable, and gives the peer's value:
+ * The result is both awaitable and async-iterable: awaiting gives the first peer, iterating gives
+ * every peer as it connects. Both hand back the same shape.
  *
  * ```ts
  * const remote = await expose(resolvers, { transport })            // the first peer's value
  * for await (const remote of expose(resolvers, { transport })) { } // every peer's value
  * ```
  *
- * `.connections` is those same two reads wrapped in the peer's identity, plus an `abort` that drops
- * that one peer:
+ * `connection` decides what that shape is. Omit it and it is the peer's value, which is what expose
+ * has always resolved to. Return whatever a connection should mean instead:
  *
  * ```ts
- * const { origin, value } = await expose(resolvers, { transport }).connections
- * for await (const peer of expose(resolvers, { transport }).connections) {
- *   if (!allowed(peer.origin)) peer.abort?.()
+ * const { value, context } = await expose(resolvers, {
+ *   transport,
+ *   connection: ({ value, context }) => ({ value, context }),
+ * })
+ *
+ * for await (const peer of expose(resolvers, {
+ *   transport,
+ *   connection: ({ value, context }) => ({ value, context }),
+ * })) {
+ *   if (!allowed(peer.context.origin)) peer.context.abort?.()
  * }
  * ```
  *
@@ -88,14 +96,24 @@ export const expose = <
   // After TValue, not before it. These are positional, so slotting a new one into the middle silently
   // reassigns every explicit type argument a consumer already wrote.
   const TValue = Capable<TModules, RevivableContextOf<TTransport>>,
-  const TBuild extends ContextBuilder = ContextBuilder
+  const TBuild extends ContextBuilder = ContextBuilder,
+  // Defaults to the peer's value, so omitting `connection` keeps expose resolving to the remote.
+  // Given one, it is inferred from that function's return type.
+  TResult = Remote<T>
 >(
   value:
     | CapableCheck<TValue, TModules, RevivableContextOf<TTransport>>
     | Contextual<CapableCheck<TValue, TModules, RevivableContextOf<TTransport>>, TBuild>,
-  options: StartConnectionsOptions<TModules> & { transport: TTransport, context?: TBuild }
-): Exposed<Remote<T>, ReturnType<TBuild>> =>
-  startConnections<Remote<T>, TModules, ReturnType<TBuild>>(
+  // Both are re-declared here to carry inference (TBuild, TResult) that the base option type states
+  // only broadly. Intersecting instead of omitting gives `connection` two signatures at once, and its
+  // parameter degrades to a union of both.
+  options: Omit<StartConnectionsOptions<TModules>, 'context' | 'connection'> & {
+    transport: TTransport
+    context?: TBuild
+    connection?: (connected: Connected<Remote<T>, ReturnType<TBuild>>) => TResult
+  }
+): Exposed<TResult> =>
+  startConnections<Remote<T>, TModules, ReturnType<TBuild>, TResult>(
     value as Capable<TModules> | Contextual<Capable<TModules>>,
-    options
+    options as StartConnectionsOptions<TModules>
   )

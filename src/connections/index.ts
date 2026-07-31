@@ -9,7 +9,7 @@ import type {
   StartConnectionsOptions,
 } from './utils.js'
 import type { MessageContext, Context } from '../utils/transport.js'
-import type { Connection, Connections, Contextual, Exposed } from './utils.js'
+import type { Connected, Contextual, Exposed } from './utils.js'
 
 import { OSRA_DEFAULT_KEY, OSRA_KEY } from '../types.js'
 import * as bidirectional from './bidirectional.js'
@@ -21,7 +21,7 @@ import { createTypedEventTarget } from '../utils/typed-event-target.js'
 import { getTransferableObjects } from '../utils/transferable.js'
 import { registerOsraMessageListener, sendOsraMessage } from '../utils/transport.js'
 import { runTeardown } from '../utils/teardown.js'
-import { asConnections, asExposed, createConnectionQueue, isContextual, mergeRevivableModules, normalizeTransport, CONTEXT, CONTEXT_BUILD } from './utils.js'
+import { asExposed, createConnectionQueue, isContextual, mergeRevivableModules, normalizeTransport, CONTEXT, CONTEXT_BUILD } from './utils.js'
 
 export * from './bidirectional.js'
 export * from './relay.js'
@@ -61,7 +61,8 @@ export type ConnectionContext<
 export const startConnections = <
   T = unknown,
   const TModules extends readonly RevivableModule[] = DefaultRevivableModules,
-  TDeclared = unknown
+  TDeclared = unknown,
+  TResult = T
 >(
   value: Capable<TModules> | Contextual<Capable<TModules>>,
   {
@@ -75,8 +76,15 @@ export const startConnections = <
     uuid: _uuid,
     remoteUuid: presetRemoteUuid,
     context: buildContext,
+    connection: selectConnection,
   }: StartConnectionsOptions<TModules>
-): Exposed<T, TDeclared> => {
+): Exposed<TResult> => {
+  // Without a `connection:` the result is the peer's value, which is what expose has always given
+  // back. With one, it is whatever that returns.
+  const select = (connected: Connected<T, TDeclared>): TResult =>
+    (selectConnection
+      ? selectConnection(connected as Connected<unknown, Record<string, unknown>>)
+      : connected.value) as TResult
   const transport = normalizeTransport(_transport)
   if (!(isEmitTransport(transport) && isReceiveTransport(transport))) {
     // A REJECTION, not a throw. `expose` used to be an async function, so this surfaced as a rejected
@@ -91,7 +99,7 @@ export const startConnections = <
       + '; pass a bidirectional platform transport or a custom { emit, receive } pair',
     ))
     rejected.catch(() => {})
-    return asExposed(asConnections(rejected, queue), queue)
+    return asExposed<T, TDeclared, TResult>(rejected, queue, select)
   }
   const mergedRevivableModules = mergeRevivableModules<TModules>(configureRevivableModules)
   type MergedModules = typeof mergedRevivableModules
@@ -110,7 +118,7 @@ export const startConnections = <
   // Resolves with the FIRST established connection. The value view derives from this, so both views
   // settle off one handshake rather than racing two.
   const { promise: firstConnection, resolve: resolveFirstConnection, reject: rejectRemoteValue } =
-    Promise.withResolvers<Connection<T, TDeclared>>()
+    Promise.withResolvers<Connected<T, TDeclared>>()
   // Keeps a fire-and-forget `expose(value, …)` (the documented server-side
   // pattern) from surfacing an unhandled rejection on abort/close; awaiting
   // callers still observe the rejection through the original promise.
@@ -159,7 +167,7 @@ export const startConnections = <
     },
     claimPendingAbort: (remoteUuid) => pendingAborts.delete(remoteUuid),
     addConnection: (ctx, value) => {
-      const connection = { ...ctx, value: value as T } as Connection<T, TDeclared>
+      const connection = { value: value as T, context: ctx as Context & TDeclared }
       resolveFirstConnection(connection)
       connectionQueue.push(connection)
     },
@@ -207,7 +215,7 @@ export const startConnections = <
   if (unregisterSignal?.aborted) {
     rejectRemoteValue(unregisterSignal.reason)
     connectionQueue.close()
-    return asExposed(asConnections(firstConnection, connectionQueue), connectionQueue)
+    return asExposed<T, TDeclared, TResult>(firstConnection, connectionQueue, select)
   }
 
   // Abort = explicit local teardown: notify every tracked peer, dispose
@@ -228,5 +236,5 @@ export const startConnections = <
     connectionModule.init(ctx)
   }
 
-  return asExposed(asConnections(firstConnection, connectionQueue), connectionQueue)
+  return asExposed<T, TDeclared, TResult>(firstConnection, connectionQueue, select)
 }

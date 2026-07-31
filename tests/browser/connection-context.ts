@@ -1,5 +1,7 @@
 import { expect } from 'chai'
 
+import type { Connected } from '../../src/index'
+
 import { expose, context } from '../../src/index'
 
 // The per-connection surface: a context built from local knowledge, iteration over every peer, and
@@ -51,11 +53,11 @@ export const iterationYieldsTheConnection = async () => {
   const { port1, port2 } = newPair()
   const exposed = expose(
     context(() => ({ ping: async () => 'pong' }), () => ({ appId: 'iterated' })),
-    { transport: port1 },
+    { transport: port1, connection: ({ context: ctx }) => ctx },
   )
   const seen: Record<string, unknown>[] = []
   const collecting = (async () => {
-    for await (const connection of exposed.connections) {
+    for await (const connection of exposed) {
       seen.push(connection)
       break
     }
@@ -67,37 +69,58 @@ export const iterationYieldsTheConnection = async () => {
   expect(typeof seen[0]!.abort).to.equal('function')
 }
 
-// The plain read is the peer's value and `.connections` is the same read wrapped in its identity.
-// Both forms of both views, because the whole point is that the choice sits at the point of use.
-export const valueViewAndConnectionViewAgree = async () => {
+// No selector: the result is the peer's value, exactly what expose resolved to before any of this.
+// With one: whatever it returns, for the await and for iteration alike.
+export const theSelectorDecidesWhatAConnectionIs = async () => {
   const { port1, port2 } = newPair()
   const api = { ping: async () => 'pong' }
   expose(api, { transport: port1 })
-  const exposed = expose<typeof api>({}, { transport: port2 })
-  const remote = await exposed
-  const connection = await exposed.connections
-  await expect(remote.ping()).to.eventually.equal('pong')
-  expect(connection.value, 'the connection wraps the same remote').to.equal(remote)
-  expect(typeof connection.abort).to.equal('function')
+  expose(api, { transport: port1, key: 'paired' })
+
+  const bare = await expose<typeof api>({}, { transport: port2 })
+  await expect(bare.ping(), 'no selector gives the remote itself').to.eventually.equal('pong')
+
+  // No explicit type argument here, deliberately: TypeScript has no partial type-argument inference,
+  // so supplying one makes every later parameter fall back to its default and the selector's return
+  // type stops being inferred. Type the remote on the selector's parameter instead.
+  const { value, context: ctx } = await expose({}, {
+    transport: port2,
+    key: 'paired',
+    connection: ({ value, context }: Connected<typeof api>) => ({ value, context }),
+  })
+  await expect(value.ping()).to.eventually.equal('pong')
+  expect(typeof ctx.abort, 'the context carries this peer\'s abort').to.equal('function')
 }
 
-// Two reads of one stream. A shared cursor would let whichever loop ran first eat the peer the other
-// was waiting for, which is the failure that made the queue multicast.
-export const bothViewsSeeEveryPeer = async () => {
+// The selector can return anything, not just a wrapper: it decides what a connection MEANS here.
+export const theSelectorCanReturnAnything = async () => {
+  const { port1, port2 } = newPair()
+  expose({ ping: async () => 'pong' }, { transport: port1 })
+  const appId = await expose({}, {
+    transport: port2,
+    context: () => ({ appId: 'npm:example' }),
+    connection: ({ context }) => context.appId,
+  })
+  expect(appId, 'a connection can be just the one field this caller cares about').to.equal('npm:example')
+}
+
+// Several loops over one expose each mean "tell me about every peer". A shared cursor would let
+// whichever one happened to be waiting eat the peer the other was waiting for.
+export const everyLoopSeesEveryPeer = async () => {
   const { port1, port2 } = newPair()
   const api = { ping: async () => 'pong' }
   const exposed = expose<typeof api>({}, { transport: port1 })
-  const values: unknown[] = []
-  const conns: Record<string, unknown>[] = []
+  const first: unknown[] = []
+  const second: unknown[] = []
   const collecting = Promise.all([
-    (async () => { for await (const v of exposed) { values.push(v); break } })(),
-    (async () => { for await (const c of exposed.connections) { conns.push(c); break } })(),
+    (async () => { for await (const v of exposed) { first.push(v); break } })(),
+    (async () => { for await (const v of exposed) { second.push(v); break } })(),
   ])
   expose(api, { transport: port2 })
   await Promise.race([collecting, new Promise(resolve => setTimeout(resolve, 3_000))])
-  expect(values, 'the value view saw the peer').to.have.lengthOf(1)
-  expect(conns, 'the connection view saw the same peer').to.have.lengthOf(1)
-  expect(conns[0]!.value).to.equal(values[0])
+  expect(first, 'the first loop saw the peer').to.have.lengthOf(1)
+  expect(second, 'the second loop saw the same peer').to.have.lengthOf(1)
+  expect(first[0]).to.equal(second[0])
 }
 
 export const abortClosesOnlyThatConnection = async () => {
@@ -159,7 +182,7 @@ export const throwingContextFactoryRejectsBothSidesWithPresetUuids = async () =>
 export const unregisterAbortEndsIteration = async () => {
   const { port1, port2 } = newPair()
   const controller = new AbortController()
-  const connections = expose({}, { transport: port1, unregisterSignal: controller.signal }).connections
+  const connections = expose({}, { transport: port1, unregisterSignal: controller.signal })
   expose({}, { transport: port2 })
   let ended = false
   const looping = (async () => {
@@ -175,7 +198,7 @@ export const unregisterAbortEndsIteration = async () => {
 // handed to a dead iterator and neither delivered nor buffered.
 export const abandonedIteratorDoesNotSwallowAConnection = async () => {
   const { port1, port2 } = newPair()
-  const connections = expose({}, { transport: port1 }).connections
+  const connections = expose({}, { transport: port1 })
   const iterator = connections[Symbol.asyncIterator]()
   const firstNext = iterator.next()
   await iterator.return?.()

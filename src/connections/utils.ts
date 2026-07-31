@@ -124,39 +124,52 @@ export type StartConnectionsOptions<
    *  Observed browser-set fields win over declared ones, so a declaration can never overwrite a real
    *  origin with a made-up one. */
   context?: ContextBuilder
+  /** Decides what one connection resolves to, for the await and for iteration alike. Omit it and that
+   *  is the peer's value, which is what `expose` has always given back:
+   *
+   *  ```ts
+   *  const remote = await expose(api, { transport })
+   *
+   *  const { value, context } = await expose(api, {
+   *    transport,
+   *    connection: ({ value, context }) => ({ value, context }),
+   *  })
+   *
+   *  for await (const origin of expose(api, {
+   *    transport,
+   *    connection: ({ context }) => context.origin,
+   *  })) { }
+   *  ```
+   *
+   *  It runs per connection, on this side, after the handshake. It cannot change what is sent, and
+   *  nothing it returns crosses the wire. */
+  connection?: (connected: Connected<unknown, Record<string, unknown>>) => unknown
 }
 
-/** An established connection: what this side knows about the realm on the other end, plus the value
- *  that realm exposed. Awaiting `.connections` and iterating it both hand back this same shape, so
- *  reading one connection and reading many is the same destructure. */
-export type Connection<TValue, TDeclared = unknown> = Context & TDeclared & { value: TValue }
+/** An established connection: the value that realm exposed, and what this side knows about the realm
+ *  it came from. `context` carries the observed origin, whatever the `context:` builder declared, and
+ *  an `abort` that drops this one peer. */
+export type Connected<TValue, TDeclared = unknown> = {
+  value: TValue
+  context: Context & TDeclared
+}
 
-/** The connection view of `expose`. Awaiting it gives the FIRST peer, iterating it gives every peer as
- *  it connects, and both carry that peer's identity and its own `abort`. */
-export type Connections<TValue, TDeclared = unknown> =
-  Promise<Connection<TValue, TDeclared>> & AsyncIterable<Connection<TValue, TDeclared>>
-
-/** The result of `expose`. Awaiting it gives the first peer's value and iterating it gives every
- *  peer's value, so the plain read is the same shape either way and unchanged from before connections
- *  existed. `.connections` is the same two reads wrapped in the peer's identity.
+/** The result of `expose`. Awaiting it gives the first peer, iterating it gives every peer as it
+ *  connects, and both hand back the same thing: one shape, read once or read repeatedly.
  *
- *  The choice sits at the point of use rather than in the options, so the shape a line produces is
- *  visible in that line instead of depending on how the expose was configured somewhere else. */
-export type Exposed<TValue, TDeclared = unknown> =
-  Promise<TValue>
-  & AsyncIterable<TValue>
-  & { connections: Connections<TValue, TDeclared> }
+ *  What that shape IS comes from the `connection:` option. Without one it is the peer's value, which
+ *  is what `expose` has always resolved to. With one it is whatever that function returns. */
+export type Exposed<TResult> = Promise<TResult> & AsyncIterable<TResult>
 
 export type ConnectionQueue<TRemote, TDeclared = unknown> = {
-  push: (connection: Connection<TRemote, TDeclared>) => void
+  push: (connection: Connected<TRemote, TDeclared>) => void
   close: () => void
-  iterate: () => AsyncIterableIterator<Connection<TRemote, TDeclared>>
+  iterate: () => AsyncIterableIterator<Connected<TRemote, TDeclared>>
 }
 
-/** Multicast: every iterator sees every peer. The value view and the connection view are two reads of
- *  one stream, so a shared cursor would let `for await (const v of exposed)` silently eat peers that
- *  `for await (const c of exposed.connections)` was waiting for. Independent cursors also make the
- *  ordinary "two loops watching the same server" case behave the way it reads. */
+/** Multicast: every iterator sees every peer, rather than several loops sharing one cursor and each
+ *  taking a slice. Two loops watching one server both mean "tell me about every peer", and a shared
+ *  cursor makes whichever one happens to be waiting eat the peer the other was waiting for. */
 /** Until someone asks to iterate, a connection is buffered only up to this many. Every consumer that
  *  just awaits the first connection would otherwise retain every later one for the transport's life,
  *  each pinning a Remote proxy and a window or MessagePort. Buffering a few keeps the ordinary
@@ -165,12 +178,12 @@ const PRE_ITERATION_BUFFER = 32
 
 /** @internal protocol plumbing, not part of the public api */
 export const createConnectionQueue = <TRemote, TDeclared = unknown>(): ConnectionQueue<TRemote, TDeclared> => {
-  type Result = IteratorResult<Connection<TRemote, TDeclared>>
-  type Subscriber = { buffered: Connection<TRemote, TDeclared>[], wake?: (result: Result) => void }
-  // Replayed to every iterator that starts later, so `expose` then iterate on a subsequent tick is
-  // lossless for the value view and the connection view alike. Copied rather than drained: draining
-  // would let whichever view iterated first decide what the other one never sees.
-  const early: Connection<TRemote, TDeclared>[] = []
+  type Result = IteratorResult<Connected<TRemote, TDeclared>>
+  type Subscriber = { buffered: Connected<TRemote, TDeclared>[], wake?: (result: Result) => void }
+  // Replayed to every iterator that starts later, so `expose` then iterate on a subsequent tick stays
+  // lossless. Copied rather than drained: draining would let whichever loop iterated first decide
+  // what the others never see.
+  const early: Connected<TRemote, TDeclared>[] = []
   const subscribers = new Set<Subscriber>()
   let closed = false
   const done = () => ({ value: undefined as never, done: true as const })
@@ -224,33 +237,37 @@ export const createConnectionQueue = <TRemote, TDeclared = unknown>(): Connectio
   }
 }
 
-/** Assigns onto the existing promise rather than wrapping it, so `then`, `catch` and `finally` stay
- *  exactly what callers already hold. */
-/** @internal MUTATES its argument; not part of the public api */
-export const asConnections = <T, TDeclared = unknown>(
-  promise: Promise<Connection<T, TDeclared>>,
-  queue: ConnectionQueue<T, TDeclared>,
-): Connections<T, TDeclared> =>
-  Object.assign(promise, {
-    [Symbol.asyncIterator]: () => queue.iterate(),
-  }) as Connections<T, TDeclared>
-
-/** The value view, with the connection view hanging off it. The value promise is DERIVED from the
- *  connection promise, so it needs its own no-op catch: a fire-and-forget `expose(...)` handles the
- *  original, and an unhandled derived rejection would still reach the console. */
+/** The awaited-and-iterable result, with every connection passed through `select` first. The promise
+ *  is DERIVED from the first-connection promise, so it needs its own no-op catch: a fire-and-forget
+ *  `expose(...)` handles the original, and an unhandled derived rejection would still reach the
+ *  console. */
 /** @internal not part of the public api */
-export const asExposed = <T, TDeclared = unknown>(
-  connections: Connections<T, TDeclared>,
+export const asExposed = <T, TDeclared, TResult>(
+  first: Promise<Connected<T, TDeclared>>,
   queue: ConnectionQueue<T, TDeclared>,
-): Exposed<T, TDeclared> => {
-  const value = connections.then(connection => connection.value)
-  value.catch(() => {})
-  return Object.assign(value, {
-    connections,
-    [Symbol.asyncIterator]: async function* () {
-      for await (const connection of { [Symbol.asyncIterator]: () => queue.iterate() }) yield connection.value
-    },
-  }) as Exposed<T, TDeclared>
+  select: (connected: Connected<T, TDeclared>) => TResult,
+): Exposed<TResult> => {
+  const result = first.then(select)
+  result.catch(() => {})
+  // Hand-written rather than an async generator wrapping the queue. A generator suspended at an
+  // `await` defers `return()` until that await settles, and the await here is a connection that may
+  // never come, so abandoning the iterator would hang instead of releasing it. Delegating `return`
+  // straight to the queue's own iterator keeps abandonment immediate.
+  const iterate = (): AsyncIterableIterator<TResult> => {
+    const inner = queue.iterate()
+    return {
+      [Symbol.asyncIterator]() { return this },
+      next: () =>
+        inner.next().then(step =>
+          step.done
+            ? { value: undefined as never, done: true as const }
+            : { value: select(step.value), done: false as const }),
+      return: () =>
+        inner.return?.() as Promise<IteratorResult<TResult>>
+        ?? Promise.resolve({ value: undefined as never, done: true as const }),
+    }
+  }
+  return Object.assign(result, { [Symbol.asyncIterator]: iterate }) as Exposed<TResult>
 }
 
 /** An exposed value can itself be a function - osra exposes functions as endpoints - so a bare
