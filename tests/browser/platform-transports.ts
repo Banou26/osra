@@ -40,16 +40,23 @@ export const sharedWorkerRpc = async () => {
   }
 }
 
-// Two sockets through the relay server (tests/ws-relay.mjs, port 3001).
+// The relay (tests/ws-relay.mjs, port 3001) broadcasts every frame to every OTHER client, and all
+// three browser projects share the one server. Two sockets on the default key therefore pair with
+// whichever peer answers first, which may belong to the same test running in another browser: socketB
+// pairs with a foreign socketB, gets its empty value, and `.add` is undefined. A key unique per call
+// scopes the announce so only this pair can see each other.
+const relayKey = () => `ws-${globalThis.crypto.randomUUID()}`
+
 // expose() is called while the sockets are still CONNECTING - outbound
 // envelopes must queue until open instead of throwing.
 export const webSocketRpc = async () => {
   const socketA = new WebSocket('ws://localhost:3001')
   const socketB = new WebSocket('ws://localhost:3001')
+  const key = relayKey()
   try {
     const value = { add: async (a: number, b: number) => a + b }
-    expose(value, { transport: socketA })
-    const remote = await expose<typeof value>({}, { transport: socketB })
+    expose(value, { transport: socketA, key })
+    const remote = await expose<typeof value>({}, { transport: socketB, key })
     expect(await remote.add(1, 2)).to.equal(3)
   } finally {
     socketA.close()
@@ -60,10 +67,11 @@ export const webSocketRpc = async () => {
 export const webSocketCallback = async () => {
   const socketA = new WebSocket('ws://localhost:3001')
   const socketB = new WebSocket('ws://localhost:3001')
+  const key = relayKey()
   try {
     const value = { run: async (callback: () => Promise<number>) => (await callback()) * 2 }
-    expose(value, { transport: socketA })
-    const remote = await expose<typeof value>({}, { transport: socketB })
+    expose(value, { transport: socketA, key })
+    const remote = await expose<typeof value>({}, { transport: socketB, key })
     expect(await remote.run(async () => 21)).to.equal(42)
   } finally {
     socketA.close()
