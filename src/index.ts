@@ -1,7 +1,7 @@
 import type { Capable, Remote } from './types.js'
 import type { DefaultRevivableModules, RevivableContext } from './revivables/index.js'
 import type { RevivableModule } from './revivables/index.js'
-import type { Connected, ContextBuilder, Contextual, Exposed, StartConnectionsOptions } from './connections/utils.js'
+import type { Connected, Contextual, Exposed, StartConnectionsOptions } from './connections/utils.js'
 import type { Context, Transport } from './utils/transport.js'
 import type { IsJsonOnlyTransport } from './utils/type-guards.js'
 import type {
@@ -96,23 +96,22 @@ export const expose = <
   // After TValue, not before it. These are positional, so slotting a new one into the middle silently
   // reassigns every explicit type argument a consumer already wrote.
   const TValue = Capable<TModules, RevivableContextOf<TTransport>>,
-  const TBuild extends ContextBuilder = ContextBuilder,
   // Defaults to the peer's value, so omitting `connection` keeps expose resolving to the remote.
   // Given one, it is inferred from that function's return type.
   TResult = Remote<T>
 >(
   value:
     | CapableCheck<TValue, TModules, RevivableContextOf<TTransport>>
-    | Contextual<CapableCheck<TValue, TModules, RevivableContextOf<TTransport>>, TBuild>,
+    | Contextual<CapableCheck<TValue, TModules, RevivableContextOf<TTransport>>>,
   // Re-declared here to carry the TResult inference that the base option type states only broadly.
   // Intersecting instead of omitting gives `connection` two signatures at once, and its parameter
   // degrades to a union of both.
   options: Omit<StartConnectionsOptions<TModules>, 'connection'> & {
     transport: TTransport
-    connection?: (connected: Connected<Remote<T>, ReturnType<TBuild>>) => TResult
+    connection?: (connected: Connected<Remote<T>>) => TResult
   }
 ): Exposed<TResult> =>
-  startConnections<Remote<T>, TModules, ReturnType<TBuild>, TResult>(
+  startConnections<Remote<T>, TModules, TResult>(
     value as Capable<TModules> | Contextual<Capable<TModules>>,
     options as StartConnectionsOptions<TModules>
   )

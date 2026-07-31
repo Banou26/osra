@@ -62,11 +62,6 @@ export type ProtocolContext<
   /** The exposed value for ONE peer. A factory rather than a value so a server can answer each realm
    *  differently (scoped resolvers per origin) instead of sharing one object across every connection. */
   valueFor: (peer: Context) => Capable<TModules>
-  /** the caller's declared values for a connection established without an inbound message to read (a
-   *  preset remote uuid), where nothing was observed. A getter: building it eagerly would run the
-   *  caller's builder on every expose, including the paths that never need it, and a builder that
-   *  throws would then throw synchronously out of expose */
-  declaredContext: () => Context
   revivableModules: TModules
   connectionContexts: Map<string, ConnectionContext<TModules>>
   getUuid: () => Uuid
@@ -121,15 +116,16 @@ export type StartConnectionsOptions<
    *
    *  It runs per connection, on this side, after the handshake. It cannot change what is sent, and
    *  nothing it returns crosses the wire. */
-  connection?: (connected: Connected<unknown, Record<string, unknown>>) => unknown
+  connection?: (connected: Connected<unknown>) => unknown
 }
 
 /** An established connection: the value that realm exposed, and what this side knows about the realm
- *  it came from. `context` carries whatever the transport observed, whatever a builder passed to
- *  `context(make, build)` declared, and an `abort` that drops this one peer. */
-export type Connected<TValue, TDeclared = unknown> = {
+ *  it came from. `context` is whatever the transport observed, plus an `abort` that drops this one
+ *  peer. Anything derived from it is the caller's to compute, in the value factory or in
+ *  `connection:`, rather than something to declare up front. */
+export type Connected<TValue> = {
   value: TValue
-  context: Context & TDeclared
+  context: Context
 }
 
 /** The result of `expose`. Awaiting it gives the first peer, iterating it gives every peer as it
@@ -139,10 +135,10 @@ export type Connected<TValue, TDeclared = unknown> = {
  *  is what `expose` has always resolved to. With one it is whatever that function returns. */
 export type Exposed<TResult> = Promise<TResult> & AsyncIterable<TResult>
 
-export type ConnectionQueue<TRemote, TDeclared = unknown> = {
-  push: (connection: Connected<TRemote, TDeclared>) => void
+export type ConnectionQueue<TRemote> = {
+  push: (connection: Connected<TRemote>) => void
   close: () => void
-  iterate: () => AsyncIterableIterator<Connected<TRemote, TDeclared>>
+  iterate: () => AsyncIterableIterator<Connected<TRemote>>
 }
 
 /** Multicast: every iterator sees every peer, rather than several loops sharing one cursor and each
@@ -155,13 +151,13 @@ export type ConnectionQueue<TRemote, TDeclared = unknown> = {
 const PRE_ITERATION_BUFFER = 32
 
 /** @internal protocol plumbing, not part of the public api */
-export const createConnectionQueue = <TRemote, TDeclared = unknown>(): ConnectionQueue<TRemote, TDeclared> => {
-  type Result = IteratorResult<Connected<TRemote, TDeclared>>
-  type Subscriber = { buffered: Connected<TRemote, TDeclared>[], wake?: (result: Result) => void }
+export const createConnectionQueue = <TRemote>(): ConnectionQueue<TRemote> => {
+  type Result = IteratorResult<Connected<TRemote>>
+  type Subscriber = { buffered: Connected<TRemote>[], wake?: (result: Result) => void }
   // Replayed to every iterator that starts later, so `expose` then iterate on a subsequent tick stays
   // lossless. Copied rather than drained: draining would let whichever loop iterated first decide
   // what the others never see.
-  const early: Connected<TRemote, TDeclared>[] = []
+  const early: Connected<TRemote>[] = []
   const subscribers = new Set<Subscriber>()
   let closed = false
   const done = () => ({ value: undefined as never, done: true as const })
@@ -220,10 +216,10 @@ export const createConnectionQueue = <TRemote, TDeclared = unknown>(): Connectio
  *  `expose(...)` handles the original, and an unhandled derived rejection would still reach the
  *  console. */
 /** @internal not part of the public api */
-export const asExposed = <T, TDeclared, TResult>(
-  first: Promise<Connected<T, TDeclared>>,
-  queue: ConnectionQueue<T, TDeclared>,
-  select: (connected: Connected<T, TDeclared>) => TResult,
+export const asExposed = <T, TResult>(
+  first: Promise<Connected<T>>,
+  queue: ConnectionQueue<T>,
+  select: (connected: Connected<T>) => TResult,
 ): Exposed<TResult> => {
   const result = first.then(select)
   result.catch(() => {})
@@ -253,52 +249,26 @@ export const asExposed = <T, TDeclared, TResult>(
  *  marker makes the intent explicit and unambiguous. */
 /** @internal */
 export const CONTEXT = Symbol.for('osra.context')
-/** @internal */
-export const CONTEXT_BUILD = Symbol.for('osra.context.build')
 
-/** Custom values a builder puts on the context, on top of what the transport observed. */
-export type ContextBuilder = (observed: Context) => Record<string, unknown>
-
-/** The context a given builder produces: what it returns, plus what osra observes locally. Exported
- *  so a builder defined elsewhere can type a resolver signature: `(ctx: ContextOf<typeof build>)`. */
-export type ContextOf<TBuild> = TBuild extends (observed: Context) => infer R ? Context & R : Context
-
-export type Contextual<TValue, TBuild extends ContextBuilder = ContextBuilder> = {
-  [CONTEXT]: (ctx: Context & Record<string, unknown>) => TValue
-  [CONTEXT_BUILD]?: TBuild
+export type Contextual<TValue> = {
+  [CONTEXT]: (ctx: Context) => TValue
 }
 
 /** Build the exposed value once per connection, from that connection's context, rather than sharing
- *  one value across every realm that connects.
- *
- *  Pass a context builder second and `ctx` is inferred exactly from it, with no type argument to
- *  write. It runs before the value is built, which is the whole reason it exists here rather than in
- *  `connection:`: it decides what this side EXPOSES to that peer, where the selector only decides
- *  what this side READS back.
+ *  one value across every realm that connects. It runs BEFORE the value is boxed and sent, which is
+ *  what lets one server answer each realm differently:
  *
  *  ```ts
- *  expose(
- *    context(ctx => resolvers(ctx.appId), ({ origin }) => ({ appId: appIdFor(origin) })),
- *    { transport },
- *  )
+ *  expose(context(({ origin }) => resolvers(idFor(origin))), { transport })
  *  ```
  *
- *  Values a caller only needs at read time do not belong here: derive them in `connection:` instead,
- *  which sees the same context and needs no declaration. */
-export function context<TBuild extends ContextBuilder, TValue>(
-  make: (ctx: ContextOf<TBuild>) => TValue,
-  build: TBuild,
-): Contextual<TValue, TBuild>
-export function context<TValue>(
-  make: (ctx: Context & Record<string, unknown>) => TValue,
-): Contextual<TValue>
-export function context(
-  make: (ctx: never) => unknown,
-  build?: ContextBuilder,
-): Contextual<unknown> {
-  const value = { [CONTEXT]: make as (ctx: Context & Record<string, unknown>) => unknown }
-  return build ? { ...value, [CONTEXT_BUILD]: build } : value
-}
+ *  A wrapper rather than "pass a function", because osra exposes functions as endpoints, so a bare
+ *  `typeof value === 'function'` cannot tell a per-peer factory from a plain function value.
+ *
+ *  What the read side needs is not declared here: `connection:` sees the same context and derives its
+ *  own. */
+export const context = <TValue,>(make: (ctx: Context) => TValue): Contextual<TValue> =>
+  ({ [CONTEXT]: make })
 
 /** @internal */
 export const isContextual = <TValue,>(value: unknown): value is Contextual<TValue> =>

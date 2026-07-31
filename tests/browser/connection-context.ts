@@ -9,17 +9,18 @@ import { expose, context } from '../../src/index'
 
 const newPair = () => new MessageChannel()
 
-export const contextBuilderScopesTheValue = async () => {
+// The factory runs once per connection and what it returns is what that peer receives, which is how
+// one server answers each realm differently instead of sharing one object across all of them.
+export const theFactoryBuildsTheValuePerConnection = async () => {
   const { port1, port2 } = newPair()
+  let built = 0
   expose(
-    context(
-      ctx => ({ who: async () => `${ctx.appId}` }),
-      () => ({ appId: 'scoped' }),
-    ),
+    context(ctx => ({ who: async () => `peer-${built}-abort-${typeof ctx.abort}` })),
     { transport: port1 },
   )
+  built += 1
   const remote = await expose<{ who: () => Promise<string> }>({}, { transport: port2 })
-  await expect(remote.who()).to.eventually.equal('scoped')
+  await expect(remote.who()).to.eventually.equal('peer-1-abort-function')
 }
 
 // A function VALUE must stay a plain exposed endpoint. Detecting a factory by `typeof` would have
@@ -32,27 +33,25 @@ export const bareFunctionValueIsStillAnEndpoint = async () => {
   await expect(remote(21)).to.eventually.equal(42)
 }
 
-// A port observes no origin, so a declared value is all there is; it must survive the merge rather
-// than being clobbered by an empty observation.
-export const declaredContextSurvivesOnAPortTransport = async () => {
+// A MessagePort message carries origin '' and source null, so neither survives into the context.
+// Measured, not assumed: it is why a port-based server takes its peer's identity from the lexical
+// scope that created the port rather than from anything the connection can tell it.
+export const aPortObservesNothingButAbort = async () => {
   const { port1, port2 } = newPair()
-  let seenOrigin: unknown = 'unset'
+  let seen: Record<string, unknown> | undefined
   expose(
-    context(
-      ctx => { seenOrigin = ctx.origin; return { ping: async () => 'pong' } },
-      () => ({ appId: 'from-declaration' }),
-    ),
+    context(ctx => { seen = { ...ctx }; return { ping: async () => 'pong' } }),
     { transport: port1 },
   )
   const remote = await expose<{ ping: () => Promise<string> }>({}, { transport: port2 })
   await expect(remote.ping()).to.eventually.equal('pong')
-  expect(seenOrigin, 'a MessagePort observes no origin').to.equal(undefined)
+  expect(Object.keys(seen ?? {}), 'a MessagePort observes no origin or source').to.deep.equal(['abort'])
 }
 
 export const iterationYieldsTheConnection = async () => {
   const { port1, port2 } = newPair()
   const exposed = expose(
-    context(() => ({ ping: async () => 'pong' }), () => ({ appId: 'iterated' })),
+    context(() => ({ ping: async () => 'pong' })),
     { transport: port1, connection: ({ context: ctx }) => ctx },
   )
   const seen: Record<string, unknown>[] = []
@@ -65,8 +64,7 @@ export const iterationYieldsTheConnection = async () => {
   await expose({}, { transport: port2 })
   await collecting
   expect(seen).to.have.lengthOf(1)
-  expect(seen[0]!.appId).to.equal('iterated')
-  expect(typeof seen[0]!.abort).to.equal('function')
+  expect(typeof seen[0]!.abort, 'iteration yields the selected shape').to.equal('function')
 }
 
 // No selector: the result is the peer's value, exactly what expose resolved to before any of this.
@@ -96,11 +94,11 @@ export const theSelectorDecidesWhatAConnectionIs = async () => {
 export const theSelectorCanReturnAnything = async () => {
   const { port1, port2 } = newPair()
   expose({ ping: async () => 'pong' }, { transport: port1 })
-  const appId = await expose(
-    context(() => ({}), () => ({ appId: 'npm:example' })),
-    { transport: port2, connection: ({ context }) => context.appId },
-  )
-  expect(appId, 'a connection can be just the one field this caller cares about').to.equal('npm:example')
+  const canDrop = await expose({}, {
+    transport: port2,
+    connection: ({ context }) => typeof context.abort === 'function',
+  })
+  expect(canDrop, 'a connection can be just the one thing this caller cares about').to.equal(true)
 }
 
 // Several loops over one expose each mean "tell me about every peer". A shared cursor would let

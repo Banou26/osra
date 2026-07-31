@@ -21,7 +21,7 @@ import { createTypedEventTarget } from '../utils/typed-event-target.js'
 import { getTransferableObjects } from '../utils/transferable.js'
 import { registerOsraMessageListener, sendOsraMessage } from '../utils/transport.js'
 import { runTeardown } from '../utils/teardown.js'
-import { asExposed, createConnectionQueue, isContextual, mergeRevivableModules, normalizeTransport, CONTEXT, CONTEXT_BUILD } from './utils.js'
+import { asExposed, createConnectionQueue, isContextual, mergeRevivableModules, normalizeTransport, CONTEXT } from './utils.js'
 
 export * from './bidirectional.js'
 export * from './relay.js'
@@ -61,7 +61,6 @@ export type ConnectionContext<
 export const startConnections = <
   T = unknown,
   const TModules extends readonly RevivableModule[] = DefaultRevivableModules,
-  TDeclared = unknown,
   TResult = T
 >(
   value: Capable<TModules> | Contextual<Capable<TModules>>,
@@ -82,13 +81,13 @@ export const startConnections = <
     connection: selectConnection = ({ value }) => value,
   }: StartConnectionsOptions<TModules>
 ): Exposed<TResult> => {
-  const select = selectConnection as (connected: Connected<T, TDeclared>) => TResult
+  const select = selectConnection as (connected: Connected<T>) => TResult
   const transport = normalizeTransport(_transport)
   if (!(isEmitTransport(transport) && isReceiveTransport(transport))) {
     // A REJECTION, not a throw. `expose` used to be an async function, so this surfaced as a rejected
     // promise and callers wrote `.catch`; returning Connections directly would have made it throw
     // synchronously instead and blown past every one of those handlers.
-    const queue = createConnectionQueue<T, TDeclared>()
+    const queue = createConnectionQueue<T>()
     queue.close()
     // same fire-and-forget guard the normal path gets below: `expose(...)` with no await must not
     // surface an unhandled rejection, while an awaiting caller still sees the error
@@ -97,26 +96,21 @@ export const startConnections = <
       + '; pass a bidirectional platform transport or a custom { emit, receive } pair',
     ))
     rejected.catch(() => {})
-    return asExposed<T, TDeclared, TResult>(rejected, queue, select)
+    return asExposed<T, TResult>(rejected, queue, select)
   }
   const mergedRevivableModules = mergeRevivableModules<TModules>(configureRevivableModules)
   type MergedModules = typeof mergedRevivableModules
   const connectionContexts = new Map<string, ConnectionContext<MergedModules>>()
 
-  // The builder travels with the value, passed as `context(make, build)`, so one definition both
-  // types the resolvers and populates the context. There is no separate option: anything a caller
-  // only needs at read time can be derived in `connection:` instead.
-  const contextBuilder = () => isContextual(value) ? value[CONTEXT_BUILD] : undefined
-
   // uuids aborted before they were registered; consumed by claimPendingAbort at registration
   const pendingAborts = new Set<string>()
 
-  const connectionQueue = createConnectionQueue<T, TDeclared>()
+  const connectionQueue = createConnectionQueue<T>()
 
   // Resolves with the FIRST established connection. The value view derives from this, so both views
   // settle off one handshake rather than racing two.
   const { promise: firstConnection, resolve: resolveFirstConnection, reject: rejectRemoteValue } =
-    Promise.withResolvers<Connected<T, TDeclared>>()
+    Promise.withResolvers<Connected<T>>()
   // Keeps a fire-and-forget `expose(value, …)` (the documented server-side
   // pattern) from surfacing an unhandled rejection on abort/close; awaiting
   // callers still observe the rejection through the original promise.
@@ -138,10 +132,9 @@ export const startConnections = <
 
   const ctx: ProtocolContext<MergedModules> = {
     transport,
-    declaredContext: () => contextBuilder()?.({}) ?? {},
     valueFor: (peer: Context) =>
       (isContextual<Capable<MergedModules>>(value)
-        ? value[CONTEXT](peer as Context & Record<string, unknown>)
+        ? value[CONTEXT](peer)
         : value) as Capable<MergedModules>,
     revivableModules: mergedRevivableModules,
     connectionContexts,
@@ -165,7 +158,7 @@ export const startConnections = <
     },
     claimPendingAbort: (remoteUuid) => pendingAborts.delete(remoteUuid),
     addConnection: (ctx, value) => {
-      const connection = { value: value as T, context: ctx as Context & TDeclared }
+      const connection = { value: value as T, context: ctx }
       resolveFirstConnection(connection)
       connectionQueue.push(connection)
     },
@@ -176,22 +169,17 @@ export const startConnections = <
   const listener = (message: Message, messageContext: MessageContext) => {
     // own message looped back on the channel
     if (message.uuid === uuid) return
-    // Built from LOCAL knowledge only. `messageContext` is what the browser told us about the
-    // delivery (origin, source), which the peer cannot forge; the caller's builder is what this side
-    // already knew. Nothing from the peer's payload participates, and none of this is ever sent.
-    // Observed wins over declared, so a declaration cannot overwrite a real origin.
+    // Built from LOCAL knowledge only: `messageContext` is what the browser told us about the
+    // delivery, which the peer cannot forge. Nothing from the peer's payload participates, and none
+    // of it is ever sent back.
     //
-    // A thunk, because only the announce branch consumes it: building it here ran the caller's
-    // builder on every RPC frame and stream chunk rather than once per connection.
-    const observed = (): Context => ({
+    // A thunk, because only the announce branch consumes it: building it eagerly ran on every RPC
+    // frame and stream chunk rather than once per connection.
+    const peer = (): Context => ({
       ...(messageContext.origin ? { origin: messageContext.origin } : {}),
       ...(messageContext.source ? { source: messageContext.source } : {}),
       ...(messageContext.port ? { port: messageContext.port } : {}),
       ...(messageContext.sender ? { sender: messageContext.sender } : {}),
-    })
-    const peer = (): Context => ({
-      ...(contextBuilder()?.(observed()) ?? {}),
-      ...observed(),
     })
     protocolEventTarget.dispatchEvent(
       new CustomEvent('message', { detail: { message: message as Message<MergedModules>, peer } }),
@@ -213,7 +201,7 @@ export const startConnections = <
   if (unregisterSignal?.aborted) {
     rejectRemoteValue(unregisterSignal.reason)
     connectionQueue.close()
-    return asExposed<T, TDeclared, TResult>(firstConnection, connectionQueue, select)
+    return asExposed<T, TResult>(firstConnection, connectionQueue, select)
   }
 
   // Abort = explicit local teardown: notify every tracked peer, dispose
@@ -234,5 +222,5 @@ export const startConnections = <
     connectionModule.init(ctx)
   }
 
-  return asExposed<T, TDeclared, TResult>(firstConnection, connectionQueue, select)
+  return asExposed<T, TResult>(firstConnection, connectionQueue, select)
 }

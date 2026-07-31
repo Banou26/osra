@@ -198,7 +198,9 @@ export const init = <TModules extends readonly RevivableModule[]>(
     try {
       // inside the try: the caller's context builder runs here, and a throw from it must reject like
       // any other setup failure rather than escaping synchronously out of expose
-      presetContextValues = { ...ctx.declaredContext(), abort: () => ctx.abortConnection(presetRemoteUuid) }
+      // Nothing was observed on this path: there is no inbound message to read, so all a preset
+      // connection knows about its peer is that it can be dropped.
+      presetContextValues = { abort: () => ctx.abortConnection(presetRemoteUuid) }
       // no inbound message to read here, so all this connection knows is what the caller declared
       const built = ctx.valueFor(presetContextValues)
       // same ordering as the announce branch: refuse before the value is sent, not after
