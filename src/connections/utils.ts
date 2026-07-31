@@ -75,6 +75,8 @@ export type ProtocolContext<
   /** reports an established connection: settles the first-connection promise and feeds iteration, so
    *  a caller sees every realm rather than only the one that happened to connect first */
   addConnection: (ctx: Context, value: Capable<TModules>) => void
+  /** tears down one connection: close to the peer, teardown locally, drop it from tracking */
+  abortConnection: (remoteUuid: Uuid) => void
   createConnectionEventTarget: () => TypedEventTarget<MessageEventMap<TModules>>
   unregisterSignal?: AbortSignal
 }

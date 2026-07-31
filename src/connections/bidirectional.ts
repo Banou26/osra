@@ -126,11 +126,15 @@ export const init = <TModules extends readonly RevivableModule[]>(
       // Echo announce back in case the peer missed our initial one.
       ctx.sendMessage({ type: 'announce', remoteUuid: message.uuid })
       const eventTarget = ctx.createConnectionEventTarget()
+      // Bound to this peer's uuid, so a resolver can drop its own connection without touching the
+      // others. A no-op if called while the value is still being built, since there is nothing
+      // tracked to tear down until the handshake below registers it.
+      const connectionContextValues = { ...peer, abort: () => ctx.abortConnection(message.uuid) }
       let connection: ReturnType<typeof startBidirectionalConnection<TModules>>
       try {
         connection = startBidirectionalConnection<TModules>({
           transport: ctx.transport,
-          value: ctx.valueFor(peer),
+          value: ctx.valueFor(connectionContextValues),
           remoteUuid: message.uuid,
           eventTarget,
           send: (m) => ctx.sendMessage(m as MessageVariant),
@@ -149,7 +153,7 @@ export const init = <TModules extends readonly RevivableModule[]>(
       } satisfies ConnectionContext<TModules>
       ctx.connectionContexts.set(message.uuid, connectionContext)
       connectionContext.connection.remoteValue.then(
-        (remoteValue) => ctx.addConnection(peer, remoteValue),
+        (remoteValue) => ctx.addConnection(connectionContextValues, remoteValue),
         (error) => ctx.rejectRemoteValue(error),
       )
       return
@@ -176,13 +180,15 @@ export const init = <TModules extends readonly RevivableModule[]>(
   })
 
   if (ctx.presetRemoteUuid !== undefined) {
+    const presetRemoteUuid = ctx.presetRemoteUuid
+    const presetContextValues = { ...ctx.declaredContext, abort: () => ctx.abortConnection(presetRemoteUuid) }
     const eventTarget = ctx.createConnectionEventTarget()
     let connection: ReturnType<typeof startBidirectionalConnection<TModules>>
     try {
       connection = startBidirectionalConnection<TModules>({
         transport: ctx.transport,
         // no inbound message to read here, so all this connection knows is what the caller declared
-        value: ctx.valueFor(ctx.declaredContext),
+        value: ctx.valueFor(presetContextValues),
         remoteUuid: ctx.presetRemoteUuid,
         eventTarget,
         send: (m) => ctx.sendMessage(m as MessageVariant),
@@ -199,7 +205,7 @@ export const init = <TModules extends readonly RevivableModule[]>(
     } satisfies ConnectionContext<TModules>
     ctx.connectionContexts.set(ctx.presetRemoteUuid, connectionContext)
     connectionContext.connection.remoteValue.then(
-      (remoteValue) => ctx.addConnection(ctx.declaredContext, remoteValue),
+      (remoteValue) => ctx.addConnection(presetContextValues, remoteValue),
       (error) => ctx.rejectRemoteValue(error),
     )
     return

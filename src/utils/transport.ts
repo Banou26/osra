@@ -20,6 +20,10 @@ import {
  *  `expose` takes a `peer` option rather than only reporting what it can see: without it, every
  *  port-based consumer would rebuild the same out-of-band handshake to learn who it is talking to. */
 export type Context = {
+  /** Tears down THIS connection and nothing else: the peer is sent a close, its revivables are torn
+   *  down, and it stops being tracked. `unregisterSignal` is the whole-expose equivalent; this is the
+   *  one a server reaches for when a single realm misbehaves or is finished with. */
+  abort?: () => void
   origin?: string
   source?: MessageEventSource | null
   port?: MessagePort | WebExtPort

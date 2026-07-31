@@ -126,6 +126,13 @@ export const startConnections = <
     sendMessage,
     protocolEventTarget,
     rejectRemoteValue,
+    abortConnection: (remoteUuid: Uuid) => {
+      const connectionContext = connectionContexts.get(remoteUuid)
+      if (!connectionContext) return
+      connectionContexts.delete(remoteUuid)
+      sendEnvelope({ type: 'close', remoteUuid })
+      runTeardown(connectionContext.connection.revivableContext)
+    },
     addConnection: (ctx, value) => {
       const connection = { ...ctx, value: value as T } as Connection<T>
       resolveFirstConnection(connection)
