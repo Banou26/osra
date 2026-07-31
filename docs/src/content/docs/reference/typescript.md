@@ -26,7 +26,32 @@ Three edges worth knowing:
 
 **Generic functions lose their generics.** Mapped types cannot carry type parameters, so `<T>(x: T) => T` collapses.
 
-**`Remote<unknown>` is `unknown`.** `expose()` with no type argument resolves to `Promise<unknown>`.
+**`Remote<unknown>` is `unknown`.** `expose()` with no type argument resolves to `unknown`.
+
+## Exposed&lt;T&gt; and Connected&lt;T&gt;
+
+`expose()` returns `Exposed<TResult>`, which is a promise and an async iterable of the same thing:
+
+```ts
+type Exposed<TResult> = Promise<TResult> & AsyncIterable<TResult>
+```
+
+`TResult` is `Remote<Peer>` unless you pass `connection`, in which case it is inferred from what that function returns. The function receives a `Connected`:
+
+```ts
+type Connected<TValue> = { value: TValue, context: Context }
+type Context = {
+  abort?: () => void
+  origin?: string
+  source?: MessageEventSource | null
+  port?: MessagePort | WebExtPort
+  sender?: WebExtSender
+}
+```
+
+Which fields of `Context` are populated depends on the transport. See [connections](/guides/connections/).
+
+Naming `Peer` and passing `connection` at once does not work, for the same reason as the module list below: TypeScript has no partial inference, so `expose<Api>()` resets every later type parameter to its default and the inferred result is lost. Annotate the function's parameter as `Connected<Remote<Api>>` instead.
 
 ## The Capable check
 

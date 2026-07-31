@@ -28,9 +28,21 @@ Both sides need the same key. The default is `'__OSRA_DEFAULT_KEY__'`, which is 
 
 If more than one peer answers on the same key, they all connect. Each gets your exposed value and can call into it.
 
-Your `expose()` promise resolves with the **first** peer's value, and stays resolved. The later ones can reach you, but you have no handle on them.
+Awaiting your `expose()` gives the **first** peer's value and stays resolved on it. Iterating gives every peer instead, as each one arrives:
 
-That is a useful shape for broadcast (a background script exposing an API to every content script) and a bad shape when you need to talk to each peer individually. For the second case, make one connection per peer:
+```ts twoslash
+import { expose } from 'osra'
+declare const worker: Worker
+type PeerApi = { ping: () => string }
+// ---cut---
+for await (const peer of expose<PeerApi>({}, { transport: worker })) {
+  peer.ping()
+}
+```
+
+That covers broadcast (a background script exposing an API to every content script) and talking to peers individually, since each iteration is one peer. To learn who each one is, or to drop one, use `connection`. See [connections](/guides/connections/).
+
+The other shape is one connection per peer, which you get for free when the platform hands you a port each time:
 
 ```ts twoslash title="shared-worker.ts"
 import { expose } from 'osra'
@@ -44,7 +56,9 @@ globalThis.addEventListener('connect', event => {
 })
 ```
 
-Every page gets its own port, its own connection and its own `expose()` promise. The same pattern applies to `runtime.onConnect` in an extension.
+Every page gets its own port, its own connection and its own `expose()`. The same pattern applies to `runtime.onConnect` in an extension.
+
+Worth knowing which of the two you want: a port observes nothing about its peer, so a per-port `expose()` learns identity from the scope that created the port. One `expose()` with several peers on a window transport observes each peer's `origin` directly.
 
 ## Naming the ends
 

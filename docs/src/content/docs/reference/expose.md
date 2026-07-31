@@ -4,10 +4,12 @@ description: The full signature, every option, and what the returned promise doe
 ---
 
 ```ts
-expose<Peer>(value, options): Promise<Remote<Peer>>
+expose<Peer>(value, options): Exposed<Remote<Peer>>
 ```
 
-Sends `value` to the peer and returns a promise for the peer's value. Both sides call it. There is no client and no server, only two ends that each expose something.
+Sends `value` to the peer and gives you back the peer's value. Both sides call it. There is no client and no server, only two ends that each expose something.
+
+The result is awaitable and async-iterable. Awaiting gives the first peer, iterating gives every peer as it connects. See [connections](/guides/connections/).
 
 `Peer` is the type the peer exposed. osra maps it through [`Remote<T>`](/reference/typescript/) so what you get back matches what actually arrives. Leave it out on a side that only serves.
 
@@ -26,12 +28,27 @@ Sends `value` to the peer and returns a promise for the peer's value. Both sides
 | `uuid` | random | Pin this instance's id instead of generating one. |
 | `remoteUuid` | | Pin the peer's id and skip the handshake. Set it on both sides or neither. See [multiple peers](/guides/multiple-peers/#uuid-and-remoteuuid). |
 | `revivableModules` | defaults | `defaults => modules`, to add or replace types. See [custom revivables](/guides/custom-revivables/). |
+| `connection` | `({ value }) => value` | What one connection resolves to, for the await and for iteration alike. See [connections](/guides/connections/). |
 
-## The returned promise
+## The result
 
-It resolves once a peer has connected, with that peer's value.
+Awaiting it settles once a peer has connected, with that peer's value.
 
-If several peers answer, it resolves with the **first** one. The others still connect and can call into your value, you just have no handle on them. See [multiple peers](/guides/multiple-peers/).
+If several peers answer, awaiting gives the **first**. Iterating gives all of them, each as it arrives:
+
+```ts twoslash
+import { expose } from 'osra'
+declare const worker: Worker
+type Api = { ping: () => string }
+// ---cut---
+for await (const remote of expose<Api>({}, { transport: worker })) {
+  remote.ping()
+}
+```
+
+Several loops over one `expose()` each see every peer. Peers that connect before anything iterates are buffered, up to 32, and replayed to the first loop that starts.
+
+Pass `connection` to change what a peer resolves to, which is also how you reach its origin and its `abort`. See [connections](/guides/connections/).
 
 It rejects when:
 
@@ -43,7 +60,7 @@ It rejects when:
 
 It stays pending while nobody is there. osra keeps announcing itself, so a peer that appears later still connects.
 
-A side that only serves can ignore the promise entirely. It will not produce an unhandled rejection.
+A side that only serves can ignore the result entirely. It will not produce an unhandled rejection.
 
 ```ts twoslash
 import { expose } from 'osra'

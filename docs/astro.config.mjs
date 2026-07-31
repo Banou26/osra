@@ -41,6 +41,7 @@ export default defineConfig({
             { label: 'identity() and transfer()', slug: 'guides/identity-and-transfer' },
             { label: 'Errors and lifecycle', slug: 'guides/lifecycle' },
             { label: 'Multiple peers', slug: 'guides/multiple-peers' },
+            { label: 'Connections', slug: 'guides/connections' },
             { label: 'Custom revivables', slug: 'guides/custom-revivables' },
           ],
         },

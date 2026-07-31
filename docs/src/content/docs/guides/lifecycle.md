@@ -67,6 +67,25 @@ A signal that is already aborted when you call `expose()` short-circuits: nothin
 
 Aborting does not poison the transport. Calling `expose()` on it again starts a fresh handshake.
 
+## Closing one peer
+
+`unregisterSignal` ends your whole side. To drop a single peer and leave the rest connected, call `abort()` on that connection's context:
+
+```ts twoslash
+import { expose } from 'osra'
+declare const worker: Worker
+declare const allowed: (origin: string | undefined) => boolean
+// ---cut---
+for await (const peer of expose({}, {
+  transport: worker,
+  connection: ({ value, context }) => ({ value, context })
+})) {
+  if (!allowed(peer.context.origin)) peer.context.abort?.()
+}
+```
+
+The peer sees the same close it would see from a full teardown, so its pending calls reject rather than hang. See [connections](/guides/connections/).
+
 ## What survives a close
 
 On a structured transport, promises and streams that ride a real transferred `MessagePort` are independent of the osra connection and keep working after it closes. Anything routed through the connection itself, which is everything on a JSON transport, dies with it.
@@ -78,7 +97,8 @@ So a remote `AbortSignal` is not a liveness check, it will not fire on teardown.
 | Message | What happened |
 |---|---|
 | `osra: connection closed` | Your side aborted, or the peer did. Pending calls, streams and writers all get this. |
-| `osra: peer closed the connection` | The peer went away before the handshake finished. |
+| `osra: peer closed the connection` | The peer went away before the handshake finished, or refused you outright. |
+| `osra: connection aborted` | Your side dropped this one peer with `context.abort()`. |
 | `osra: transport must be able to both emit and receive…` | You passed half a transport. Pair it with `{ emit, receive }`. |
 | `osra: cannot serialize a circular structure` | Break the cycle, or send the shared part once with [`identity()`](/guides/identity-and-transfer/). |
 | `osra: stream exceeded its credit window` | A peer pushed past its grant. Usually a hand-rolled implementation of the protocol. |

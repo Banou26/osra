@@ -21,10 +21,15 @@ const stripNodeModulesPaths = () =>
     },
   })
 
-// Blocks tagged ```ts twoslash are type-checked against the published osra
-// package at build time (the build fails on API drift) and render hover
-// popups with the real types. Keep compilerOptions in sync with
+// Blocks tagged ```ts twoslash are type-checked against the PUBLISHED osra package at build time and
+// render hover popups with the real types. Keep compilerOptions in sync with
 // scripts/check-twoslash.mjs, which is the fast per-file checker.
+//
+// A failing block does NOT fail the build. It silently drops the whole page's body, so the page
+// deploys as a title and nav with no content, and the build still reports success. Documenting an
+// unreleased API therefore blanks every page that mentions it until the release lands. Run
+// `npm run docs-check-twoslash` before pushing docs; a red result there is a blank page, not a
+// warning.
 export default defineEcConfig({
   // Inline the EC styles into each page instead of the shared ec.*.css asset.
   // The external file put every token color and code background in one extra
