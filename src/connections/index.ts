@@ -21,7 +21,7 @@ import { createTypedEventTarget } from '../utils/typed-event-target.js'
 import { getTransferableObjects } from '../utils/transferable.js'
 import { registerOsraMessageListener, sendOsraMessage } from '../utils/transport.js'
 import { runTeardown } from '../utils/teardown.js'
-import { asConnections, createConnectionQueue, isContextual, mergeRevivableModules, normalizeTransport, CONTEXT } from './utils.js'
+import { asConnections, createConnectionQueue, isContextual, mergeRevivableModules, normalizeTransport, CONTEXT, CONTEXT_BUILD } from './utils.js'
 
 export * from './bidirectional.js'
 export * from './relay.js'
@@ -87,6 +87,11 @@ export const startConnections = <
   type MergedModules = typeof mergedRevivableModules
   const connectionContexts = new Map<string, ConnectionContext<MergedModules>>()
 
+  // A builder passed to `context(build, make)` travels with the value, so one definition types the
+  // resolvers AND populates the context. The `context:` option covers a builder defined elsewhere.
+  const contextBuilder = () =>
+    (isContextual(value) ? value[CONTEXT_BUILD] : undefined) ?? buildContext
+
   const connectionQueue = createConnectionQueue<T>()
 
   // Resolves with the FIRST established connection, in the same shape iteration yields, so reading
@@ -114,7 +119,7 @@ export const startConnections = <
 
   const ctx: ProtocolContext<MergedModules> = {
     transport,
-    declaredContext: buildContext?.({}) ?? {},
+    declaredContext: contextBuilder()?.({}) ?? {},
     valueFor: (peer: Context) =>
       (isContextual<Capable<MergedModules>>(value)
         ? value[CONTEXT](peer as Context & Record<string, unknown>)
@@ -156,7 +161,7 @@ export const startConnections = <
       ...(messageContext.sender ? { sender: messageContext.sender } : {}),
     }
     const peer: Context = {
-      ...(buildContext?.(observed) ?? {}),
+      ...(contextBuilder()?.(observed) ?? {}),
       ...(messageContext.origin ? { origin: messageContext.origin } : {}),
       ...(messageContext.source ? { source: messageContext.source } : {}),
       ...(messageContext.port ? { port: messageContext.port } : {}),

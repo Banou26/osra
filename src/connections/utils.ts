@@ -186,14 +186,52 @@ export const asConnections = <T, TDeclared = unknown>(
  *  `typeof value === 'function'` cannot tell a per-peer factory from a plain function value. The
  *  marker makes the intent explicit and unambiguous. */
 export const CONTEXT = Symbol.for('osra.context')
+export const CONTEXT_BUILD = Symbol.for('osra.context.build')
 
-export type Contextual<TValue> = { [CONTEXT]: (ctx: Context & Record<string, unknown>) => TValue }
+/** Custom values a builder puts on the context, on top of what the transport observed. */
+export type ContextBuilder = (observed: Context) => Record<string, unknown>
+
+/** The context a given builder produces: what it returns, plus what osra observes locally. Exported
+ *  so a builder defined elsewhere can type a resolver signature: `(ctx: ContextOf<typeof build>)`. */
+export type ContextOf<TBuild> = TBuild extends (observed: Context) => infer R ? Context & R : Context
+
+export type Contextual<TValue> = {
+  [CONTEXT]: (ctx: Context & Record<string, unknown>) => TValue
+  [CONTEXT_BUILD]?: ContextBuilder
+}
 
 /** Build the exposed value once per connection, from that connection's context, rather than sharing
- *  one value across every realm that connects. */
-export const context = <TValue,>(
-  build: (ctx: Context & Record<string, unknown>) => TValue,
-): Contextual<TValue> => ({ [CONTEXT]: build })
+ *  one value across every realm that connects.
+ *
+ *  Pass the context builder as the first argument and `ctx` is inferred exactly, with no type
+ *  argument to write and no separate `context:` option to keep in sync:
+ *
+ *  ```ts
+ *  expose(
+ *    context(({ origin }) => ({ appId: appIdFor(origin) }), ctx => resolvers(ctx.appId)),
+ *    { transport },
+ *  )
+ *  ```
+ *
+ *  The one-argument form still works when the values come from the `context:` option instead, but
+ *  then `ctx` is only known to carry unknowns, because the two call sites are independent. */
+export function context<TBuild extends ContextBuilder, TValue>(
+  build: TBuild,
+  make: (ctx: ContextOf<TBuild>) => TValue,
+): Contextual<TValue>
+export function context<TValue>(
+  make: (ctx: Context & Record<string, unknown>) => TValue,
+): Contextual<TValue>
+export function context(
+  buildOrMake: ContextBuilder | ((ctx: never) => unknown),
+  make?: (ctx: never) => unknown,
+): Contextual<unknown> {
+  if (!make) return { [CONTEXT]: buildOrMake as (ctx: Context & Record<string, unknown>) => unknown }
+  return {
+    [CONTEXT]: make as (ctx: Context & Record<string, unknown>) => unknown,
+    [CONTEXT_BUILD]: buildOrMake as ContextBuilder,
+  }
+}
 
 export const isContextual = <TValue,>(value: unknown): value is Contextual<TValue> =>
   typeof value === 'object' && value !== null && CONTEXT in value
