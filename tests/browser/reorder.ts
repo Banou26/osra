@@ -82,7 +82,7 @@ export const streamSurvivesReorderingTransport = async () => {
   const { a, b } = transportPair(true)
   const apiA = { stream: async () => sequentialStream(CHUNKS) }
   expose(apiA, { transport: a })
-  const { value: remote } = await expose<typeof apiA>({}, { transport: b })
+  const remote = await expose<typeof apiA>({}, { transport: b })
 
   const received = await readAll(await remote.stream())
   expect(received, 'every chunk delivered').to.have.lengthOf(CHUNKS)
@@ -100,7 +100,7 @@ export const streamSurvivesReorderingRelay = async () => {
 
   const apiA = { stream: async () => sequentialStream(CHUNKS) }
   expose(apiA, { transport: producerSide.a })
-  const { value: remote } = await expose<typeof apiA>({}, { transport: consumerSide.b })
+  const remote = await expose<typeof apiA>({}, { transport: consumerSide.b })
 
   const received = await readAll(await remote.stream())
   expect(received, 'every chunk delivered').to.have.lengthOf(CHUNKS)
@@ -118,7 +118,7 @@ export const callbackBurstSurvivesReorderingTransport = async () => {
     },
   }
   expose(apiA, { transport: a })
-  const { value: remote } = await expose<typeof apiA>({}, { transport: b })
+  const remote = await expose<typeof apiA>({}, { transport: b })
 
   await remote.drive((n) => { seen.push(n) })
   // Let the reversed macrotask batches flush.

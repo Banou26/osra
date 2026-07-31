@@ -16,7 +16,7 @@ export const contextBuilderScopesTheValue = async () => {
     ),
     { transport: port1 },
   )
-  const { value: remote } = await expose<{ who: () => Promise<string> }>({}, { transport: port2 })
+  const remote = await expose<{ who: () => Promise<string> }>({}, { transport: port2 })
   await expect(remote.who()).to.eventually.equal('scoped')
 }
 
@@ -26,7 +26,7 @@ export const bareFunctionValueIsStillAnEndpoint = async () => {
   const { port1, port2 } = newPair()
   const value = async (n: number) => n * 2
   expose(value, { transport: port1 })
-  const { value: remote } = await expose<typeof value>({}, { transport: port2 })
+  const remote = await expose<typeof value>({}, { transport: port2 })
   await expect(remote(21)).to.eventually.equal(42)
 }
 
@@ -42,20 +42,20 @@ export const declaredContextSurvivesOnAPortTransport = async () => {
     ),
     { transport: port1 },
   )
-  const { value: remote } = await expose<{ ping: () => Promise<string> }>({}, { transport: port2 })
+  const remote = await expose<{ ping: () => Promise<string> }>({}, { transport: port2 })
   await expect(remote.ping()).to.eventually.equal('pong')
   expect(seenOrigin, 'a MessagePort observes no origin').to.equal(undefined)
 }
 
 export const iterationYieldsTheConnection = async () => {
   const { port1, port2 } = newPair()
-  const connections = expose(
+  const exposed = expose(
     context(() => ({ ping: async () => 'pong' }), () => ({ appId: 'iterated' })),
     { transport: port1 },
   )
   const seen: Record<string, unknown>[] = []
   const collecting = (async () => {
-    for await (const connection of connections) {
+    for await (const connection of exposed.connections) {
       seen.push(connection)
       break
     }
@@ -67,6 +67,39 @@ export const iterationYieldsTheConnection = async () => {
   expect(typeof seen[0]!.abort).to.equal('function')
 }
 
+// The plain read is the peer's value and `.connections` is the same read wrapped in its identity.
+// Both forms of both views, because the whole point is that the choice sits at the point of use.
+export const valueViewAndConnectionViewAgree = async () => {
+  const { port1, port2 } = newPair()
+  const api = { ping: async () => 'pong' }
+  expose(api, { transport: port1 })
+  const exposed = expose<typeof api>({}, { transport: port2 })
+  const remote = await exposed
+  const connection = await exposed.connections
+  await expect(remote.ping()).to.eventually.equal('pong')
+  expect(connection.value, 'the connection wraps the same remote').to.equal(remote)
+  expect(typeof connection.abort).to.equal('function')
+}
+
+// Two reads of one stream. A shared cursor would let whichever loop ran first eat the peer the other
+// was waiting for, which is the failure that made the queue multicast.
+export const bothViewsSeeEveryPeer = async () => {
+  const { port1, port2 } = newPair()
+  const api = { ping: async () => 'pong' }
+  const exposed = expose<typeof api>({}, { transport: port1 })
+  const values: unknown[] = []
+  const conns: Record<string, unknown>[] = []
+  const collecting = Promise.all([
+    (async () => { for await (const v of exposed) { values.push(v); break } })(),
+    (async () => { for await (const c of exposed.connections) { conns.push(c); break } })(),
+  ])
+  expose(api, { transport: port2 })
+  await Promise.race([collecting, new Promise(resolve => setTimeout(resolve, 3_000))])
+  expect(values, 'the value view saw the peer').to.have.lengthOf(1)
+  expect(conns, 'the connection view saw the same peer').to.have.lengthOf(1)
+  expect(conns[0]!.value).to.equal(values[0])
+}
+
 export const abortClosesOnlyThatConnection = async () => {
   const { port1, port2 } = newPair()
   let abortIt: (() => void) | undefined
@@ -74,7 +107,7 @@ export const abortClosesOnlyThatConnection = async () => {
     context(ctx => { abortIt = ctx.abort; return { ping: async () => 'pong' } }),
     { transport: port1 },
   )
-  const { value: remote } = await expose<{ ping: () => Promise<string> }>({}, { transport: port2 })
+  const remote = await expose<{ ping: () => Promise<string> }>({}, { transport: port2 })
   await expect(remote.ping()).to.eventually.equal('pong')
   expect(abortIt, 'abort is on the context').to.be.a('function')
   abortIt!()
@@ -126,7 +159,7 @@ export const throwingContextFactoryRejectsBothSidesWithPresetUuids = async () =>
 export const unregisterAbortEndsIteration = async () => {
   const { port1, port2 } = newPair()
   const controller = new AbortController()
-  const connections = expose({}, { transport: port1, unregisterSignal: controller.signal })
+  const connections = expose({}, { transport: port1, unregisterSignal: controller.signal }).connections
   expose({}, { transport: port2 })
   let ended = false
   const looping = (async () => {
@@ -142,7 +175,7 @@ export const unregisterAbortEndsIteration = async () => {
 // handed to a dead iterator and neither delivered nor buffered.
 export const abandonedIteratorDoesNotSwallowAConnection = async () => {
   const { port1, port2 } = newPair()
-  const connections = expose({}, { transport: port1 })
+  const connections = expose({}, { transport: port1 }).connections
   const iterator = connections[Symbol.asyncIterator]()
   const firstNext = iterator.next()
   await iterator.return?.()

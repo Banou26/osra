@@ -9,7 +9,7 @@ import type {
   StartConnectionsOptions,
 } from './utils.js'
 import type { MessageContext, Context } from '../utils/transport.js'
-import type { Connection, Connections, Contextual } from './utils.js'
+import type { Connection, Connections, Contextual, Exposed } from './utils.js'
 
 import { OSRA_DEFAULT_KEY, OSRA_KEY } from '../types.js'
 import * as bidirectional from './bidirectional.js'
@@ -21,7 +21,7 @@ import { createTypedEventTarget } from '../utils/typed-event-target.js'
 import { getTransferableObjects } from '../utils/transferable.js'
 import { registerOsraMessageListener, sendOsraMessage } from '../utils/transport.js'
 import { runTeardown } from '../utils/teardown.js'
-import { asConnections, createConnectionQueue, isContextual, mergeRevivableModules, normalizeTransport, CONTEXT, CONTEXT_BUILD } from './utils.js'
+import { asConnections, asExposed, createConnectionQueue, isContextual, mergeRevivableModules, normalizeTransport, CONTEXT, CONTEXT_BUILD } from './utils.js'
 
 export * from './bidirectional.js'
 export * from './relay.js'
@@ -76,7 +76,7 @@ export const startConnections = <
     remoteUuid: presetRemoteUuid,
     context: buildContext,
   }: StartConnectionsOptions<TModules>
-): Connections<T, TDeclared> => {
+): Exposed<T, TDeclared> => {
   const transport = normalizeTransport(_transport)
   if (!(isEmitTransport(transport) && isReceiveTransport(transport))) {
     // A REJECTION, not a throw. `expose` used to be an async function, so this surfaced as a rejected
@@ -91,7 +91,7 @@ export const startConnections = <
       + '; pass a bidirectional platform transport or a custom { emit, receive } pair',
     ))
     rejected.catch(() => {})
-    return asConnections(rejected, queue)
+    return asExposed(asConnections(rejected, queue), queue)
   }
   const mergedRevivableModules = mergeRevivableModules<TModules>(configureRevivableModules)
   type MergedModules = typeof mergedRevivableModules
@@ -107,8 +107,8 @@ export const startConnections = <
 
   const connectionQueue = createConnectionQueue<T, TDeclared>()
 
-  // Resolves with the FIRST established connection, in the same shape iteration yields, so reading
-  // one realm and reading many are the same destructure.
+  // Resolves with the FIRST established connection. The value view derives from this, so both views
+  // settle off one handshake rather than racing two.
   const { promise: firstConnection, resolve: resolveFirstConnection, reject: rejectRemoteValue } =
     Promise.withResolvers<Connection<T, TDeclared>>()
   // Keeps a fire-and-forget `expose(value, …)` (the documented server-side
@@ -159,17 +159,6 @@ export const startConnections = <
     },
     claimPendingAbort: (remoteUuid) => pendingAborts.delete(remoteUuid),
     addConnection: (ctx, value) => {
-      // The one migration hazard the compiler cannot catch. `await expose(...)` now resolves to a
-      // Connection, so `const { value } = await expose(...)` means the remote. A peer whose own api
-      // has a top-level `value` key makes that line keep compiling while silently changing meaning,
-      // so say it out loud once rather than let it surface as a runtime mystery.
-      if (value && typeof value === 'object' && 'value' in (value as object)) {
-        console.warn(
-          'osra: this peer exposes a top-level `value`. `await expose(...)` resolves to a connection,'
-          + ' so `const { value } = await expose(...)` gives the peer itself, not its `.value`.'
-          + ' Destructure as `const { value: remote } = ...` and read `remote.value`.',
-        )
-      }
       const connection = { ...ctx, value: value as T } as Connection<T, TDeclared>
       resolveFirstConnection(connection)
       connectionQueue.push(connection)
@@ -218,7 +207,7 @@ export const startConnections = <
   if (unregisterSignal?.aborted) {
     rejectRemoteValue(unregisterSignal.reason)
     connectionQueue.close()
-    return asConnections(firstConnection, connectionQueue)
+    return asExposed(asConnections(firstConnection, connectionQueue), connectionQueue)
   }
 
   // Abort = explicit local teardown: notify every tracked peer, dispose
@@ -239,5 +228,5 @@ export const startConnections = <
     connectionModule.init(ctx)
   }
 
-  return asConnections(firstConnection, connectionQueue)
+  return asExposed(asConnections(firstConnection, connectionQueue), connectionQueue)
 }

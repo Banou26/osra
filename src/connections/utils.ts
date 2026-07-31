@@ -127,15 +127,25 @@ export type StartConnectionsOptions<
 }
 
 /** An established connection: what this side knows about the realm on the other end, plus the value
- *  that realm exposed. Awaiting `expose` and iterating it both hand back this same shape, so reading
- *  one connection and reading many is the same destructure. */
+ *  that realm exposed. Awaiting `.connections` and iterating it both hand back this same shape, so
+ *  reading one connection and reading many is the same destructure. */
 export type Connection<TValue, TDeclared = unknown> = Context & TDeclared & { value: TValue }
 
-/** The result of `expose`. Awaiting it gives the FIRST peer's value, which is the single-peer case
- *  and what every existing caller does. Iterating it gives every peer as it connects, each with its
- *  own identity, which is what a server embedded by many realms needs. */
+/** The connection view of `expose`. Awaiting it gives the FIRST peer, iterating it gives every peer as
+ *  it connects, and both carry that peer's identity and its own `abort`. */
 export type Connections<TValue, TDeclared = unknown> =
   Promise<Connection<TValue, TDeclared>> & AsyncIterable<Connection<TValue, TDeclared>>
+
+/** The result of `expose`. Awaiting it gives the first peer's value and iterating it gives every
+ *  peer's value, so the plain read is the same shape either way and unchanged from before connections
+ *  existed. `.connections` is the same two reads wrapped in the peer's identity.
+ *
+ *  The choice sits at the point of use rather than in the options, so the shape a line produces is
+ *  visible in that line instead of depending on how the expose was configured somewhere else. */
+export type Exposed<TValue, TDeclared = unknown> =
+  Promise<TValue>
+  & AsyncIterable<TValue>
+  & { connections: Connections<TValue, TDeclared> }
 
 export type ConnectionQueue<TRemote, TDeclared = unknown> = {
   push: (connection: Connection<TRemote, TDeclared>) => void
@@ -143,9 +153,10 @@ export type ConnectionQueue<TRemote, TDeclared = unknown> = {
   iterate: () => AsyncIterableIterator<Connection<TRemote, TDeclared>>
 }
 
-/** Single-consumer: peers that connect before anything iterates are buffered, and two iterators would
- *  split the stream rather than each see every peer. That matches the shape of the problem, where one
- *  server loop accepts connections. */
+/** Multicast: every iterator sees every peer. The value view and the connection view are two reads of
+ *  one stream, so a shared cursor would let `for await (const v of exposed)` silently eat peers that
+ *  `for await (const c of exposed.connections)` was waiting for. Independent cursors also make the
+ *  ordinary "two loops watching the same server" case behave the way it reads. */
 /** Until someone asks to iterate, a connection is buffered only up to this many. Every consumer that
  *  just awaits the first connection would otherwise retain every later one for the transport's life,
  *  each pinning a Remote proxy and a window or MessagePort. Buffering a few keeps the ordinary
@@ -154,51 +165,58 @@ const PRE_ITERATION_BUFFER = 32
 
 /** @internal protocol plumbing, not part of the public api */
 export const createConnectionQueue = <TRemote, TDeclared = unknown>(): ConnectionQueue<TRemote, TDeclared> => {
-  const buffered: Connection<TRemote, TDeclared>[] = []
-  let iterationRequested = false
-  const waiting: ((result: IteratorResult<Connection<TRemote, TDeclared>>) => void)[] = []
+  type Result = IteratorResult<Connection<TRemote, TDeclared>>
+  type Subscriber = { buffered: Connection<TRemote, TDeclared>[], wake?: (result: Result) => void }
+  // Replayed to every iterator that starts later, so `expose` then iterate on a subsequent tick is
+  // lossless for the value view and the connection view alike. Copied rather than drained: draining
+  // would let whichever view iterated first decide what the other one never sees.
+  const early: Connection<TRemote, TDeclared>[] = []
+  const subscribers = new Set<Subscriber>()
   let closed = false
   const done = () => ({ value: undefined as never, done: true as const })
   return {
     push: (connection) => {
       if (closed) return
-      const wake = waiting.shift()
-      if (wake) { wake({ value: connection, done: false }); return }
-      buffered.push(connection)
-      if (!iterationRequested && buffered.length > PRE_ITERATION_BUFFER) buffered.shift()
+      if (subscribers.size === 0) {
+        early.push(connection)
+        if (early.length > PRE_ITERATION_BUFFER) early.shift()
+        return
+      }
+      for (const subscriber of subscribers) {
+        const wake = subscriber.wake
+        if (wake) { subscriber.wake = undefined; wake({ value: connection, done: false }); continue }
+        subscriber.buffered.push(connection)
+      }
     },
     close: () => {
       closed = true
-      for (const wake of waiting.splice(0)) wake(done())
+      for (const subscriber of subscribers) {
+        const wake = subscriber.wake
+        subscriber.wake = undefined
+        wake?.(done())
+      }
     },
     iterate: () => {
-      iterationRequested = true
-      // Per iterator, not shared: abandoning a waiter in `waiting` would hand the next connection to
-      // a dead iterator, which then drops it, and a fresh iterator would never see that peer.
+      // Per iterator, not shared: a waiter left behind by an abandoned iterator would be handed the
+      // next connection, drop it, and a fresh iterator would never see that peer.
+      const subscriber: Subscriber = { buffered: [...early] }
+      subscribers.add(subscriber)
       let finished = false
-      let pending: ((result: IteratorResult<Connection<TRemote, TDeclared>>) => void) | undefined
-      const settleOwn = () => {
-        if (!pending) return
-        const index = waiting.indexOf(pending)
-        if (index !== -1) waiting.splice(index, 1)
-        pending(done())
-        pending = undefined
-      }
       return {
         [Symbol.asyncIterator]() { return this },
         next: () => {
           if (finished) return Promise.resolve(done())
-          const next = buffered.shift()
+          const next = subscriber.buffered.shift()
           if (next) return Promise.resolve({ value: next, done: false as const })
           if (closed) return Promise.resolve(done())
-          return new Promise<IteratorResult<Connection<TRemote, TDeclared>>>((resolve) => {
-            pending = resolve
-            waiting.push(resolve)
-          })
+          return new Promise<Result>((resolve) => { subscriber.wake = resolve })
         },
         return: () => {
           finished = true
-          settleOwn()
+          subscribers.delete(subscriber)
+          const wake = subscriber.wake
+          subscriber.wake = undefined
+          wake?.(done())
           return Promise.resolve(done())
         },
       }
@@ -216,6 +234,24 @@ export const asConnections = <T, TDeclared = unknown>(
   Object.assign(promise, {
     [Symbol.asyncIterator]: () => queue.iterate(),
   }) as Connections<T, TDeclared>
+
+/** The value view, with the connection view hanging off it. The value promise is DERIVED from the
+ *  connection promise, so it needs its own no-op catch: a fire-and-forget `expose(...)` handles the
+ *  original, and an unhandled derived rejection would still reach the console. */
+/** @internal not part of the public api */
+export const asExposed = <T, TDeclared = unknown>(
+  connections: Connections<T, TDeclared>,
+  queue: ConnectionQueue<T, TDeclared>,
+): Exposed<T, TDeclared> => {
+  const value = connections.then(connection => connection.value)
+  value.catch(() => {})
+  return Object.assign(value, {
+    connections,
+    [Symbol.asyncIterator]: async function* () {
+      for await (const connection of { [Symbol.asyncIterator]: () => queue.iterate() }) yield connection.value
+    },
+  }) as Exposed<T, TDeclared>
+}
 
 /** An exposed value can itself be a function - osra exposes functions as endpoints - so a bare
  *  `typeof value === 'function'` cannot tell a per-peer factory from a plain function value. The

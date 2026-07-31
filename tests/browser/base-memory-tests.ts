@@ -7,7 +7,7 @@ export const DEFAULT_ITERATIONS = 100000
 export const functionCallsNoLeak = async (transport: Transport, iterations = DEFAULT_ITERATIONS) => {
   const value = async (data: { foo: number }, bar: string) => data.foo + bar.length
   expose(value, { transport })
-  const { value: remote } = await expose<typeof value>({}, { transport })
+  const remote = await expose<typeof value>({}, { transport })
   for (let i = 0; i < iterations; i++) {
     await remote({ foo: 1 }, 'test')
   }
@@ -16,7 +16,7 @@ export const functionCallsNoLeak = async (transport: Transport, iterations = DEF
 export const callbacksNoLeak = async (transport: Transport, iterations = DEFAULT_ITERATIONS) => {
   const value = async () => async () => 1
   expose(value, { transport })
-  const { value: remote } = await expose<typeof value>({}, { transport })
+  const remote = await expose<typeof value>({}, { transport })
   for (let i = 0; i < iterations; i++) {
     const callback = await remote()
     await callback()
@@ -26,7 +26,7 @@ export const callbacksNoLeak = async (transport: Transport, iterations = DEFAULT
 export const callbackAsArgNoLeak = async (transport: Transport, iterations = DEFAULT_ITERATIONS) => {
   const value = async (callback: () => number) => callback()
   expose(value, { transport })
-  const { value: remote } = await expose<typeof value>({}, { transport })
+  const remote = await expose<typeof value>({}, { transport })
   for (let i = 0; i < iterations; i++) {
     await remote(() => 42)
   }
@@ -38,7 +38,7 @@ export const promiseValuesNoLeak = async (transport: Transport, iterations = DEF
   // from a single expose() doesn't exercise the box/revive churn.
   const value = async (n: number) => ({ inner: Promise.resolve(n) })
   expose(value, { transport })
-  const { value: remote } = await expose<typeof value>({}, { transport })
+  const remote = await expose<typeof value>({}, { transport })
   for (let i = 0; i < iterations; i++) {
     const { inner } = await remote(i)
     await inner
@@ -51,7 +51,7 @@ export const objectMethodsNoLeak = async (transport: Transport, iterations = DEF
     multiply: async (a: number, b: number) => a * b
   }
   expose(value, { transport })
-  const { value: remote } = await expose<typeof value>({}, { transport })
+  const remote = await expose<typeof value>({}, { transport })
   for (let i = 0; i < iterations; i++) {
     await remote.add(1, 2)
     await remote.multiply(3, 4)
@@ -61,7 +61,7 @@ export const objectMethodsNoLeak = async (transport: Transport, iterations = DEF
 export const largeDataTransferNoLeak = async (transport: Transport, iterations = DEFAULT_ITERATIONS) => {
   const value = async (data: Uint8Array) => data.length
   expose(value, { transport })
-  const { value: remote } = await expose<typeof value>({}, { transport })
+  const remote = await expose<typeof value>({}, { transport })
   for (let i = 0; i < iterations; i++) {
     const largeBuffer = new Uint8Array(100 * 1024) // 100KB
     await remote(transfer(largeBuffer))
@@ -71,7 +71,7 @@ export const largeDataTransferNoLeak = async (transport: Transport, iterations =
 export const rapidConnectionNoLeak = async (transport: Transport, iterations = DEFAULT_ITERATIONS) => {
   const value = async () => 'connected'
   expose(value, { transport })
-  const { value: remote } = await expose<typeof value>({}, { transport })
+  const remote = await expose<typeof value>({}, { transport })
   for (let i = 0; i < iterations; i++) {
     await remote()
   }
@@ -83,7 +83,7 @@ export const errorHandlingNoLeak = async (transport: Transport, iterations = DEF
     return 'success'
   }
   expose(value, { transport })
-  const { value: remote } = await expose<typeof value>({}, { transport })
+  const remote = await expose<typeof value>({}, { transport })
   for (let i = 0; i < iterations; i++) {
     await remote(false)
     try { await remote(true) } catch { /* Expected */ }
@@ -93,7 +93,7 @@ export const errorHandlingNoLeak = async (transport: Transport, iterations = DEF
 export const nestedCallbacksNoLeak = async (transport: Transport, iterations = DEFAULT_ITERATIONS) => {
   const value = async (callback: (innerCb: () => number) => number) => callback(() => 42)
   expose(value, { transport })
-  const { value: remote } = await expose<typeof value>({}, { transport })
+  const remote = await expose<typeof value>({}, { transport })
   for (let i = 0; i < iterations; i++) {
     await remote((innerCb) => innerCb() * 2)
   }
@@ -107,7 +107,7 @@ const CONCURRENT_CALL_FAN_OUT = 5
 export const concurrentCallsNoLeak = async (transport: Transport, iterations = DEFAULT_ITERATIONS) => {
   const value = async (id: number) => id * 2
   expose(value, { transport })
-  const { value: remote } = await expose<typeof value>({}, { transport })
+  const remote = await expose<typeof value>({}, { transport })
   const adjusted = Math.ceil(iterations / CONCURRENT_CALL_FAN_OUT)
   for (let i = 0; i < adjusted; i++) {
     await Promise.all([remote(1), remote(2), remote(3), remote(4), remote(5)])
@@ -117,7 +117,7 @@ export const concurrentCallsNoLeak = async (transport: Transport, iterations = D
 export const mapRoundTripNoLeak = async (transport: Transport, iterations = DEFAULT_ITERATIONS) => {
   const value = async (m: Map<string, number>) => m.size
   expose(value, { transport })
-  const { value: remote } = await expose<typeof value>({}, { transport })
+  const remote = await expose<typeof value>({}, { transport })
   for (let i = 0; i < iterations; i++) {
     await remote(new Map([['a', 1], ['b', 2], ['c', 3]]))
   }
@@ -126,7 +126,7 @@ export const mapRoundTripNoLeak = async (transport: Transport, iterations = DEFA
 export const setRoundTripNoLeak = async (transport: Transport, iterations = DEFAULT_ITERATIONS) => {
   const value = async (s: Set<number>) => s.size
   expose(value, { transport })
-  const { value: remote } = await expose<typeof value>({}, { transport })
+  const remote = await expose<typeof value>({}, { transport })
   for (let i = 0; i < iterations; i++) {
     await remote(new Set([1, 2, 3, 4, 5]))
   }
@@ -135,7 +135,7 @@ export const setRoundTripNoLeak = async (transport: Transport, iterations = DEFA
 export const bigIntRoundTripNoLeak = async (transport: Transport, iterations = DEFAULT_ITERATIONS) => {
   const value = async (n: bigint) => n + 1n
   expose(value, { transport })
-  const { value: remote } = await expose<typeof value>({}, { transport })
+  const remote = await expose<typeof value>({}, { transport })
   for (let i = 0; i < iterations; i++) {
     await remote(BigInt(i))
   }
@@ -148,7 +148,7 @@ export const eventTargetDispatchNoLeak = async (transport: Transport, iterations
     fire: async () => { et.dispatchEvent(new CustomEvent('tick', { detail: 1 })) },
   }
   expose(value, { transport })
-  const { value: remote } = await expose<typeof value>({}, { transport })
+  const remote = await expose<typeof value>({}, { transport })
   // Subscribe once and fire repeatedly - exercises the per-dispatch wire
   // overhead (subscribe is one-shot at the 0→1 listener edge).
   remote.et.addEventListener('tick', () => {})

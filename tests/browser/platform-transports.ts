@@ -33,7 +33,7 @@ export const sharedWorkerRpc = async () => {
   )
   try {
     const sharedWorker = new SharedWorker(url)
-    const { value: remote } = await expose<AddApi>({}, { transport: sharedWorker })
+    const remote = await expose<AddApi>({}, { transport: sharedWorker })
     expect(await remote.add(20, 22)).to.equal(42)
   } finally {
     URL.revokeObjectURL(url)
@@ -49,7 +49,7 @@ export const webSocketRpc = async () => {
   try {
     const value = { add: async (a: number, b: number) => a + b }
     expose(value, { transport: socketA })
-    const { value: remote } = await expose<typeof value>({}, { transport: socketB })
+    const remote = await expose<typeof value>({}, { transport: socketB })
     expect(await remote.add(1, 2)).to.equal(3)
   } finally {
     socketA.close()
@@ -63,7 +63,7 @@ export const webSocketCallback = async () => {
   try {
     const value = { run: async (callback: () => Promise<number>) => (await callback()) * 2 }
     expose(value, { transport: socketA })
-    const { value: remote } = await expose<typeof value>({}, { transport: socketB })
+    const remote = await expose<typeof value>({}, { transport: socketB })
     expect(await remote.run(async () => 21)).to.equal(42)
   } finally {
     socketA.close()

@@ -14,7 +14,7 @@ export const argsAndResponseOverChannel = async () => {
   const value = async (data: { foo: number }) => data.foo + 1
   expose(value, { transport: port1 })
 
-  const { value: remote } = await expose<typeof value>({}, { transport: port2 })
+  const remote = await expose<typeof value>({}, { transport: port2 })
 
   await expect(remote({ foo: 41 })).to.eventually.equal(42)
 }
@@ -24,7 +24,7 @@ export const callbackOverChannel = async () => {
   const value = async (cb: () => Promise<number>) => cb()
   expose(value, { transport: port1 })
 
-  const { value: remote } = await expose<typeof value>({}, { transport: port2 })
+  const remote = await expose<typeof value>({}, { transport: port2 })
 
   const result = await remote(async () => 7)
   expect(result).to.equal(7)
@@ -37,7 +37,7 @@ export const arrayBufferOverChannel = async () => {
   const value = { buf: _buf }
   expose(value, { transport: port1 })
 
-  const { value: { buf } } = await expose<typeof value>({}, { transport: port2 })
+  const { buf } = await expose<typeof value>({}, { transport: port2 })
 
   expect(buf).to.be.instanceOf(ArrayBuffer)
   expect(new Uint8Array(buf).slice(0, 8)).to.deep.equal(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]))
@@ -49,7 +49,7 @@ export const messagePortOverChannel = async () => {
   const value = { port: inner.port1 }
   expose(value, { transport: port1 })
 
-  const { value: { port } } = await expose<typeof value>({}, { transport: port2 })
+  const { port } = await expose<typeof value>({}, { transport: port2 })
 
   expect(port).to.be.instanceOf(MessagePort)
 
@@ -67,7 +67,7 @@ export const promiseOverChannel = async () => {
   const value = { p: Promise.resolve('hi') }
   expose(value, { transport: port1 })
 
-  const { value: { p } } = await expose<typeof value>({}, { transport: port2 })
+  const { p } = await expose<typeof value>({}, { transport: port2 })
 
   await expect(p).to.eventually.equal('hi')
 }
@@ -77,7 +77,7 @@ export const mapOverChannel = async () => {
   const value = { m: new Map<string, number>([['a', 1], ['b', 2]]) }
   expose(value, { transport: port1 })
 
-  const { value: { m } } = await expose<typeof value>({}, { transport: port2 })
+  const { m } = await expose<typeof value>({}, { transport: port2 })
 
   expect(m).to.be.instanceOf(Map)
   expect(m.get('a')).to.equal(1)

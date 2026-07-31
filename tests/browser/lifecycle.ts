@@ -65,8 +65,8 @@ export const keyIsolation = async () => {
   expose(valueA, { transport: port1, key: 'channel-a' })
   expose(valueB, { transport: port1, key: 'channel-b' })
 
-  const { value: remoteA } = await expose<typeof valueA>({}, { transport: port2, key: 'channel-a' })
-  const { value: remoteB } = await expose<typeof valueB>({}, { transport: port2, key: 'channel-b' })
+  const remoteA = await expose<typeof valueA>({}, { transport: port2, key: 'channel-a' })
+  const remoteB = await expose<typeof valueB>({}, { transport: port2, key: 'channel-b' })
 
   await expect(remoteA.which()).to.eventually.equal('A')
   await expect(remoteB.which()).to.eventually.equal('B')
@@ -82,7 +82,7 @@ export const remoteNameFiltering = async () => {
   const value = { ping: async () => 'pong' }
   expose(value, { transport: port1, name: 'server' })
 
-  const { value: remote } = await expose<typeof value>(
+  const remote = await expose<typeof value>(
     {},
     { transport: port2, name: 'client', remoteName: 'server' },
   )
@@ -102,7 +102,7 @@ export const customUuidIsUsed = async () => {
   const value = { ping: async () => 'pong' }
   expose(value, { transport: port1 })
 
-  const { value: remote } = await expose<typeof value>(
+  const remote = await expose<typeof value>(
     {},
     { transport: spyTransport(port2, sent), uuid: customUuid },
   )
@@ -133,7 +133,7 @@ export const presetRemoteUuidSkipsAnnounce = async () => {
     remoteUuid: uuidB,
   })
 
-  const { value: remote } = await expose<typeof value>(
+  const remote = await expose<typeof value>(
     {},
     {
       transport: spyTransport(port2, sentFromB),
@@ -167,7 +167,7 @@ export const reregisterAfterCloseContinuesMessaging = async () => {
   expose(serverValue, { transport: port2 })
 
   const controller1 = new AbortController()
-  const { value: client1 } = await expose<typeof serverValue>(
+  const client1 = await expose<typeof serverValue>(
     {},
     { transport: port1, unregisterSignal: controller1.signal },
   )
@@ -175,7 +175,7 @@ export const reregisterAfterCloseContinuesMessaging = async () => {
 
   controller1.abort()
 
-  const { value: client2 } = await expose<typeof serverValue>({}, { transport: port1 })
+  const client2 = await expose<typeof serverValue>({}, { transport: port1 })
   expect(await client2.ping(41)).to.equal(42)
 }
 
@@ -190,8 +190,8 @@ export const keyIsolationOverJson = async () => {
   expose(valueA, { transport: makeJsonTransport(port1), key: 'channel-a' })
   expose(valueB, { transport: makeJsonTransport(port1), key: 'channel-b' })
 
-  const { value: remoteA } = await expose<typeof valueA>({}, { transport: makeJsonTransport(port2), key: 'channel-a' })
-  const { value: remoteB } = await expose<typeof valueB>({}, { transport: makeJsonTransport(port2), key: 'channel-b' })
+  const remoteA = await expose<typeof valueA>({}, { transport: makeJsonTransport(port2), key: 'channel-a' })
+  const remoteB = await expose<typeof valueB>({}, { transport: makeJsonTransport(port2), key: 'channel-b' })
 
   await expect(remoteA.which()).to.eventually.equal('A')
   await expect(remoteB.which()).to.eventually.equal('B')
@@ -227,7 +227,7 @@ export const announceRetrySurvivesLateLink = async () => {
   await new Promise(resolve => setTimeout(resolve, 300))
   linked = true
 
-  const { value: remote } = await remotePromise
+  const remote = await remotePromise
   await expect(remote.ping()).to.eventually.equal('pong')
 
   const announceUuids = new Set(sent.filter(m => m.type === 'announce').map(m => m.uuid))
@@ -264,7 +264,7 @@ export const announceSurvivesThrowingEmit = async () => {
   await new Promise(resolve => setTimeout(resolve, 300))
   linked = true
 
-  const { value: remote } = await remotePromise
+  const remote = await remotePromise
   await expect(remote.ping()).to.eventually.equal('pong')
   expect(failures).to.be.greaterThan(0)
 }

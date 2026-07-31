@@ -9,7 +9,7 @@ export const sameReferenceAcrossArgs = async (transport: Transport) => {
   const value = async (a: () => number, b: () => number) => a === b
   expose(value, { transport })
 
-  const { value: test } = await expose<typeof value>({}, { transport })
+  const test = await expose<typeof value>({}, { transport })
 
   const fn = () => 42
   const result = await test(identity(fn), identity(fn))
@@ -28,7 +28,7 @@ export const sameReferenceAcrossCalls = async (transport: Transport) => {
   }
   expose(value, { transport })
 
-  const { value: remote } = await expose<typeof value>({}, { transport })
+  const remote = await expose<typeof value>({}, { transport })
 
   const fn = () => 42
   await remote.capture(identity(fn))
@@ -57,7 +57,7 @@ export const addRemoveEventListenerPattern = async (transport: Transport) => {
   }
   expose(value, { transport })
 
-  const { value: remote } = await expose<typeof value>({}, { transport })
+  const remote = await expose<typeof value>({}, { transport })
 
   let callCount = 0
   const handler = async () => { callCount++ }
@@ -78,7 +78,7 @@ export const unwrappedValuesClone = async (transport: Transport) => {
   const value = async (a: () => number, b: () => number) => a === b
   expose(value, { transport })
 
-  const { value: test } = await expose<typeof value>({}, { transport })
+  const test = await expose<typeof value>({}, { transport })
 
   const fn = () => 42
   const result = await test(fn, fn)
@@ -113,7 +113,7 @@ export const identityWithFunctionStillCallable = async (transport: Transport) =>
   const value = async (fn: () => number) => fn()
   expose(value, { transport })
 
-  const { value: test } = await expose<typeof value>({}, { transport })
+  const test = await expose<typeof value>({}, { transport })
 
   const fn = () => 42
   const result = await test(identity(fn))
@@ -134,7 +134,7 @@ export const identityTwiceAcrossCallsCallable = async (transport: Transport) => 
   }
   expose(value, { transport })
 
-  const { value: remote } = await expose<typeof value>({}, { transport })
+  const remote = await expose<typeof value>({}, { transport })
 
   const fn = () => 99
   await remote.capture(identity(fn))
@@ -149,7 +149,7 @@ export const identityTwiceAcrossCallsCallable = async (transport: Transport) => 
 export const roundTripReturnsOriginalFunction = async (transport: Transport) => {
   const value = async (fn: () => number) => identity(fn)
   expose(value, { transport })
-  const { value: remote } = await expose<typeof value>({}, { transport })
+  const remote = await expose<typeof value>({}, { transport })
 
   const fn = () => 42
   const echoed = await remote(identity(fn))
@@ -163,7 +163,7 @@ export const roundTripReturnsOriginalFunction = async (transport: Transport) => 
 export const roundTripReturnsOriginalObject = async (transport: Transport) => {
   const value = async (o: { a: number }) => identity(o)
   expose(value, { transport })
-  const { value: remote } = await expose<typeof value>({}, { transport })
+  const remote = await expose<typeof value>({}, { transport })
 
   const obj = { a: 1 }
   const echoed = await remote(identity(obj))
@@ -175,7 +175,7 @@ export const roundTripReturnsOriginalObject = async (transport: Transport) => {
 export const roundTripStableAcrossCalls = async (transport: Transport) => {
   const value = async (fn: () => number) => identity(fn)
   expose(value, { transport })
-  const { value: remote } = await expose<typeof value>({}, { transport })
+  const remote = await expose<typeof value>({}, { transport })
 
   const fn = () => 7
   const [a, b, c] = await Promise.all([
@@ -193,7 +193,7 @@ export const roundTripStableAcrossCalls = async (transport: Transport) => {
 export const roundTripDistinctObjectsStayDistinct = async (transport: Transport) => {
   const value = async (o: { a: number }) => identity(o)
   expose(value, { transport })
-  const { value: remote } = await expose<typeof value>({}, { transport })
+  const remote = await expose<typeof value>({}, { transport })
 
   const obj1 = { a: 1 }
   const obj2 = { a: 1 }

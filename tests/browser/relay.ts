@@ -46,7 +46,7 @@ export const relayedFunctionCall = async () => {
   const apiA = { add: async (a: number, b: number) => a + b }
   expose(apiA, { transport: workerATransport })
 
-  const { value: remoteA } = await expose<typeof apiA>({}, { transport: workerBTransport })
+  const remoteA = await expose<typeof apiA>({}, { transport: workerBTransport })
   await expect(remoteA.add(2, 3)).to.eventually.equal(5)
 }
 
@@ -59,7 +59,7 @@ export const relayedBidirectional = async () => {
   const remoteFromA = expose<typeof apiB>(apiA, { transport: workerATransport })
   const remoteFromB = expose<typeof apiA>(apiB, { transport: workerBTransport })
 
-  const [{ value: bSide }, { value: aSide }] = await Promise.all([remoteFromA, remoteFromB])
+  const [bSide, aSide] = await Promise.all([remoteFromA, remoteFromB])
 
   // workerA sees workerB's api; workerB sees workerA's.
   await expect(bSide.greet('one')).to.eventually.equal('B:one')
@@ -77,7 +77,7 @@ export const relayedCallback = async () => {
   }
   expose(apiA, { transport: workerATransport })
 
-  const { value: remoteA } = await expose<typeof apiA>({}, { transport: workerBTransport })
+  const remoteA = await expose<typeof apiA>({}, { transport: workerBTransport })
   await expect(remoteA.runWith(async n => n + 1)).to.eventually.equal(43)
 }
 
@@ -89,7 +89,7 @@ export const relayedArrayBuffer = async () => {
   const apiA = { getBuf: async () => buf }
   expose(apiA, { transport: workerATransport })
 
-  const { value: remoteA } = await expose<typeof apiA>({}, { transport: workerBTransport })
+  const remoteA = await expose<typeof apiA>({}, { transport: workerBTransport })
   const received = await remoteA.getBuf()
 
   expect(received).to.be.instanceOf(ArrayBuffer)
@@ -104,7 +104,7 @@ export const relayedPromise = async () => {
   const apiA = { fetchValue: async () => Promise.resolve('payload') }
   expose(apiA, { transport: workerATransport })
 
-  const { value: remoteA } = await expose<typeof apiA>({}, { transport: workerBTransport })
+  const remoteA = await expose<typeof apiA>({}, { transport: workerBTransport })
   await expect(remoteA.fetchValue()).to.eventually.equal('payload')
 }
 
@@ -121,7 +121,7 @@ export const relayedUserMessagePortTransfersEndToEnd = async () => {
   const apiA = { takeMyPort: userChannel.port1 }
   expose(apiA, { transport: workerATransport })
 
-  const { value: remoteA } = await expose<typeof apiA>({}, { transport: workerBTransport })
+  const remoteA = await expose<typeof apiA>({}, { transport: workerBTransport })
   expect(remoteA.takeMyPort).to.be.instanceOf(MessagePort)
 
   // Pull the relay out from under the pair - if the user port still works,
@@ -163,8 +163,8 @@ export const relayKeyIsolation = async () => {
   expose(apiA, { transport: chanA.port1, key: 'channel-a' })
   expose(apiB, { transport: chanA.port1, key: 'channel-b' })
 
-  const { value: remoteA } = await expose<typeof apiA>({}, { transport: chanB.port2, key: 'channel-a' })
-  const { value: remoteB } = await expose<typeof apiB>({}, { transport: chanB.port2, key: 'channel-b' })
+  const remoteA = await expose<typeof apiA>({}, { transport: chanB.port2, key: 'channel-a' })
+  const remoteB = await expose<typeof apiB>({}, { transport: chanB.port2, key: 'channel-b' })
 
   await expect(remoteA.which()).to.eventually.equal('A')
   await expect(remoteB.which()).to.eventually.equal('B')

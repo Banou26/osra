@@ -1,7 +1,7 @@
 import type { Capable, Remote } from './types.js'
 import type { DefaultRevivableModules, RevivableContext } from './revivables/index.js'
 import type { RevivableModule } from './revivables/index.js'
-import type { Connections, ContextBuilder, Contextual, StartConnectionsOptions } from './connections/utils.js'
+import type { ContextBuilder, Contextual, Exposed, StartConnectionsOptions } from './connections/utils.js'
 import type { Context, Transport } from './utils/transport.js'
 import type { IsJsonOnlyTransport } from './utils/type-guards.js'
 import type {
@@ -59,11 +59,21 @@ type CapableCheck<
  * each realm differently (scoped resolvers per app) instead of sharing one object across all of them.
  * A bare function stays a plain exposed endpoint, so the wrapper is what disambiguates the two.
  *
- * The result is both awaitable and async-iterable:
+ * The result is both awaitable and async-iterable, and gives the peer's value:
  *
  * ```ts
- * const { value } = await expose(resolvers, { transport })               // the first connection
- * for await (const { origin, value } of expose(context(ctx => resolvers(ctx)), { transport })) { }
+ * const remote = await expose(resolvers, { transport })            // the first peer's value
+ * for await (const remote of expose(resolvers, { transport })) { } // every peer's value
+ * ```
+ *
+ * `.connections` is those same two reads wrapped in the peer's identity, plus an `abort` that drops
+ * that one peer:
+ *
+ * ```ts
+ * const { origin, value } = await expose(resolvers, { transport }).connections
+ * for await (const peer of expose(resolvers, { transport }).connections) {
+ *   if (!allowed(peer.origin)) peer.abort?.()
+ * }
  * ```
  *
  * A peer's identity is whatever the transport can observe merged over whatever the caller declared
@@ -84,7 +94,7 @@ export const expose = <
     | CapableCheck<TValue, TModules, RevivableContextOf<TTransport>>
     | Contextual<CapableCheck<TValue, TModules, RevivableContextOf<TTransport>>, TBuild>,
   options: StartConnectionsOptions<TModules> & { transport: TTransport, context?: TBuild }
-): Connections<Remote<T>, ReturnType<TBuild>> =>
+): Exposed<Remote<T>, ReturnType<TBuild>> =>
   startConnections<Remote<T>, TModules, ReturnType<TBuild>>(
     value as Capable<TModules> | Contextual<Capable<TModules>>,
     options
