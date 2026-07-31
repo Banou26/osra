@@ -83,7 +83,7 @@ const main = async () => {
   // Both peers call expose(). Each hands over its own value and receives the
   // peer's; the client shares nothing, so it passes {}.
   expose(api, { transport: hostSide })
-  const remote: Remote<typeof api> = await expose<typeof api>({}, { transport: clientSide })
+  const { value: remote }: { value: Remote<typeof api> } = await expose<typeof api>({}, { transport: clientSide })
 
   // The Capable check rejects non-serializable values at the expose() call
   // site, at compile time, pinpointing the offending path. Uncommenting:

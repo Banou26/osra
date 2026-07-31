@@ -37,7 +37,7 @@ const makeWorker = (url: string) =>
 const awaitHandshake = async (worker: Worker) => {
   const handshake = expose<Remote>({}, { transport: worker })
   const outcome = await Promise.race([
-    handshake.then(remote => ({ ok: true as const, remote })),
+    handshake.then(({ value: remote }) => ({ ok: true as const, remote })),
     new Promise<{ ok: false }>(r =>
       setTimeout(() => r({ ok: false }), HANDSHAKE_DEADLINE_MS),
     ),

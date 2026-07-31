@@ -78,9 +78,17 @@ export const startConnections = <
 ): Connections<T> => {
   const transport = normalizeTransport(_transport)
   if (!(isEmitTransport(transport) && isReceiveTransport(transport))) {
-    throw new Error(
-      'osra: transport must be able to both emit and receive to establish a connection'
-      + '; pass a bidirectional platform transport or a custom { emit, receive } pair',
+    // A REJECTION, not a throw. `expose` used to be an async function, so this surfaced as a rejected
+    // promise and callers wrote `.catch`; returning Connections directly would have made it throw
+    // synchronously instead and blown past every one of those handlers.
+    const queue = createConnectionQueue<T>()
+    queue.close()
+    return asConnections(
+      Promise.reject(new Error(
+        'osra: transport must be able to both emit and receive to establish a connection'
+        + '; pass a bidirectional platform transport or a custom { emit, receive } pair',
+      )),
+      queue,
     )
   }
   const mergedRevivableModules = mergeRevivableModules<TModules>(configureRevivableModules)

@@ -75,9 +75,9 @@ const resolvers = {
     connect: async () => {
       if (!connectedTabId) throw new Error('No tab connected yet')
       const port = chrome.tabs.connect(connectedTabId, { name: `bg-to-content-${Date.now()}` })
-      bgInitiatedContentApi = await expose<ContentScriptResolvers>(resolvers, {
+      bgInitiatedContentApi = (await expose<ContentScriptResolvers>(resolvers, {
         transport: { isJson: true, emit: port, receive: port }
-      })
+      })).value
       return true
     },
     getInfo: async () => {
@@ -118,9 +118,9 @@ chrome.runtime.onConnect.addListener(async (port) => {
   if (port.name.startsWith('content-')) {
     // Track the tab ID for background-initiated connections
     connectedTabId = port.sender?.tab?.id ?? null
-    contentApi = await expose<ContentScriptResolvers>(resolvers, {
+    contentApi = (await expose<ContentScriptResolvers>(resolvers, {
       transport: { isJson: true, emit: port, receive: port }
-    })
+    })).value
   }
 })
 
@@ -189,5 +189,5 @@ chrome.runtime.onMessage.addListener(function runtimeInitialListener(message, se
     },
   }, {
     transport
-  }).then(api => { runtimeContentApi = api })
+  }).then(({ value }) => { runtimeContentApi = value })
 })
