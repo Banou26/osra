@@ -175,6 +175,53 @@ await remote.transferBuffer(transfer(buffer)) // moved - buffer is detached loca
 | `unregisterSignal` | - | `AbortSignal` that will tear down the connection when aborted |
 | `uuid` / `remoteUuid` | random / - | Same as `name` and `remoteName`, but automatically generated at announce time |
 | `revivableModules` | - | `defaults => modules` function to add, drop, reorder, or override revivable modules |
+| `connection` | `({ value }) => value` | What one connection resolves to, for the await and for iteration alike (see [Connections](#connections)) |
+
+## Connections
+
+`expose()` is awaitable and async-iterable. Awaiting gives the first peer, iterating gives every peer as it connects:
+
+```typescript
+import { expose } from 'osra'
+
+type PeerApi = { version: () => string }
+
+const api = { log: (line: string) => console.log(line) }
+
+// the first peer to connect
+const remote = await expose<PeerApi>(api, { transport: window })
+await remote.version()
+
+// every peer, as each one arrives
+for await (const peer of expose<PeerApi>(api, { transport: window })) {
+  console.log('peer connected, running', await peer.version())
+}
+```
+
+Each loop is one peer, so a page embedding several iframes serves them all from one `expose()`. Several loops over the same `expose()` each see every peer, and peers that connect before anything iterates are buffered and replayed.
+
+Pass `connection` to decide what a peer resolves to, which is also how you reach its origin and its per-peer `abort`:
+
+```typescript
+for await (const peer of expose({}, {
+  transport: window,
+  connection: ({ value, context }) => ({ value, context })
+})) {
+  if (!allowed(peer.context.origin)) peer.context.abort?.()
+}
+```
+
+The context holds only what the transport observed, plus `abort`. A window or iframe gives `origin` and `source`; a WebExtension gives `port` and `sender`; a WebSocket gives the socket URL as `origin`; a `MessagePort` or `Worker` observes nothing at all.
+
+Wrap a value in `context()` to build it once per connection, so one server can answer each realm differently instead of sharing one object with all of them:
+
+```typescript
+import { expose, context } from 'osra'
+
+expose(context(({ origin }) => ({ read: readFor(origin) })), { transport: window })
+```
+
+It runs before your value is sent, so calling `ctx.abort()` inside it refuses that peer outright.
 
 ## Limitations
 
