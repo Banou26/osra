@@ -129,7 +129,7 @@ export const init = <TModules extends readonly RevivableModule[]>(
       // Bound to this peer's uuid, so a resolver can drop its own connection without touching the
       // others. A no-op if called while the value is still being built, since there is nothing
       // tracked to tear down until the handshake below registers it.
-      const connectionContextValues = { ...peer, abort: () => ctx.abortConnection(message.uuid) }
+      const connectionContextValues = { ...peer(), abort: () => ctx.abortConnection(message.uuid) }
       let connection: ReturnType<typeof startBidirectionalConnection<TModules>>
       try {
         connection = startBidirectionalConnection<TModules>({

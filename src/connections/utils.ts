@@ -46,7 +46,9 @@ export type ProtocolEventMap<
 > = {
   // the transport's own view of the inbound message rides along, because that is the only place the
   // peer's origin exists and it is gone by the time a connection module sees the payload
-  message: CustomEvent<{ message: Message<TModules>, peer: Context }>
+  // `peer` is a thunk: only the announce branch needs it, and building it eagerly ran the caller's
+  // context builder on every RPC frame and stream chunk instead of once per connection
+  message: CustomEvent<{ message: Message<TModules>, peer: () => Context }>
 }
 
 export type ProtocolEventTarget<
@@ -121,7 +123,7 @@ export type StartConnectionsOptions<
    *
    *  Observed browser-set fields win over declared ones, so a declaration can never overwrite a real
    *  origin with a made-up one. */
-  context?: (observed: Context) => Context & Record<string, unknown>
+  context?: ContextBuilder
 }
 
 /** An established connection: what this side knows about the realm on the other end, plus the value
@@ -132,9 +134,6 @@ export type Connection<TValue, TDeclared = unknown> = Context & TDeclared & { va
 /** The result of `expose`. Awaiting it gives the FIRST peer's value, which is the single-peer case
  *  and what every existing caller does. Iterating it gives every peer as it connects, each with its
  *  own identity, which is what a server embedded by many realms needs. */
-/** Awaiting gives the FIRST peer's value, which is the single-peer case and what every existing
- *  caller already does. Iterating gives every peer as it connects, each with its own identity. One
- *  object can be both: `await` goes through `then`, `for await` through Symbol.asyncIterator. */
 export type Connections<TValue, TDeclared = unknown> =
   Promise<Connection<TValue, TDeclared>> & AsyncIterable<Connection<TValue, TDeclared>>
 
@@ -153,6 +152,7 @@ export type ConnectionQueue<TRemote, TDeclared = unknown> = {
  *  "expose now, iterate on the next tick" case lossless; a consumer that never iterates cannot leak. */
 const PRE_ITERATION_BUFFER = 32
 
+/** @internal protocol plumbing, not part of the public api */
 export const createConnectionQueue = <TRemote, TDeclared = unknown>(): ConnectionQueue<TRemote, TDeclared> => {
   const buffered: Connection<TRemote, TDeclared>[] = []
   let iterationRequested = false
@@ -208,6 +208,7 @@ export const createConnectionQueue = <TRemote, TDeclared = unknown>(): Connectio
 
 /** Assigns onto the existing promise rather than wrapping it, so `then`, `catch` and `finally` stay
  *  exactly what callers already hold. */
+/** @internal MUTATES its argument; not part of the public api */
 export const asConnections = <T, TDeclared = unknown>(
   promise: Promise<Connection<T, TDeclared>>,
   queue: ConnectionQueue<T, TDeclared>,
@@ -219,7 +220,9 @@ export const asConnections = <T, TDeclared = unknown>(
 /** An exposed value can itself be a function - osra exposes functions as endpoints - so a bare
  *  `typeof value === 'function'` cannot tell a per-peer factory from a plain function value. The
  *  marker makes the intent explicit and unambiguous. */
+/** @internal */
 export const CONTEXT = Symbol.for('osra.context')
+/** @internal */
 export const CONTEXT_BUILD = Symbol.for('osra.context.build')
 
 /** Custom values a builder puts on the context, on top of what the transport observed. */
@@ -229,9 +232,9 @@ export type ContextBuilder = (observed: Context) => Record<string, unknown>
  *  so a builder defined elsewhere can type a resolver signature: `(ctx: ContextOf<typeof build>)`. */
 export type ContextOf<TBuild> = TBuild extends (observed: Context) => infer R ? Context & R : Context
 
-export type Contextual<TValue> = {
+export type Contextual<TValue, TBuild extends ContextBuilder = ContextBuilder> = {
   [CONTEXT]: (ctx: Context & Record<string, unknown>) => TValue
-  [CONTEXT_BUILD]?: ContextBuilder
+  [CONTEXT_BUILD]?: TBuild
 }
 
 /** Build the exposed value once per connection, from that connection's context, rather than sharing
@@ -252,7 +255,7 @@ export type Contextual<TValue> = {
 export function context<TBuild extends ContextBuilder, TValue>(
   make: (ctx: ContextOf<TBuild>) => TValue,
   build: TBuild,
-): Contextual<TValue>
+): Contextual<TValue, TBuild>
 export function context<TValue>(
   make: (ctx: Context & Record<string, unknown>) => TValue,
 ): Contextual<TValue>
@@ -264,5 +267,6 @@ export function context(
   return build ? { ...value, [CONTEXT_BUILD]: build } : value
 }
 
+/** @internal */
 export const isContextual = <TValue,>(value: unknown): value is Contextual<TValue> =>
   typeof value === 'object' && value !== null && CONTEXT in value

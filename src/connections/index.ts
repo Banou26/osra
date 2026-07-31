@@ -60,7 +60,8 @@ export type ConnectionContext<
 
 export const startConnections = <
   T = unknown,
-  const TModules extends readonly RevivableModule[] = DefaultRevivableModules
+  const TModules extends readonly RevivableModule[] = DefaultRevivableModules,
+  TDeclared = unknown
 >(
   value: Capable<TModules> | Contextual<Capable<TModules>>,
   {
@@ -75,13 +76,13 @@ export const startConnections = <
     remoteUuid: presetRemoteUuid,
     context: buildContext,
   }: StartConnectionsOptions<TModules>
-): Connections<T> => {
+): Connections<T, TDeclared> => {
   const transport = normalizeTransport(_transport)
   if (!(isEmitTransport(transport) && isReceiveTransport(transport))) {
     // A REJECTION, not a throw. `expose` used to be an async function, so this surfaced as a rejected
     // promise and callers wrote `.catch`; returning Connections directly would have made it throw
     // synchronously instead and blown past every one of those handlers.
-    const queue = createConnectionQueue<T>()
+    const queue = createConnectionQueue<T, TDeclared>()
     queue.close()
     // same fire-and-forget guard the normal path gets below: `expose(...)` with no await must not
     // surface an unhandled rejection, while an awaiting caller still sees the error
@@ -96,7 +97,7 @@ export const startConnections = <
   type MergedModules = typeof mergedRevivableModules
   const connectionContexts = new Map<string, ConnectionContext<MergedModules>>()
 
-  // A builder passed to `context(build, make)` travels with the value, so one definition types the
+  // A builder passed to `context(make, build)` travels with the value, so one definition types the
   // resolvers AND populates the context. The `context:` option covers a builder defined elsewhere.
   const contextBuilder = () =>
     (isContextual(value) ? value[CONTEXT_BUILD] : undefined) ?? buildContext
@@ -104,12 +105,12 @@ export const startConnections = <
   // uuids aborted before they were registered; consumed by claimPendingAbort at registration
   const pendingAborts = new Set<string>()
 
-  const connectionQueue = createConnectionQueue<T>()
+  const connectionQueue = createConnectionQueue<T, TDeclared>()
 
   // Resolves with the FIRST established connection, in the same shape iteration yields, so reading
   // one realm and reading many are the same destructure.
   const { promise: firstConnection, resolve: resolveFirstConnection, reject: rejectRemoteValue } =
-    Promise.withResolvers<Connection<T>>()
+    Promise.withResolvers<Connection<T, TDeclared>>()
   // Keeps a fire-and-forget `expose(value, …)` (the documented server-side
   // pattern) from surfacing an unhandled rejection on abort/close; awaiting
   // callers still observe the rejection through the original promise.
@@ -127,7 +128,7 @@ export const startConnections = <
     sendEnvelope(message, targetOrigin)
   }
 
-  const protocolEventTarget = createTypedEventTarget<{ message: CustomEvent<{ message: Message<MergedModules>, peer: Context }> }>()
+  const protocolEventTarget = createTypedEventTarget<{ message: CustomEvent<{ message: Message<MergedModules>, peer: () => Context }> }>()
 
   const ctx: ProtocolContext<MergedModules> = {
     transport,
@@ -158,7 +159,7 @@ export const startConnections = <
     },
     claimPendingAbort: (remoteUuid) => pendingAborts.delete(remoteUuid),
     addConnection: (ctx, value) => {
-      const connection = { ...ctx, value: value as T } as Connection<T>
+      const connection = { ...ctx, value: value as T } as Connection<T, TDeclared>
       resolveFirstConnection(connection)
       connectionQueue.push(connection)
     },
@@ -170,22 +171,22 @@ export const startConnections = <
     // own message looped back on the channel
     if (message.uuid === uuid) return
     // Built from LOCAL knowledge only. `messageContext` is what the browser told us about the
-    // delivery (origin, source), which the peer cannot forge; `declaredContext` is what this side
+    // delivery (origin, source), which the peer cannot forge; the caller's builder is what this side
     // already knew. Nothing from the peer's payload participates, and none of this is ever sent.
     // Observed wins over declared, so a declaration cannot overwrite a real origin.
-    const observed: Context = {
+    //
+    // A thunk, because only the announce branch consumes it: building it here ran the caller's
+    // builder on every RPC frame and stream chunk rather than once per connection.
+    const observed = (): Context => ({
       ...(messageContext.origin ? { origin: messageContext.origin } : {}),
       ...(messageContext.source ? { source: messageContext.source } : {}),
       ...(messageContext.port ? { port: messageContext.port } : {}),
       ...(messageContext.sender ? { sender: messageContext.sender } : {}),
-    }
-    const peer: Context = {
-      ...(contextBuilder()?.(observed) ?? {}),
-      ...(messageContext.origin ? { origin: messageContext.origin } : {}),
-      ...(messageContext.source ? { source: messageContext.source } : {}),
-      ...(messageContext.port ? { port: messageContext.port } : {}),
-      ...(messageContext.sender ? { sender: messageContext.sender } : {}),
-    }
+    })
+    const peer = (): Context => ({
+      ...(contextBuilder()?.(observed()) ?? {}),
+      ...observed(),
+    })
     protocolEventTarget.dispatchEvent(
       new CustomEvent('message', { detail: { message: message as Message<MergedModules>, peer } }),
     )

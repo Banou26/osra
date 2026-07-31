@@ -17,7 +17,7 @@ import {
  *  `origin` and `source` are only OBSERVABLE on window transports. A MessagePort message carries
  *  origin "" and source null, so for a port the identity has to be declared by whoever created the
  *  transport, which is the side that received the port over a trustworthy window message. That is why
- *  `expose` takes a `peer` option rather than only reporting what it can see: without it, every
+ *  `expose` takes a `context` option rather than only reporting what it can see: without it, every
  *  port-based consumer would rebuild the same out-of-band handshake to learn who it is talking to. */
 export type Context = {
   /** Tears down THIS connection and nothing else: the peer is sent a close, its revivables are torn
