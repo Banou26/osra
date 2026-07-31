@@ -1,6 +1,6 @@
 import { expect } from 'chai'
 
-import { expose } from '../../src/index'
+import { expose, context } from '../../src/index'
 
 // Platform transports that the parameterized matrix can't cover: a real
 // SharedWorker (messages arrive on .port, which must also be start()ed)
@@ -76,5 +76,33 @@ export const webSocketCallback = async () => {
   } finally {
     socketA.close()
     socketB.close()
+  }
+}
+
+// A window transport is the one shape that observes a peer origin, and it is what a broker embedded
+// in an iframe relies on to know which realm it is serving. srcdoc inherits this page's origin, so
+// the observed value is a real origin rather than an opaque one.
+export const windowTransportObservesThePeerOrigin = async () => {
+  const osraUrl = new URL('/build/index.js', location.href).href
+  const key = `ctx-origin-${globalThis.crypto.randomUUID()}`
+  const iframe = document.createElement('iframe')
+  iframe.srcdoc =
+    `<script type="module">`
+    + `import { expose } from ${JSON.stringify(osraUrl)}\n`
+    + `expose({ ping: async () => 'pong' }, { transport: { receive: window, emit: window.parent }, key: ${JSON.stringify(key)} })`
+    + `</script>`
+  document.body.appendChild(iframe)
+  try {
+    let seen: Record<string, unknown> | undefined
+    const remote = await expose<{ ping: () => Promise<string> }>(
+      context(ctx => { seen = { ...ctx }; return {} }),
+      { transport: { receive: window, emit: iframe.contentWindow as Window }, key },
+    )
+    expect(await remote.ping(), 'the connection works').to.equal('pong')
+    expect(seen?.origin, 'the window transport observes the peer origin').to.equal(location.origin)
+    expect(seen?.source, 'and the peer window itself').to.equal(iframe.contentWindow)
+    expect(typeof seen?.abort).to.equal('function')
+  } finally {
+    iframe.remove()
   }
 }
