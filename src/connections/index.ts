@@ -76,15 +76,14 @@ export const startConnections = <
     uuid: _uuid,
     remoteUuid: presetRemoteUuid,
     context: buildContext,
-    connection: selectConnection,
+    // A connection is the peer's value unless the caller says otherwise, which is what expose has
+    // always resolved to. Its type-level counterpart is `TResult`'s default in src/index.ts: a type
+    // parameter default cannot be read off a value, so those two state the same fact separately and
+    // have to move together.
+    connection: selectConnection = ({ value }) => value,
   }: StartConnectionsOptions<TModules>
 ): Exposed<TResult> => {
-  // Without a `connection:` the result is the peer's value, which is what expose has always given
-  // back. With one, it is whatever that returns.
-  const select = (connected: Connected<T, TDeclared>): TResult =>
-    (selectConnection
-      ? selectConnection(connected as Connected<unknown, Record<string, unknown>>)
-      : connected.value) as TResult
+  const select = selectConnection as (connected: Connected<T, TDeclared>) => TResult
   const transport = normalizeTransport(_transport)
   if (!(isEmitTransport(transport) && isReceiveTransport(transport))) {
     // A REJECTION, not a throw. `expose` used to be an async function, so this surfaced as a rejected
