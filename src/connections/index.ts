@@ -159,6 +159,17 @@ export const startConnections = <
     },
     claimPendingAbort: (remoteUuid) => pendingAborts.delete(remoteUuid),
     addConnection: (ctx, value) => {
+      // The one migration hazard the compiler cannot catch. `await expose(...)` now resolves to a
+      // Connection, so `const { value } = await expose(...)` means the remote. A peer whose own api
+      // has a top-level `value` key makes that line keep compiling while silently changing meaning,
+      // so say it out loud once rather than let it surface as a runtime mystery.
+      if (value && typeof value === 'object' && 'value' in (value as object)) {
+        console.warn(
+          'osra: this peer exposes a top-level `value`. `await expose(...)` resolves to a connection,'
+          + ' so `const { value } = await expose(...)` gives the peer itself, not its `.value`.'
+          + ' Destructure as `const { value: remote } = ...` and read `remote.value`.',
+        )
+      }
       const connection = { ...ctx, value: value as T } as Connection<T, TDeclared>
       resolveFirstConnection(connection)
       connectionQueue.push(connection)
