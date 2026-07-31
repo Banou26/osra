@@ -3,6 +3,7 @@ import type { Transport } from '../../src'
 import { base } from './base-tests'
 import { baseMemory } from './base-memory-tests'
 import { gc } from './gc-tests'
+import * as connectionContext from './connection-context'
 import * as customRevivables from './custom-revivables'
 import * as identityTests from './identity'
 import * as transferTests from './transfer'
@@ -50,6 +51,7 @@ export const gcTests: Readonly<Record<string, (transport: Transport) => Promise<
 
 // Standalone: no transport parameterization. One execution per test.
 export const standaloneTests: Readonly<Record<string, Readonly<Record<string, () => Promise<void>>>>> = {
+  ConnectionContext: fns(connectionContext),
   EventPort: fns(eventPort),
   Lifecycle: fns(lifecycle),
   MessageChannelTransport: fns(messageChannel),

@@ -79,6 +79,8 @@ export type ProtocolContext<
   addConnection: (ctx: Context, value: Capable<TModules>) => void
   /** tears down one connection: close to the peer, teardown locally, drop it from tracking */
   abortConnection: (remoteUuid: Uuid) => void
+  /** true when this uuid was aborted before it was registered, which means refuse the registration */
+  claimPendingAbort: (remoteUuid: Uuid) => boolean
   createConnectionEventTarget: () => TypedEventTarget<MessageEventMap<TModules>>
   unregisterSignal?: AbortSignal
 }
@@ -145,8 +147,15 @@ export type ConnectionQueue<TRemote, TDeclared = unknown> = {
 /** Single-consumer: peers that connect before anything iterates are buffered, and two iterators would
  *  split the stream rather than each see every peer. That matches the shape of the problem, where one
  *  server loop accepts connections. */
+/** Until someone asks to iterate, a connection is buffered only up to this many. Every consumer that
+ *  just awaits the first connection would otherwise retain every later one for the transport's life,
+ *  each pinning a Remote proxy and a window or MessagePort. Buffering a few keeps the ordinary
+ *  "expose now, iterate on the next tick" case lossless; a consumer that never iterates cannot leak. */
+const PRE_ITERATION_BUFFER = 32
+
 export const createConnectionQueue = <TRemote, TDeclared = unknown>(): ConnectionQueue<TRemote, TDeclared> => {
   const buffered: Connection<TRemote, TDeclared>[] = []
+  let iterationRequested = false
   const waiting: ((result: IteratorResult<Connection<TRemote, TDeclared>>) => void)[] = []
   let closed = false
   const done = () => ({ value: undefined as never, done: true as const })
@@ -154,14 +163,16 @@ export const createConnectionQueue = <TRemote, TDeclared = unknown>(): Connectio
     push: (connection) => {
       if (closed) return
       const wake = waiting.shift()
-      if (wake) wake({ value: connection, done: false })
-      else buffered.push(connection)
+      if (wake) { wake({ value: connection, done: false }); return }
+      buffered.push(connection)
+      if (!iterationRequested && buffered.length > PRE_ITERATION_BUFFER) buffered.shift()
     },
     close: () => {
       closed = true
       for (const wake of waiting.splice(0)) wake(done())
     },
     iterate: () => {
+      iterationRequested = true
       // Per iterator, not shared: abandoning a waiter in `waiting` would hand the next connection to
       // a dead iterator, which then drops it, and a fresh iterator would never see that peer.
       let finished = false

@@ -101,6 +101,9 @@ export const startConnections = <
   const contextBuilder = () =>
     (isContextual(value) ? value[CONTEXT_BUILD] : undefined) ?? buildContext
 
+  // uuids aborted before they were registered; consumed by claimPendingAbort at registration
+  const pendingAborts = new Set<string>()
+
   const connectionQueue = createConnectionQueue<T>()
 
   // Resolves with the FIRST established connection, in the same shape iteration yields, so reading
@@ -142,7 +145,10 @@ export const startConnections = <
     rejectRemoteValue,
     abortConnection: (remoteUuid: Uuid) => {
       const connectionContext = connectionContexts.get(remoteUuid)
-      if (!connectionContext) return
+      // Raised from inside the value factory, which runs BEFORE the connection is registered. Record
+      // it so registration refuses instead of silently completing: the deny pattern
+      // `ctx.abort()` used to hand the peer a working connection anyway.
+      if (!connectionContext) { pendingAborts.add(remoteUuid); return }
       connectionContexts.delete(remoteUuid)
       sendEnvelope({ type: 'close', remoteUuid })
       runTeardown(connectionContext.connection.revivableContext)
@@ -150,6 +156,7 @@ export const startConnections = <
       // init at the untracked-peer guard, so nothing would ever settle the caller's promise.
       rejectRemoteValue(new Error('osra: connection aborted'))
     },
+    claimPendingAbort: (remoteUuid) => pendingAborts.delete(remoteUuid),
     addConnection: (ctx, value) => {
       const connection = { ...ctx, value: value as T } as Connection<T>
       resolveFirstConnection(connection)

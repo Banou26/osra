@@ -141,8 +141,10 @@ export const init = <TModules extends readonly RevivableModule[]>(
           revivableModules: ctx.revivableModules
         })
       } catch (error) {
-        // Boxing our own value failed (e.g. cyclic data) - surface it
-        // instead of swallowing inside EventTarget dispatch.
+        // Building or boxing our own value failed: a context factory that threw or refused, or
+        // cyclic data. Surface it locally instead of swallowing it inside EventTarget dispatch, AND
+        // tell the peer, or its own expose() waits on a handshake that will never come.
+        ctx.sendMessage({ type: 'close', remoteUuid: message.uuid })
         ctx.rejectRemoteValue(error)
         return
       }
@@ -151,6 +153,13 @@ export const init = <TModules extends readonly RevivableModule[]>(
         eventTarget,
         connection,
       } satisfies ConnectionContext<TModules>
+      // The factory ran above and may have called ctx.abort(). Refuse here rather than register a
+      // connection the value's own author already rejected.
+      if (ctx.claimPendingAbort(message.uuid)) {
+        ctx.sendMessage({ type: 'close', remoteUuid: message.uuid })
+        runTeardown(connection.revivableContext)
+        return
+      }
       ctx.connectionContexts.set(message.uuid, connectionContext)
       connectionContext.connection.remoteValue.then(
         (remoteValue) => ctx.addConnection(connectionContextValues, remoteValue),
@@ -198,6 +207,7 @@ export const init = <TModules extends readonly RevivableModule[]>(
         revivableModules: ctx.revivableModules
       })
     } catch (error) {
+      ctx.sendMessage({ type: 'close', remoteUuid: presetRemoteUuid })
       ctx.rejectRemoteValue(error)
       return
     }
@@ -206,6 +216,11 @@ export const init = <TModules extends readonly RevivableModule[]>(
       eventTarget,
       connection,
     } satisfies ConnectionContext<TModules>
+    if (ctx.claimPendingAbort(presetRemoteUuid)) {
+      ctx.sendMessage({ type: 'close', remoteUuid: presetRemoteUuid })
+      runTeardown(connection.revivableContext)
+      return
+    }
     ctx.connectionContexts.set(ctx.presetRemoteUuid, connectionContext)
     connectionContext.connection.remoteValue.then(
       (remoteValue) => ctx.addConnection(presetContextValues, remoteValue),
