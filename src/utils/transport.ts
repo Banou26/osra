@@ -12,6 +12,20 @@ import {
   isWebExtensionPort, isWebExtensionRuntime, isWebSocket, isWindow, isSharedWorker
 } from './type-guards.js'
 
+/** What the local side knows about the realm on the other end of a connection.
+ *
+ *  `origin` and `source` are only OBSERVABLE on window transports. A MessagePort message carries
+ *  origin "" and source null, so for a port the identity has to be declared by whoever created the
+ *  transport, which is the side that received the port over a trustworthy window message. That is why
+ *  `expose` takes a `peer` option rather than only reporting what it can see: without it, every
+ *  port-based consumer would rebuild the same out-of-band handshake to learn who it is talking to. */
+export type Context = {
+  origin?: string
+  source?: MessageEventSource | null
+  port?: MessagePort | WebExtPort
+  sender?: WebExtSender
+}
+
 export type MessageContext = {
   port?: MessagePort | WebExtPort // WebExtension
   sender?: WebExtSender // WebExtension

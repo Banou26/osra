@@ -8,7 +8,8 @@ import type {
   ProtocolContext,
   StartConnectionsOptions,
 } from './utils.js'
-import type { MessageContext } from '../utils/transport.js'
+import type { MessageContext, Context } from '../utils/transport.js'
+import type { Connections, Contextual } from './utils.js'
 
 import { OSRA_DEFAULT_KEY, OSRA_KEY } from '../types.js'
 import * as bidirectional from './bidirectional.js'
@@ -20,7 +21,7 @@ import { createTypedEventTarget } from '../utils/typed-event-target.js'
 import { getTransferableObjects } from '../utils/transferable.js'
 import { registerOsraMessageListener, sendOsraMessage } from '../utils/transport.js'
 import { runTeardown } from '../utils/teardown.js'
-import { mergeRevivableModules, normalizeTransport } from './utils.js'
+import { asConnections, createPeerQueue, isContextual, mergeRevivableModules, normalizeTransport, CONTEXT } from './utils.js'
 
 export * from './bidirectional.js'
 export * from './relay.js'
@@ -61,7 +62,7 @@ export const startConnections = <
   T = unknown,
   const TModules extends readonly RevivableModule[] = DefaultRevivableModules
 >(
-  value: Capable<TModules>,
+  value: Capable<TModules> | Contextual<Capable<TModules>>,
   {
     transport: _transport,
     name,
@@ -72,8 +73,9 @@ export const startConnections = <
     revivableModules: configureRevivableModules,
     uuid: _uuid,
     remoteUuid: presetRemoteUuid,
+    context: declaredContext = {},
   }: StartConnectionsOptions<TModules>
-): Promise<T> => {
+): Connections<T> => {
   const transport = normalizeTransport(_transport)
   if (!(isEmitTransport(transport) && isReceiveTransport(transport))) {
     throw new Error(
@@ -84,6 +86,8 @@ export const startConnections = <
   const mergedRevivableModules = mergeRevivableModules<TModules>(configureRevivableModules)
   type MergedModules = typeof mergedRevivableModules
   const connectionContexts = new Map<string, ConnectionContext<MergedModules>>()
+
+  const peerQueue = createPeerQueue<T>()
 
   const { promise: remoteValuePromise, resolve: resolveRemoteValue, reject: rejectRemoteValue } =
     Promise.withResolvers<Capable<MergedModules>>()
@@ -104,11 +108,15 @@ export const startConnections = <
     sendEnvelope(message, targetOrigin)
   }
 
-  const protocolEventTarget = createTypedEventTarget<{ message: CustomEvent<Message<MergedModules>> }>()
+  const protocolEventTarget = createTypedEventTarget<{ message: CustomEvent<{ message: Message<MergedModules>, peer: Context }> }>()
 
   const ctx: ProtocolContext<MergedModules> = {
     transport,
-    value: value as Capable<MergedModules>,
+    declaredContext,
+    valueFor: (peer: Context) =>
+      (isContextual<Capable<MergedModules>>(value)
+        ? value[CONTEXT](peer as Context & Record<string, unknown>)
+        : value) as Capable<MergedModules>,
     revivableModules: mergedRevivableModules,
     connectionContexts,
     getUuid: () => uuid,
@@ -117,15 +125,25 @@ export const startConnections = <
     protocolEventTarget,
     resolveRemoteValue,
     rejectRemoteValue,
+    addPeer: (peer, remote) => peerQueue.push({ ...peer, remote: remote as T }),
     createConnectionEventTarget: createTypedEventTarget,
     unregisterSignal,
   }
 
-  const listener = (message: Message, _: MessageContext) => {
+  const listener = (message: Message, messageContext: MessageContext) => {
     // own message looped back on the channel
     if (message.uuid === uuid) return
+    // A port carries neither origin nor source, so what the caller declared wins there; a window
+    // message carries both and they are browser-set, so they win over anything declared.
+    const peer: Context = {
+      ...declaredContext,
+      ...(messageContext.origin ? { origin: messageContext.origin } : {}),
+      ...(messageContext.source ? { source: messageContext.source } : {}),
+      ...(messageContext.port ? { port: messageContext.port } : {}),
+      ...(messageContext.sender ? { sender: messageContext.sender } : {}),
+    }
     protocolEventTarget.dispatchEvent(
-      new CustomEvent('message', { detail: message as Message<MergedModules> }),
+      new CustomEvent('message', { detail: { message: message as Message<MergedModules>, peer } }),
     )
   }
 
@@ -143,7 +161,8 @@ export const startConnections = <
   // so the listener below would leave the promise pending forever.
   if (unregisterSignal?.aborted) {
     rejectRemoteValue(unregisterSignal.reason)
-    return remoteValuePromise as Promise<T>
+    peerQueue.close()
+    return asConnections(remoteValuePromise as Promise<T>, peerQueue)
   }
 
   // Abort = explicit local teardown: notify every tracked peer, dispose
@@ -161,5 +180,5 @@ export const startConnections = <
     connectionModule.init(ctx)
   }
 
-  return remoteValuePromise as Promise<T>
+  return asConnections(remoteValuePromise as Promise<T>, peerQueue)
 }

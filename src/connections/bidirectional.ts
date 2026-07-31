@@ -113,7 +113,7 @@ export const init = <TModules extends readonly RevivableModule[]>(
 ): void => {
   if (!(isEmitTransport(ctx.transport) && isReceiveTransport(ctx.transport))) return
 
-  ctx.protocolEventTarget.addEventListener('message', ({ detail: message }) => {
+  ctx.protocolEventTarget.addEventListener('message', ({ detail: { message, peer } }) => {
     if (message.type === 'announce') {
       if (!message.remoteUuid) {
         ctx.sendMessage({ type: 'announce', remoteUuid: message.uuid })
@@ -130,7 +130,7 @@ export const init = <TModules extends readonly RevivableModule[]>(
       try {
         connection = startBidirectionalConnection<TModules>({
           transport: ctx.transport,
-          value: ctx.value,
+          value: ctx.valueFor(peer),
           remoteUuid: message.uuid,
           eventTarget,
           send: (m) => ctx.sendMessage(m as MessageVariant),
@@ -149,7 +149,10 @@ export const init = <TModules extends readonly RevivableModule[]>(
       } satisfies ConnectionContext<TModules>
       ctx.connectionContexts.set(message.uuid, connectionContext)
       connectionContext.connection.remoteValue.then(
-        (remoteValue) => ctx.resolveRemoteValue(remoteValue),
+        (remoteValue) => {
+          ctx.resolveRemoteValue(remoteValue)
+          ctx.addPeer(peer, remoteValue)
+        },
         (error) => ctx.rejectRemoteValue(error),
       )
       return
@@ -181,7 +184,8 @@ export const init = <TModules extends readonly RevivableModule[]>(
     try {
       connection = startBidirectionalConnection<TModules>({
         transport: ctx.transport,
-        value: ctx.value,
+        // no inbound message to read here, so all this connection knows is what the caller declared
+        value: ctx.valueFor(ctx.declaredContext),
         remoteUuid: ctx.presetRemoteUuid,
         eventTarget,
         send: (m) => ctx.sendMessage(m as MessageVariant),
@@ -198,7 +202,10 @@ export const init = <TModules extends readonly RevivableModule[]>(
     } satisfies ConnectionContext<TModules>
     ctx.connectionContexts.set(ctx.presetRemoteUuid, connectionContext)
     connectionContext.connection.remoteValue.then(
-      (remoteValue) => ctx.resolveRemoteValue(remoteValue),
+      (remoteValue) => {
+        ctx.resolveRemoteValue(remoteValue)
+        ctx.addPeer(ctx.declaredContext, remoteValue)
+      },
       (error) => ctx.rejectRemoteValue(error),
     )
     return

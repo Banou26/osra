@@ -1,8 +1,8 @@
 import type { Capable, Remote } from './types.js'
 import type { DefaultRevivableModules, RevivableContext } from './revivables/index.js'
 import type { RevivableModule } from './revivables/index.js'
-import type { StartConnectionsOptions } from './connections/utils.js'
-import type { Transport } from './utils/transport.js'
+import type { Connections, Contextual, StartConnectionsOptions } from './connections/utils.js'
+import type { Context, Transport } from './utils/transport.js'
 import type { IsJsonOnlyTransport } from './utils/type-guards.js'
 import type {
   BadFieldValue, BadFieldPath, BadFieldParent,
@@ -50,16 +50,37 @@ type CapableCheck<
         [ParentObject]: BadFieldParent<T, Capable<TModules, Ctx>>
       }
 
-export const expose = async <
+/**
+ * Expose a value to whoever connects, and get back what they exposed.
+ *
+ * Wrap `value` in `context` to build it once per connection, which is what lets one server answer
+ * each realm differently (scoped resolvers per app) instead of sharing one object across all of them.
+ * A bare function stays a plain exposed endpoint, so the wrapper is what disambiguates the two.
+ *
+ * The result is both awaitable and async-iterable:
+ *
+ * ```ts
+ * const remote = await expose(resolvers, { transport })                  // the first peer
+ * for await (const { origin, remote } of expose(context(ctx => resolvers(ctx)), { transport })) { }
+ * ```
+ *
+ * A peer's identity is whatever the transport can observe merged over whatever the caller declared
+ * in `peer`. Only a window message carries a browser-set origin and source; a MessagePort message
+ * carries neither, so a port-based server declares what it learned when it received the port.
+ * Observed fields win over declared ones, so a declaration can never spoof a real origin.
+ */
+export const expose = <
   T = unknown,
   const TModules extends readonly RevivableModule[] = DefaultRevivableModules,
   const TTransport extends Transport = Transport,
   const TValue = Capable<TModules, ContextOf<TTransport>>
 >(
-  value: CapableCheck<TValue, TModules, ContextOf<TTransport>>,
+  value:
+    | CapableCheck<TValue, TModules, ContextOf<TTransport>>
+    | Contextual<CapableCheck<TValue, TModules, ContextOf<TTransport>>>,
   options: StartConnectionsOptions<TModules> & { transport: TTransport }
-): Promise<Remote<T>> =>
+): Connections<Remote<T>> =>
   startConnections<Remote<T>, TModules>(
-    value as Capable<TModules>,
+    value as Capable<TModules> | Contextual<Capable<TModules>>,
     options
   )
