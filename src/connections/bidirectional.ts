@@ -149,10 +149,7 @@ export const init = <TModules extends readonly RevivableModule[]>(
       } satisfies ConnectionContext<TModules>
       ctx.connectionContexts.set(message.uuid, connectionContext)
       connectionContext.connection.remoteValue.then(
-        (remoteValue) => {
-          ctx.resolveRemoteValue(remoteValue)
-          ctx.addPeer(peer, remoteValue)
-        },
+        (remoteValue) => ctx.addConnection(peer, remoteValue),
         (error) => ctx.rejectRemoteValue(error),
       )
       return
@@ -202,10 +199,7 @@ export const init = <TModules extends readonly RevivableModule[]>(
     } satisfies ConnectionContext<TModules>
     ctx.connectionContexts.set(ctx.presetRemoteUuid, connectionContext)
     connectionContext.connection.remoteValue.then(
-      (remoteValue) => {
-        ctx.resolveRemoteValue(remoteValue)
-        ctx.addPeer(ctx.declaredContext, remoteValue)
-      },
+      (remoteValue) => ctx.addConnection(ctx.declaredContext, remoteValue),
       (error) => ctx.rejectRemoteValue(error),
     )
     return

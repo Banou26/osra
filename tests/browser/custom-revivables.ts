@@ -37,7 +37,7 @@ export const userPoint = async (transport: Transport) => {
   }
   expose(value, { transport, revivableModules: withPoint })
 
-  const test = await expose<typeof value, ReturnType<typeof withPoint>>(
+  const { value: test } = await expose<typeof value, ReturnType<typeof withPoint>>(
     {},
     { transport, revivableModules: withPoint },
   )
@@ -53,7 +53,7 @@ export const userPointReturn = async (transport: Transport) => {
   const value = async () => new Point(1, 2)
   expose(value, { transport, revivableModules: withPoint })
 
-  const test = await expose<typeof value, ReturnType<typeof withPoint>>(
+  const { value: test } = await expose<typeof value, ReturnType<typeof withPoint>>(
     {},
     { transport, revivableModules: withPoint },
   )
@@ -68,7 +68,7 @@ export const userPointDefaultsStillWork = async (transport: Transport) => {
   const value = async () => new Date('2026-04-08T00:00:00.000Z')
   expose(value, { transport, revivableModules: withPoint })
 
-  const test = await expose<typeof value, ReturnType<typeof withPoint>>(
+  const { value: test } = await expose<typeof value, ReturnType<typeof withPoint>>(
     {},
     { transport, revivableModules: withPoint },
   )

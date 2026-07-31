@@ -13,7 +13,7 @@ const hashToHex = async (arrayBuffer: BufferSource) =>
 export const unwrappedBufferIsCopied = async (transport: Transport) => {
   const value = async (data: ArrayBuffer) => data.byteLength
   expose(value, { transport })
-  const remote = await expose<typeof value>({}, { transport })
+  const { value: remote } = await expose<typeof value>({}, { transport })
 
   const buffer = new ArrayBuffer(1024)
   new Uint8Array(buffer).fill(7)
@@ -29,7 +29,7 @@ export const unwrappedBufferIsCopied = async (transport: Transport) => {
 export const transferredBufferIsDetached = async (transport: Transport) => {
   const value = async (data: ArrayBuffer) => data.byteLength
   expose(value, { transport })
-  const remote = await expose<typeof value>({}, { transport })
+  const { value: remote } = await expose<typeof value>({}, { transport })
 
   const buffer = new ArrayBuffer(1024)
   new Uint8Array(buffer).fill(5)
@@ -49,8 +49,8 @@ export const transferredBufferIsDetached = async (transport: Transport) => {
 export const broadcastUnwrappedWorks = async (transport: Transport) => {
   const value = async (data: ArrayBuffer) => data.byteLength
   expose(value, { transport })
-  const remote1 = await expose<typeof value>({}, { transport })
-  const remote2 = await expose<typeof value>({}, { transport })
+  const { value: remote1 } = await expose<typeof value>({}, { transport })
+  const { value: remote2 } = await expose<typeof value>({}, { transport })
 
   const buffer = new ArrayBuffer(512)
   new Uint8Array(buffer).fill(9)
@@ -88,7 +88,7 @@ export const transferIsIdempotentTypedArray = async (_transport: Transport) => {
 export const transferTwiceInlineStillTransfers = async (transport: Transport) => {
   const value = async (data: ArrayBuffer) => data.byteLength
   expose(value, { transport })
-  const remote = await expose<typeof value>({}, { transport })
+  const { value: remote } = await expose<typeof value>({}, { transport })
 
   const buffer = new ArrayBuffer(128)
   const result = await remote(transfer(transfer(buffer)))
@@ -102,7 +102,7 @@ export const transferTwiceInlineStillTransfers = async (transport: Transport) =>
 export const transferTypedArrayMovesUnderlyingBuffer = async (transport: Transport) => {
   const value = async (data: Uint8Array) => data.length
   expose(value, { transport })
-  const remote = await expose<typeof value>({}, { transport })
+  const { value: remote } = await expose<typeof value>({}, { transport })
 
   const u8 = new Uint8Array(256)
   u8.fill(3)
@@ -131,7 +131,7 @@ export const transferReadableStream = async (transport: Transport) => {
     return received.join('')
   }
   expose(value, { transport })
-  const remote = await expose<typeof value>({}, { transport })
+  const { value: remote } = await expose<typeof value>({}, { transport })
 
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -163,7 +163,7 @@ export const nonTransferablesAreNoOp = async (_transport: Transport) => {
 export const transferDoesNotCrashNonTransferable = async (transport: Transport) => {
   const value = async (data: { foo: number }) => data.foo
   expose(value, { transport })
-  const remote = await expose<typeof value>({}, { transport })
+  const { value: remote } = await expose<typeof value>({}, { transport })
 
   // transfer({ foo: 1 }) returns the object unchanged; the RPC should still succeed.
   const result = await remote(transfer({ foo: 7 }) as { foo: number })
@@ -179,7 +179,7 @@ export const messagePortStillTransfersWithoutWrapper = async (transport: Transpo
     port1: _port1,
   }
   expose(value, { transport })
-  const { port1 } = await expose<typeof value>({}, { transport })
+  const { value: { port1 } } = await expose<typeof value>({}, { transport })
 
   let port1Resolve: (value: number) => void
   const port1Promise = new Promise<number>(resolve => { port1Resolve = resolve })
@@ -206,7 +206,7 @@ export const messagePortStillTransfersWithoutWrapper = async (transport: Transpo
 export const transferredBufferDataRoundTrips = async (transport: Transport) => {
   const value = async (data: ArrayBuffer) => new Uint8Array(data).toHex() as string
   expose(value, { transport })
-  const remote = await expose<typeof value>({}, { transport })
+  const { value: remote } = await expose<typeof value>({}, { transport })
 
   const buffer = new ArrayBuffer(64)
   const u8 = new Uint8Array(buffer)
@@ -232,7 +232,7 @@ export const offscreenCanvasTransfersAsCanvas = async (transport: Transport) => 
     return { isCanvas: canvas instanceof OffscreenCanvas, width: canvas.width, height: canvas.height, r, g, b, a }
   }
   expose(value, { transport })
-  const remote = await expose<typeof value>({}, { transport })
+  const { value: remote } = await expose<typeof value>({}, { transport })
 
   const canvas = new OffscreenCanvas(48, 24)
   const result = await remote(transfer(canvas))
@@ -256,7 +256,7 @@ export const videoFrameTransferDetachesSource = async (transport: Transport) => 
     return info
   }
   expose(value, { transport })
-  const remote = await expose<typeof value>({}, { transport })
+  const { value: remote } = await expose<typeof value>({}, { transport })
 
   const frame = new VideoFrame(new Uint8Array(2 * 2 * 4).fill(127), {
     format: 'RGBA', codedWidth: 2, codedHeight: 2, timestamp: 0,
@@ -280,7 +280,7 @@ export const audioDataTransferDetachesSource = async (transport: Transport) => {
     return info
   }
   expose(value, { transport })
-  const remote = await expose<typeof value>({}, { transport })
+  const { value: remote } = await expose<typeof value>({}, { transport })
 
   const audio = new AudioData({
     format: 'f32', sampleRate: 8000, numberOfFrames: 8, numberOfChannels: 1,

@@ -19,7 +19,7 @@ export type Resolvers = typeof resolvers
 
 // Content-initiated connection to background
 const port = chrome.runtime.connect({ name: `content-${Date.now()}` })
-const api = await expose<BackgroundResolvers>(resolvers, {
+const { value: api } = await expose<BackgroundResolvers>(resolvers, {
   transport: { isJson: true, emit: port, receive: port }
 })
 
@@ -28,7 +28,7 @@ setApi(api)
 // Listen for background-initiated connections
 chrome.runtime.onConnect.addListener(async (port) => {
   if (port.name.startsWith('bg-to-content-')) {
-    const bgInitiatedApi = await expose<BackgroundResolvers>(resolvers, {
+    const { value: bgInitiatedApi } = await expose<BackgroundResolvers>(resolvers, {
       transport: { isJson: true, emit: port, receive: port }
     })
     setBgInitiatedApi(bgInitiatedApi)
@@ -49,7 +49,7 @@ const runtimeTransport = {
   }
 }
 
-const runtimeApi = await expose<BackgroundResolvers>(resolvers, {
+const { value: runtimeApi } = await expose<BackgroundResolvers>(resolvers, {
   transport: runtimeTransport
 })
 

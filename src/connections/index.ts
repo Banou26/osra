@@ -9,7 +9,7 @@ import type {
   StartConnectionsOptions,
 } from './utils.js'
 import type { MessageContext, Context } from '../utils/transport.js'
-import type { Connections, Contextual } from './utils.js'
+import type { Connection, Connections, Contextual } from './utils.js'
 
 import { OSRA_DEFAULT_KEY, OSRA_KEY } from '../types.js'
 import * as bidirectional from './bidirectional.js'
@@ -21,7 +21,7 @@ import { createTypedEventTarget } from '../utils/typed-event-target.js'
 import { getTransferableObjects } from '../utils/transferable.js'
 import { registerOsraMessageListener, sendOsraMessage } from '../utils/transport.js'
 import { runTeardown } from '../utils/teardown.js'
-import { asConnections, createPeerQueue, isContextual, mergeRevivableModules, normalizeTransport, CONTEXT } from './utils.js'
+import { asConnections, createConnectionQueue, isContextual, mergeRevivableModules, normalizeTransport, CONTEXT } from './utils.js'
 
 export * from './bidirectional.js'
 export * from './relay.js'
@@ -73,7 +73,7 @@ export const startConnections = <
     revivableModules: configureRevivableModules,
     uuid: _uuid,
     remoteUuid: presetRemoteUuid,
-    context: declaredContext = {},
+    localContext: declaredContext = {},
   }: StartConnectionsOptions<TModules>
 ): Connections<T> => {
   const transport = normalizeTransport(_transport)
@@ -87,14 +87,16 @@ export const startConnections = <
   type MergedModules = typeof mergedRevivableModules
   const connectionContexts = new Map<string, ConnectionContext<MergedModules>>()
 
-  const peerQueue = createPeerQueue<T>()
+  const connectionQueue = createConnectionQueue<T>()
 
-  const { promise: remoteValuePromise, resolve: resolveRemoteValue, reject: rejectRemoteValue } =
-    Promise.withResolvers<Capable<MergedModules>>()
+  // Resolves with the FIRST established connection, in the same shape iteration yields, so reading
+  // one realm and reading many are the same destructure.
+  const { promise: firstConnection, resolve: resolveFirstConnection, reject: rejectRemoteValue } =
+    Promise.withResolvers<Connection<T>>()
   // Keeps a fire-and-forget `expose(value, …)` (the documented server-side
   // pattern) from surfacing an unhandled rejection on abort/close; awaiting
   // callers still observe the rejection through the original promise.
-  remoteValuePromise.catch(() => {})
+  firstConnection.catch(() => {})
 
   const uuid: Uuid = _uuid ?? globalThis.crypto.randomUUID()
 
@@ -112,7 +114,7 @@ export const startConnections = <
 
   const ctx: ProtocolContext<MergedModules> = {
     transport,
-    declaredContext,
+    declaredContext: typeof declaredContext === 'function' ? declaredContext({}) : declaredContext,
     valueFor: (peer: Context) =>
       (isContextual<Capable<MergedModules>>(value)
         ? value[CONTEXT](peer as Context & Record<string, unknown>)
@@ -123,9 +125,12 @@ export const startConnections = <
     presetRemoteUuid,
     sendMessage,
     protocolEventTarget,
-    resolveRemoteValue,
     rejectRemoteValue,
-    addPeer: (peer, remote) => peerQueue.push({ ...peer, remote: remote as T }),
+    addConnection: (ctx, value) => {
+      const connection = { ...ctx, value: value as T } as Connection<T>
+      resolveFirstConnection(connection)
+      connectionQueue.push(connection)
+    },
     createConnectionEventTarget: createTypedEventTarget,
     unregisterSignal,
   }
@@ -133,10 +138,18 @@ export const startConnections = <
   const listener = (message: Message, messageContext: MessageContext) => {
     // own message looped back on the channel
     if (message.uuid === uuid) return
-    // A port carries neither origin nor source, so what the caller declared wins there; a window
-    // message carries both and they are browser-set, so they win over anything declared.
+    // Built from LOCAL knowledge only. `messageContext` is what the browser told us about the
+    // delivery (origin, source), which the peer cannot forge; `declaredContext` is what this side
+    // already knew. Nothing from the peer's payload participates, and none of this is ever sent.
+    // Observed wins over declared, so a declaration cannot overwrite a real origin.
+    const observed: Context = {
+      ...(messageContext.origin ? { origin: messageContext.origin } : {}),
+      ...(messageContext.source ? { source: messageContext.source } : {}),
+      ...(messageContext.port ? { port: messageContext.port } : {}),
+      ...(messageContext.sender ? { sender: messageContext.sender } : {}),
+    }
     const peer: Context = {
-      ...declaredContext,
+      ...(typeof declaredContext === 'function' ? declaredContext(observed) : declaredContext),
       ...(messageContext.origin ? { origin: messageContext.origin } : {}),
       ...(messageContext.source ? { source: messageContext.source } : {}),
       ...(messageContext.port ? { port: messageContext.port } : {}),
@@ -161,8 +174,8 @@ export const startConnections = <
   // so the listener below would leave the promise pending forever.
   if (unregisterSignal?.aborted) {
     rejectRemoteValue(unregisterSignal.reason)
-    peerQueue.close()
-    return asConnections(remoteValuePromise as Promise<T>, peerQueue)
+    connectionQueue.close()
+    return asConnections(firstConnection, connectionQueue)
   }
 
   // Abort = explicit local teardown: notify every tracked peer, dispose
@@ -180,5 +193,5 @@ export const startConnections = <
     connectionModule.init(ctx)
   }
 
-  return asConnections(remoteValuePromise as Promise<T>, peerQueue)
+  return asConnections(firstConnection, connectionQueue)
 }

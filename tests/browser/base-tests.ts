@@ -16,7 +16,7 @@ export const argsAndResponse = async (transport: Transport) => {
   }
   expose(value, { transport })
 
-  const test = await expose<typeof value>({}, { transport })
+  const { value: test } = await expose<typeof value>({}, { transport })
 
   await expect(test({ foo: 1 }, 'bar')).to.eventually.equal(1)
   await expect(test({ foo: 0 }, 'baz')).to.be.rejectedWith(/foo is not 1/)
@@ -26,7 +26,7 @@ export const callback = async (transport: Transport) => {
   const value = async () => async () => 1
   expose(value, { transport })
 
-  const test = await expose<typeof value>({}, { transport })
+  const { value: test } = await expose<typeof value>({}, { transport })
 
   const result = await test()
   await expect(result()).to.eventually.equal(1)
@@ -36,7 +36,7 @@ export const callbackAsArg = async (transport: Transport) => {
   const value = async (callback: () => number) => callback()
   expose(value, { transport })
 
-  const test = await expose<typeof value>({}, { transport })
+  const { value: test } = await expose<typeof value>({}, { transport })
 
   const result = await test(() => 1)
   expect(result).to.equal(1)
@@ -56,7 +56,7 @@ export const objectBaseArgsAndResponse = async (transport: Transport) => {
   }
   expose(value, { transport })
 
-  const { test } = await expose<typeof value>({}, { transport })
+  const { value: { test } } = await expose<typeof value>({}, { transport })
 
   await expect(test({ foo: 1 }, 'bar')).to.eventually.equal(1)
   await expect(test({ foo: 0 }, 'baz')).to.be.rejectedWith(/foo is not 1/)
@@ -68,7 +68,7 @@ export const objectCallback = async (transport: Transport) => {
   }
   expose(value, { transport })
 
-  const { test } = await expose<typeof value>({}, { transport })
+  const { value: { test } } = await expose<typeof value>({}, { transport })
 
   const result = await test()
   await expect(result()).to.eventually.equal(1)
@@ -80,7 +80,7 @@ export const objectCallbackAsArg = async (transport: Transport) => {
   }
   expose(value, { transport })
 
-  const { test } = await expose<typeof value>({}, { transport })
+  const { value: { test } } = await expose<typeof value>({}, { transport })
 
   const result = await test(() => 1)
   expect(result).to.equal(1)
@@ -93,7 +93,7 @@ export const userMessagePort = async (transport: Transport) => {
   }
   expose(value, { transport })
 
-  const { port1 } = await expose<typeof value>({}, { transport })
+  const { value: { port1 } } = await expose<typeof value>({}, { transport })
 
   // A user-owned MessagePort must revive as a real MessagePort regardless
   // of whether the transport supports structured clone or is JSON-only.
@@ -125,7 +125,7 @@ export const userPromise = async (transport: Transport) => {
   }
   expose(value, { transport })
 
-  const { promise } = await expose<typeof value>({}, { transport })
+  const { value: { promise } } = await expose<typeof value>({}, { transport })
 
   await expect(promise).to.eventually.equal(1)
 }
@@ -143,7 +143,7 @@ export const userArrayBuffer = async (transport: Transport) => {
   }
   expose(value, { transport })
 
-  const { arrayBuffer } = await expose<typeof value>({}, { transport })
+  const { value: { arrayBuffer } } = await expose<typeof value>({}, { transport })
   const newHash = await hashToHex(arrayBuffer)
   expect(newHash).to.equal(originalHash)
 }
@@ -158,7 +158,7 @@ export const userTypedArray = async (transport: Transport) => {
   }
   expose(value, { transport })
 
-  const { uint8Array } = await expose<typeof value>({}, { transport })
+  const { value: { uint8Array } } = await expose<typeof value>({}, { transport })
   expect(uint8Array).to.be.instanceOf(Uint8Array)
   const newHash = await hashToHex(uint8Array)
   expect(newHash).to.equal(originalHash)
@@ -180,7 +180,7 @@ export const userReadableStream = async (transport: Transport) => {
   }
   expose(value, { transport })
 
-  const { readableStream: resultReadableStream } = await expose<typeof value>({}, { transport })
+  const { value: { readableStream: resultReadableStream } } = await expose<typeof value>({}, { transport })
   expect(resultReadableStream).to.be.instanceOf(ReadableStream)
   const reader = resultReadableStream.getReader()
   const result = await reader.read()
@@ -202,7 +202,7 @@ export const userPromiseTypedArray = async (transport: Transport) => {
   }
   expose(value, { transport })
 
-  const { uint8Array } = await expose<typeof value>({}, { transport })
+  const { value: { uint8Array } } = await expose<typeof value>({}, { transport })
   expect(uint8Array).to.be.instanceOf(Promise)
   const newHash = await hashToHex(await uint8Array)
   expect(newHash).to.equal(originalHash)
@@ -215,7 +215,7 @@ export const userDate = async (transport: Transport) => {
   }
   expose(value, { transport })
 
-  const { date } = await expose<typeof value>({}, { transport })
+  const { value: { date } } = await expose<typeof value>({}, { transport })
 
   // Test that the date is correctly transferred
   expect(date).to.be.instanceOf(Date)
@@ -232,7 +232,7 @@ export const userError = async (transport: Transport) => {
   }
   expose(value, { transport })
 
-  const { error, throwError } = await expose<typeof value>({}, { transport })
+  const { value: { error, throwError } } = await expose<typeof value>({}, { transport })
 
   expect(error).to.be.instanceOf(Error)
   expect(error.message).to.equal('Test error message')
@@ -248,7 +248,7 @@ export const asyncInit = async (transport: Transport) => {
   
   await new Promise(resolve => setTimeout(resolve, 100))
 
-  const { foo } = await expose<typeof value>({}, { transport })
+  const { value: { foo } } = await expose<typeof value>({}, { transport })
 
   expect(foo).to.equal(1)
 }
@@ -264,7 +264,7 @@ export const asyncInit = async (transport: Transport) => {
 //   }
 //   expose(value, { transport })
 
-//   const { writableStream: resultWritableStream } = await expose<typeof value>({}, { transport })
+//   const { value: { writableStream: resultWritableStream } } = await expose<typeof value>({}, { transport })
 //   resultWritableStream.write(new Uint8Array([1, 2, 3]))
 // }
 
@@ -275,7 +275,7 @@ export const userAbortSignal = async (transport: Transport) => {
   }
   expose(value, { transport })
 
-  const { signal } = await expose<typeof value>({}, { transport })
+  const { value: { signal } } = await expose<typeof value>({}, { transport })
 
   expect(signal).to.be.instanceOf(AbortSignal)
   expect(signal.aborted).to.be.false
@@ -300,7 +300,7 @@ export const userAbortSignalAlreadyAborted = async (transport: Transport) => {
   }
   expose(value, { transport })
 
-  const { signal } = await expose<typeof value>({}, { transport })
+  const { value: { signal } } = await expose<typeof value>({}, { transport })
 
   expect(signal).to.be.instanceOf(AbortSignal)
   expect(signal.aborted).to.be.true
@@ -317,7 +317,7 @@ export const userAbortSignalAlreadyAbortedWithLiveReason = async (transport: Tra
   const value = { signal: controller.signal }
   expose(value, { transport })
 
-  const { signal } = await expose<typeof value>({}, { transport })
+  const { value: { signal } } = await expose<typeof value>({}, { transport })
 
   expect(signal.aborted).to.be.true
   const reason = signal.reason as { fn: () => Promise<number>, nested: AbortSignal }
@@ -336,7 +336,7 @@ export const userResponse = async (transport: Transport) => {
   }
   expose(value, { transport })
 
-  const { response } = await expose<typeof value>({}, { transport })
+  const { value: { response } } = await expose<typeof value>({}, { transport })
 
   expect(response).to.be.instanceOf(Response)
   expect(response.status).to.equal(201)
@@ -366,7 +366,7 @@ export const userResponseWithStreamBody = async (transport: Transport) => {
   }
   expose(value, { transport })
 
-  const { response } = await expose<typeof value>({}, { transport })
+  const { value: { response } } = await expose<typeof value>({}, { transport })
 
   expect(response).to.be.instanceOf(Response)
   expect(response.status).to.equal(200)
@@ -385,7 +385,7 @@ export const userResponseNoBody = async (transport: Transport) => {
   }
   expose(value, { transport })
 
-  const { response } = await expose<typeof value>({}, { transport })
+  const { value: { response } } = await expose<typeof value>({}, { transport })
 
   expect(response).to.be.instanceOf(Response)
   expect(response.status).to.equal(204)
@@ -408,7 +408,7 @@ export const userResponseNullBodyStatusWithBody = async (transport: Transport) =
   const value = { r204: withStatus(204), r205: withStatus(205), r304: withStatus(304) }
   expose(value, { transport })
 
-  const revived = await expose<typeof value>({}, { transport })
+  const { value: revived } = await expose<typeof value>({}, { transport })
 
   for (const [status, key] of [[204, 'r204'], [205, 'r205'], [304, 'r304']] as const) {
     const response = revived[key]
@@ -428,7 +428,7 @@ export const userRequest = async (transport: Transport) => {
   }
   expose(value, { transport })
 
-  const { request } = await expose<typeof value>({}, { transport })
+  const { value: { request } } = await expose<typeof value>({}, { transport })
 
   expect(request).to.be.instanceOf(Request)
   expect(request.method).to.equal('POST')
@@ -477,7 +477,7 @@ export const userRequestWithBody = async (transport: Transport) => {
   }
   expose(value, { transport })
 
-  const { request } = await expose<typeof value>({}, { transport })
+  const { value: { request } } = await expose<typeof value>({}, { transport })
 
   expect(request).to.be.instanceOf(Request)
   expect(request.method).to.equal('POST')
@@ -496,7 +496,7 @@ export const userRequestNoBody = async (transport: Transport) => {
   }
   expose(value, { transport })
 
-  const { request } = await expose<typeof value>({}, { transport })
+  const { value: { request } } = await expose<typeof value>({}, { transport })
 
   expect(request).to.be.instanceOf(Request)
   expect(request.method).to.equal('GET')
@@ -512,7 +512,7 @@ export const userMap = async (transport: Transport) => {
   const value = { map: _map }
   expose(value, { transport })
 
-  const { map } = await expose<typeof value>({}, { transport })
+  const { value: { map } } = await expose<typeof value>({}, { transport })
 
   expect(map).to.be.instanceOf(Map)
   expect(map.size).to.equal(3)
@@ -525,7 +525,7 @@ export const userMapEmpty = async (transport: Transport) => {
   const value = { map: new Map<string, number>() }
   expose(value, { transport })
 
-  const { map } = await expose<typeof value>({}, { transport })
+  const { value: { map } } = await expose<typeof value>({}, { transport })
 
   expect(map).to.be.instanceOf(Map)
   expect(map.size).to.equal(0)
@@ -540,7 +540,7 @@ export const userMapWithLiveValues = async (transport: Transport) => {
   }
   expose(value, { transport })
 
-  const { map } = await expose<typeof value>({}, { transport })
+  const { value: { map } } = await expose<typeof value>({}, { transport })
 
   expect(map).to.be.instanceOf(Map)
   expect(map.size).to.equal(2)
@@ -557,7 +557,7 @@ export const userMapWithFunctions = async (transport: Transport) => {
   }
   expose(value, { transport })
 
-  const { map } = await expose<typeof value>({}, { transport })
+  const { value: { map } } = await expose<typeof value>({}, { transport })
 
   expect(map).to.be.instanceOf(Map)
   await expect(map.get('double')!()).to.eventually.equal(4)
@@ -572,7 +572,7 @@ export const userMapWithComplexKeys = async (transport: Transport) => {
   }
   expose(value, { transport })
 
-  const { map } = await expose<typeof value>({}, { transport })
+  const { value: { map } } = await expose<typeof value>({}, { transport })
 
   expect(map).to.be.instanceOf(Map)
   expect(map.size).to.equal(2)
@@ -588,7 +588,7 @@ export const userSet = async (transport: Transport) => {
   const value = { set: new Set<number>([1, 2, 3]) }
   expose(value, { transport })
 
-  const { set } = await expose<typeof value>({}, { transport })
+  const { value: { set } } = await expose<typeof value>({}, { transport })
 
   expect(set).to.be.instanceOf(Set)
   expect(set.size).to.equal(3)
@@ -601,7 +601,7 @@ export const userSetEmpty = async (transport: Transport) => {
   const value = { set: new Set<number>() }
   expose(value, { transport })
 
-  const { set } = await expose<typeof value>({}, { transport })
+  const { value: { set } } = await expose<typeof value>({}, { transport })
 
   expect(set).to.be.instanceOf(Set)
   expect(set.size).to.equal(0)
@@ -613,7 +613,7 @@ export const userSetWithLiveValues = async (transport: Transport) => {
   }
   expose(value, { transport })
 
-  const { set } = await expose<typeof value>({}, { transport })
+  const { value: { set } } = await expose<typeof value>({}, { transport })
 
   expect(set).to.be.instanceOf(Set)
   expect(set.size).to.equal(2)
@@ -625,7 +625,7 @@ export const userBigInt = async (transport: Transport) => {
   const value = { big: 9_007_199_254_740_993n }
   expose(value, { transport })
 
-  const { big } = await expose<typeof value>({}, { transport })
+  const { value: { big } } = await expose<typeof value>({}, { transport })
 
   expect(typeof big).to.equal('bigint')
   expect(big).to.equal(9_007_199_254_740_993n)
@@ -635,7 +635,7 @@ export const userBigIntInMap = async (transport: Transport) => {
   const value = { map: new Map<string, bigint>([['big', 1_000_000_000_000_000_000n]]) }
   expose(value, { transport })
 
-  const { map } = await expose<typeof value>({}, { transport })
+  const { value: { map } } = await expose<typeof value>({}, { transport })
 
   expect(map.get('big')).to.equal(1_000_000_000_000_000_000n)
 }
@@ -645,7 +645,7 @@ export const userBigInt64Array = async (transport: Transport) => {
   const value = { arr }
   expose(value, { transport })
 
-  const { arr: revived } = await expose<typeof value>({}, { transport })
+  const { value: { arr: revived } } = await expose<typeof value>({}, { transport })
 
   expect(revived).to.be.instanceOf(BigInt64Array)
   expect(revived.length).to.equal(4)
@@ -658,7 +658,7 @@ export const userBigUint64Array = async (transport: Transport) => {
   const value = { arr }
   expose(value, { transport })
 
-  const { arr: revived } = await expose<typeof value>({}, { transport })
+  const { value: { arr: revived } } = await expose<typeof value>({}, { transport })
 
   expect(revived).to.be.instanceOf(BigUint64Array)
   expect(revived.length).to.equal(3)
@@ -671,7 +671,7 @@ export const userPromiseRejected = async (transport: Transport) => {
   ;(value.failing as Promise<unknown>).catch(() => {})
   expose(value, { transport })
 
-  const { failing } = await expose<typeof value>({}, { transport })
+  const { value: { failing } } = await expose<typeof value>({}, { transport })
 
   // Error rejections round-trip via the error revivable as Error instances
   // (name, message, stack, cause preserved). Asserting the type as well as
@@ -689,7 +689,7 @@ export const userPromiseRejectedWithString = async (transport: Transport) => {
   ;(value.failing as Promise<unknown>).catch(() => {})
   expose(value, { transport })
 
-  const { failing } = await expose<typeof value>({}, { transport })
+  const { value: { failing } } = await expose<typeof value>({}, { transport })
 
   let caught: unknown
   try { await failing } catch (e) { caught = e }
@@ -701,7 +701,7 @@ export const userAbortSignalErrorReason = async (transport: Transport) => {
   const value = { signal: controller.signal }
   expose(value, { transport })
 
-  const { signal } = await expose<typeof value>({}, { transport })
+  const { value: { signal } } = await expose<typeof value>({}, { transport })
 
   let abortedReason: unknown
   signal.addEventListener('abort', () => { abortedReason = signal.reason })
@@ -719,7 +719,7 @@ export const userHeadersDirect = async (transport: Transport) => {
   const value = { headers: _headers }
   expose(value, { transport })
 
-  const { headers } = await expose<typeof value>({}, { transport })
+  const { value: { headers } } = await expose<typeof value>({}, { transport })
 
   expect(headers).to.be.instanceOf(Headers)
   expect(headers.get('X-A')).to.equal('1')
@@ -730,7 +730,7 @@ export const userArrayBufferEmpty = async (transport: Transport) => {
   const value = { ab: new ArrayBuffer(0) }
   expose(value, { transport })
 
-  const { ab } = await expose<typeof value>({}, { transport })
+  const { value: { ab } } = await expose<typeof value>({}, { transport })
 
   expect(ab).to.be.instanceOf(ArrayBuffer)
   expect(ab.byteLength).to.equal(0)
@@ -740,7 +740,7 @@ export const userTypedArrayEmpty = async (transport: Transport) => {
   const value = { arr: new Uint8Array(0) }
   expose(value, { transport })
 
-  const { arr } = await expose<typeof value>({}, { transport })
+  const { value: { arr } } = await expose<typeof value>({}, { transport })
 
   expect(arr).to.be.instanceOf(Uint8Array)
   expect(arr.length).to.equal(0)
@@ -757,7 +757,7 @@ export const userReadableStreamMultiChunk = async (transport: Transport) => {
   const value = { stream }
   expose(value, { transport })
 
-  const { stream: revived } = await expose<typeof value>({}, { transport })
+  const { value: { stream: revived } } = await expose<typeof value>({}, { transport })
   const reader = revived.getReader()
   const received: number[] = []
   while (true) {
@@ -783,7 +783,7 @@ export const userReadableStreamCancel = async (transport: Transport) => {
   const value = { stream }
   expose(value, { transport })
 
-  const { stream: revived } = await expose<typeof value>({}, { transport })
+  const { value: { stream: revived } } = await expose<typeof value>({}, { transport })
   const reader = revived.getReader()
   const first = await reader.read()
   expect(first.value?.[0]).to.equal(1)
@@ -801,7 +801,7 @@ export const userErrorWithCause = async (transport: Transport) => {
   const value = { error: new Error('outer message', { cause: inner }) }
   expose(value, { transport })
 
-  const { error } = await expose<typeof value>({}, { transport })
+  const { value: { error } } = await expose<typeof value>({}, { transport })
 
   expect(error).to.be.instanceOf(Error)
   expect(error.message).to.equal('outer message')
@@ -815,7 +815,7 @@ export const userPromiseOfMap = async (transport: Transport) => {
   }
   expose(value, { transport })
 
-  const { deferredMap } = await expose<typeof value>({}, { transport })
+  const { value: { deferredMap } } = await expose<typeof value>({}, { transport })
 
   const m = await deferredMap
   expect(m).to.be.instanceOf(Map)
@@ -831,7 +831,7 @@ export const userCallbackReturningSet = async (transport: Transport) => {
   const value = async () => new Set<Date>(expected.map(s => new Date(s)))
   expose(value, { transport })
 
-  const remote = await expose<typeof value>({}, { transport })
+  const { value: remote } = await expose<typeof value>({}, { transport })
 
   const s = await remote()
   expect(s).to.be.instanceOf(Set)
@@ -852,7 +852,7 @@ export const userMapInsideArray = async (transport: Transport) => {
   }
   expose(value, { transport })
 
-  const { list } = await expose<typeof value>({}, { transport })
+  const { value: { list } } = await expose<typeof value>({}, { transport })
 
   expect(list).to.have.length(2)
   expect(list[0]).to.be.instanceOf(Map)
@@ -867,7 +867,7 @@ export const userArrayBufferInMap = async (transport: Transport) => {
   }
   expose(value, { transport })
 
-  const { map } = await expose<typeof value>({}, { transport })
+  const { value: { map } } = await expose<typeof value>({}, { transport })
 
   const revived = map.get('data')!
   expect(revived).to.be.instanceOf(ArrayBuffer)
@@ -882,7 +882,7 @@ export const userEventTarget = async (transport: Transport) => {
   }
   expose(value, { transport })
 
-  const { et, fire } = await expose<typeof value>({}, { transport })
+  const { value: { et, fire } } = await expose<typeof value>({}, { transport })
 
   expect(et).to.be.instanceOf(EventTarget)
 
@@ -907,7 +907,7 @@ export const userEventTargetMultipleListeners = async (transport: Transport) => 
   }
   expose(value, { transport })
 
-  const { et, fire } = await expose<typeof value>({}, { transport })
+  const { value: { et, fire } } = await expose<typeof value>({}, { transport })
 
   let count = 0
   const inc = () => { count++ }
@@ -932,7 +932,7 @@ export const userEventTargetCustomEvent = async (transport: Transport) => {
   }
   expose(value, { transport })
 
-  const { et, fire } = await expose<typeof value>({}, { transport })
+  const { value: { et, fire } } = await expose<typeof value>({}, { transport })
 
   let resolveSeen: (e: CustomEvent) => void
   const seen = new Promise<CustomEvent>(r => { resolveSeen = r })
@@ -964,7 +964,7 @@ export const userEventTargetUnsubscribe = async (transport: Transport) => {
   _et.addEventListener('tick', () => { probeCount++ })
   expose(value, { transport })
 
-  const { et, fire, listenerCount } = await expose<typeof value>({}, { transport })
+  const { value: { et, fire, listenerCount } } = await expose<typeof value>({}, { transport })
 
   let receiverCount = 0
   const handler = () => { receiverCount++ }
@@ -997,7 +997,7 @@ export const userEventTargetMultipleEventTypes = async (transport: Transport) =>
   }
   expose(value, { transport })
 
-  const { et, fireA, fireB } = await expose<typeof value>({}, { transport })
+  const { value: { et, fireA, fireB } } = await expose<typeof value>({}, { transport })
 
   let aCount = 0
   let bCount = 0
@@ -1022,7 +1022,7 @@ export const userEventTargetMultipleEventTypes = async (transport: Transport) =>
 export const functionNonClonableResultRejects = async (transport: Transport) => {
   const value = async (): Promise<any> => new WeakMap()
   expose(value, { transport })
-  const remote = await expose<typeof value>({}, { transport })
+  const { value: remote } = await expose<typeof value>({}, { transport })
 
   const call = (remote() as Promise<unknown>).then(
     () => 'resolved' as const,
@@ -1046,7 +1046,7 @@ export const userEventTargetCaptureBothFlags = async (transport: Transport) => {
   }
   expose(value, { transport })
 
-  const { et, fire } = await expose<typeof value>({}, { transport })
+  const { value: { et, fire } } = await expose<typeof value>({}, { transport })
 
   let count = 0
   const handler = () => { count++ }
@@ -1082,7 +1082,7 @@ export const userEventTargetOnceUnsubscribes = async (transport: Transport) => {
   }
   expose(value, { transport })
 
-  const { et, fire, probe } = await expose<typeof value>({}, { transport })
+  const { value: { et, fire, probe } } = await expose<typeof value>({}, { transport })
 
   let receiverCount = 0
   et.addEventListener('tick', () => { receiverCount++ }, { once: true })
@@ -1107,7 +1107,7 @@ export const userSymbol = async (transport: Transport) => {
   const value = { sym: _sym }
   expose(value, { transport })
 
-  const { sym } = await expose<typeof value>({}, { transport })
+  const { value: { sym } } = await expose<typeof value>({}, { transport })
 
   expect(typeof sym).to.equal('symbol')
   expect(sym.description).to.equal('hello symbol')
@@ -1120,7 +1120,7 @@ export const userSymbolNoDescription = async (transport: Transport) => {
   const value = { sym: Symbol() }
   expose(value, { transport })
 
-  const { sym } = await expose<typeof value>({}, { transport })
+  const { value: { sym } } = await expose<typeof value>({}, { transport })
 
   expect(typeof sym).to.equal('symbol')
   expect(sym.description).to.be.undefined
@@ -1147,7 +1147,7 @@ export const userWritableStream = async (transport: Transport) => {
   }
   expose(value, { transport })
 
-  const remote = await expose<typeof value>({}, { transport })
+  const { value: remote } = await expose<typeof value>({}, { transport })
   const writer = remote.writableStream.getWriter()
   await writer.write(new Uint8Array([1, 2, 3]))
   await writer.write(new Uint8Array([4, 5]))
@@ -1170,7 +1170,7 @@ export const userWritableStreamAbort = async (transport: Transport) => {
   }
   expose(value, { transport })
 
-  const remote = await expose<typeof value>({}, { transport })
+  const { value: remote } = await expose<typeof value>({}, { transport })
   const writer = remote.writableStream.getWriter()
   await writer.abort('stop now')
   await until(async () => await remote.getAbortReason() !== undefined)
@@ -1185,7 +1185,7 @@ export const userWritableStreamSinkErrorPropagates = async (transport: Transport
   }
   expose(value, { transport })
 
-  const remote = await expose<typeof value>({}, { transport })
+  const { value: remote } = await expose<typeof value>({}, { transport })
   const writer = remote.writableStream.getWriter()
   await expect(writer.write('x')).to.eventually.be.rejectedWith(/sink failed/)
 }
@@ -1198,7 +1198,7 @@ export const userAsyncGenerator = async (transport: Transport) => {
   }
   expose(value, { transport })
 
-  const remote = await expose<typeof value>({}, { transport })
+  const { value: remote } = await expose<typeof value>({}, { transport })
   const collected: number[] = []
   for await (const item of await remote.streamData()) collected.push(item as number)
   expect(collected).to.deep.equal([0, 1, 2])
@@ -1219,7 +1219,7 @@ export const userAsyncGeneratorEarlyBreak = async (transport: Transport) => {
   }
   expose(value, { transport })
 
-  const remote = await expose<typeof value>({}, { transport })
+  const { value: remote } = await expose<typeof value>({}, { transport })
   for await (const item of await remote.infinite()) {
     if ((item as number) >= 2) break
   }
@@ -1239,7 +1239,7 @@ export const userTypedArraySubarray = async (transport: Transport) => {
   }
   expose(value, { transport })
 
-  const remote = await expose<typeof value>({}, { transport })
+  const { value: remote } = await expose<typeof value>({}, { transport })
   const { sub, odd } = await remote.getViews()
   expect([...sub]).to.deep.equal([2, 3, 4])
   expect(sub.byteLength).to.equal(3)
@@ -1250,7 +1250,7 @@ export const userCircularThrows = async (transport: Transport) => {
   const value = { echo: async (input: unknown) => input }
   expose(value, { transport })
 
-  const remote = await expose<typeof value>({}, { transport })
+  const { value: remote } = await expose<typeof value>({}, { transport })
   const cyclic: Record<string, unknown> = {}
   cyclic.self = cyclic
   await expect(remote.echo(cyclic as never)).to.eventually.be.rejectedWith(TypeError, /circular/)
@@ -1263,7 +1263,7 @@ export const userErrorSubclasses = async (transport: Transport) => {
   }
   expose(value, { transport })
 
-  const remote = await expose<typeof value>({}, { transport })
+  const { value: remote } = await expose<typeof value>({}, { transport })
   const typeError = await remote.getTypeError()
   expect(typeError).to.be.instanceOf(TypeError)
   expect(typeError.message).to.equal('bad type')
@@ -1279,7 +1279,7 @@ export const userRegisteredSymbol = async (transport: Transport) => {
   const value = { sym: Symbol.for('osra.test.registered') }
   expose(value, { transport })
 
-  const { sym } = await expose<typeof value>({}, { transport })
+  const { value: { sym } } = await expose<typeof value>({}, { transport })
   expect(sym).to.equal(Symbol.for('osra.test.registered'))
 }
 
@@ -1295,7 +1295,7 @@ export const userReadableStreamSourceErrorPropagates = async (transport: Transpo
   const value = { stream }
   expose(value, { transport })
 
-  const { stream: revived } = await expose<typeof value>({}, { transport })
+  const { value: { stream: revived } } = await expose<typeof value>({}, { transport })
   const reader = revived.getReader()
   // Chunks produced before the error must still be delivered - the credit
   // pump runs ahead of the consumer and must not let the error eat them.
@@ -1315,7 +1315,7 @@ export const userReadableStreamBackpressure = async (transport: Transport) => {
   const value = { stream }
   expose(value, { transport })
 
-  const { stream: revived } = await expose<typeof value>({}, { transport })
+  const { value: { stream: revived } } = await expose<typeof value>({}, { transport })
   const reader = revived.getReader()
   for (let i = 0; i < 5; i++) await reader.read()
   await new Promise(resolve => setTimeout(resolve, 200))
@@ -1336,7 +1336,7 @@ export const userReadableStreamObjectBackpressure = async (transport: Transport)
   const value = { stream }
   expose(value, { transport })
 
-  const { stream: revived } = await expose<typeof value>({}, { transport })
+  const { value: { stream: revived } } = await expose<typeof value>({}, { transport })
   const reader = revived.getReader()
   for (let i = 0; i < 3; i++) await reader.read()
   await new Promise(resolve => setTimeout(resolve, 200))
@@ -1359,7 +1359,7 @@ export const userNonFinitePrimitives = async (transport: Transport) => {
   }
   expose(value, { transport })
 
-  const remote = await expose<typeof value>({}, { transport })
+  const { value: remote } = await expose<typeof value>({}, { transport })
   const result = await remote.numbers()
   expect(Number.isNaN(result.nan)).to.be.true
   expect(result.positive).to.equal(Infinity)
@@ -1374,7 +1374,7 @@ export const userNonFinitePrimitives = async (transport: Transport) => {
 export const userBlobArg = async (transport: Transport) => {
   const value = { echo: async (input: unknown) => input }
   expose(value, { transport })
-  const remote = await expose<typeof value>({}, { transport })
+  const { value: remote } = await expose<typeof value>({}, { transport })
 
   const blob = new Blob(['osra-blob'], { type: 'text/plain' })
   if ('isJson' in transport && transport.isJson === true) {
@@ -1390,7 +1390,7 @@ export const userBlobArg = async (transport: Transport) => {
 export const userBlobNestedArg = async (transport: Transport) => {
   const value = { echo: async (input: unknown) => input }
   expose(value, { transport })
-  const remote = await expose<typeof value>({}, { transport })
+  const { value: remote } = await expose<typeof value>({}, { transport })
 
   const wrapped = { data: [new Blob(['nested'], { type: 'text/plain' })] }
   if ('isJson' in transport && transport.isJson === true) {
@@ -1407,7 +1407,7 @@ export const userBlobNestedArg = async (transport: Transport) => {
 export const userBlobReturnRejects = async (transport: Transport) => {
   const value = { getBlob: async () => new Blob(['osra-blob'], { type: 'text/plain' }) }
   expose(value, { transport })
-  const remote = await expose<typeof value>({}, { transport })
+  const { value: remote } = await expose<typeof value>({}, { transport })
 
   if ('isJson' in transport && transport.isJson === true) {
     await expect(remote.getBlob()).to.eventually.be.rejectedWith(TypeError, /only supported on structured-clone transports/)
@@ -1424,7 +1424,7 @@ export const userBlobReturnRejects = async (transport: Transport) => {
 export const manyCallsChurnTombstonedPorts = async (transport: Transport) => {
   const value = { echo: async (n: number) => n }
   expose(value, { transport })
-  const remote = await expose<typeof value>({}, { transport })
+  const { value: remote } = await expose<typeof value>({}, { transport })
 
   for (let i = 0; i < 300; i++) {
     expect(await remote.echo(i)).to.equal(i)

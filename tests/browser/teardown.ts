@@ -44,7 +44,7 @@ export const abortRejectsPendingCalls = async () => {
   expose(value, { transport: port1 })
 
   const controller = new AbortController()
-  const remote = await expose<typeof value>(
+  const { value: remote } = await expose<typeof value>(
     {},
     { transport: port2, unregisterSignal: controller.signal },
   )
@@ -62,7 +62,7 @@ export const peerCloseRejectsPendingCalls = async () => {
   const value = { hang: () => new Promise<void>(() => {}) }
   expose(value, { transport: port1, unregisterSignal: exposerController.signal })
 
-  const remote = await expose<typeof value>({}, { transport: port2 })
+  const { value: remote } = await expose<typeof value>({}, { transport: port2 })
   const call = remote.hang()
   await new Promise(resolve => setTimeout(resolve, 50))
   exposerController.abort()

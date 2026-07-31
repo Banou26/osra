@@ -35,7 +35,7 @@ export const revivedEventTargetDroppedWithoutListenerIsCollected = async (transp
   const _et = new EventTarget()
   const value = { et: _et }
   expose(value, { transport })
-  const remote = await expose<typeof value>({}, { transport })
+  const { value: remote } = await expose<typeof value>({}, { transport })
 
   const etRef = new WeakRef(remote.et)
   ;(remote as { et?: unknown }).et = undefined
@@ -53,7 +53,7 @@ export const revivedEventTargetDroppedWithoutListenerIsCollected = async (transp
 export const revivedFunctionDroppedIsCollected = async (transport: Transport) => {
   const value = { foo: async () => 1 }
   expose(value, { transport })
-  const remote = await expose<typeof value>({}, { transport })
+  const { value: remote } = await expose<typeof value>({}, { transport })
   const fooRef = new WeakRef(remote.foo)
   ;(remote as { foo?: unknown }).foo = undefined
   await __osraForceGc()
@@ -95,7 +95,7 @@ export const revivedEventTargetDropTearsDownSource = async (transport: Transport
     forwarderLive: async () => forwarderLive,
   }
   expose(value, { transport })
-  const remote = await expose<typeof value>({}, { transport })
+  const { value: remote } = await expose<typeof value>({}, { transport })
 
   // Subscribe inside an inner scope so the only strong reference to the
   // revived EventTarget is `remote.et` - we'll drop that below. The listener
@@ -140,7 +140,7 @@ export const funcDropDoesNotRejectPending = async (transport: Transport) => {
   const value = { slow: (): Promise<number> => new Promise(() => {}) }
   expose(value, { transport })
 
-  const remote = await expose<typeof value>({}, { transport })
+  const { value: remote } = await expose<typeof value>({}, { transport })
 
   const callPromise = remote.slow().then(
     () => 'settled' as const,
@@ -180,7 +180,7 @@ export const revivedPortDropSendsCloseToBoxSide = async (transport: Transport) =
     ping: async () => 'pong',
   }
   expose(value, { transport })
-  const remote = await expose<typeof value>({}, { transport })
+  const { value: remote } = await expose<typeof value>({}, { transport })
 
   const holder: { port?: unknown } = { port: await remote.getPort() }
   ;(holder.port as EventPort<string>).postMessage('hello')

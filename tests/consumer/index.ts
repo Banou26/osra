@@ -18,7 +18,7 @@ const okTransport: Transport = worker
 
 type Api = { add: (a: number, b: number) => number }
 const checkRemote = async () => {
-  const remote = await expose<Api>({}, { transport: worker })
+  const { value: remote } = await expose<Api>({}, { transport: worker })
   const sum: Promise<number> = remote.add(1, 2)
   // @ts-expect-error remote calls are always async - sync access must fail
   const sync: number = remote.add(1, 2)
