@@ -18,7 +18,7 @@ const okTransport: Transport = worker
 
 type Api = { add: (a: number, b: number) => number }
 const checkRemote = async () => {
-  const { value: remote } = await expose<Api>({}, { transport: worker })
+  const remote = await expose<Api>({}, { transport: worker })
   const sum: Promise<number> = remote.add(1, 2)
   // @ts-expect-error remote calls are always async - sync access must fail
   const sync: number = remote.add(1, 2)
@@ -63,13 +63,17 @@ declare const jsonTransport: { isJson: true, emit: Worker, receive: Worker }
 expose({ foo: new File([], '') }, { transport: jsonTransport, key: 'json-1' })
 expose({ foo: new File([], '') }, { transport: worker, key: 'clone-file' })
 
+// `value` accepts the checked value OR its `context()` wrapper, so the parameter is a union and the
+// branded branch has to be picked out before the message can be read off it.
+type Branded<T> = Extract<T, { [ErrorMessage]: unknown }>
+
 // And the rejection must carry the transport-specific error text, not the
 // generic one - pin both messages via an instantiation expression on expose.
-type JsonFileError = Parameters<typeof expose<
+type JsonFileError = Branded<Parameters<typeof expose<
   unknown, DefaultRevivableModules,
   typeof jsonTransport,
   { foo: File }
->>[0]
+>>[0]>
 const jsonFileMessage: JsonFileError[typeof ErrorMessage] =
   'Value type is only supported on structured-clone transports, not on JSON transports'
 // @ts-expect-error the generic message must not be the one resolved for File
@@ -80,20 +84,20 @@ const jsonFileWrong: JsonFileError[typeof ErrorMessage] = 'Value type must resol
 expose({ blob: new Blob(['x']) }, { transport: worker, key: 'clone-blob' })
 // @ts-expect-error Blob is only supported on structured-clone transports
 expose({ blob: new Blob(['x']) }, { transport: jsonTransport, key: 'json-2' })
-type JsonBlobError = Parameters<typeof expose<
+type JsonBlobError = Branded<Parameters<typeof expose<
   unknown, DefaultRevivableModules,
   typeof jsonTransport,
   { blob: Blob }
->>[0]
+>>[0]>
 const jsonBlobMessage: JsonBlobError[typeof ErrorMessage] =
   'Value type is only supported on structured-clone transports, not on JSON transports'
 
 // A type unsupported on EVERY transport keeps the generic message on JSON too.
-type JsonWeakMapError = Parameters<typeof expose<
+type JsonWeakMapError = Branded<Parameters<typeof expose<
   unknown, DefaultRevivableModules,
   typeof jsonTransport,
   { cache: WeakMap<object, string> }
->>[0]
+>>[0]>
 const jsonWeakMapMessage: JsonWeakMapError[typeof ErrorMessage] = 'Value type must resolve to a Capable'
 
 void jsonFileMessage; void jsonFileWrong; void jsonBlobMessage; void jsonWeakMapMessage

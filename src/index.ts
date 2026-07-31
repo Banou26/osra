@@ -75,8 +75,10 @@ export const expose = <
   T = unknown,
   const TModules extends readonly RevivableModule[] = DefaultRevivableModules,
   const TTransport extends Transport = Transport,
-  const TBuild extends ContextBuilder = ContextBuilder,
-  const TValue = Capable<TModules, RevivableContextOf<TTransport>>
+  // After TValue, not before it. These are positional, so slotting a new one into the middle silently
+  // reassigns every explicit type argument a consumer already wrote.
+  const TValue = Capable<TModules, RevivableContextOf<TTransport>>,
+  const TBuild extends ContextBuilder = ContextBuilder
 >(
   value:
     | CapableCheck<TValue, TModules, RevivableContextOf<TTransport>>
