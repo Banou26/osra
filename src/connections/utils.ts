@@ -203,34 +203,31 @@ export type Contextual<TValue> = {
 /** Build the exposed value once per connection, from that connection's context, rather than sharing
  *  one value across every realm that connects.
  *
- *  Pass the context builder as the first argument and `ctx` is inferred exactly, with no type
+ *  Optionally pass a context builder second, and `ctx` is inferred exactly from it, with no type
  *  argument to write and no separate `context:` option to keep in sync:
  *
  *  ```ts
  *  expose(
- *    context(({ origin }) => ({ appId: appIdFor(origin) }), ctx => resolvers(ctx.appId)),
+ *    context(ctx => resolvers(ctx.appId), ({ origin }) => ({ appId: appIdFor(origin) })),
  *    { transport },
  *  )
  *  ```
  *
- *  The one-argument form still works when the values come from the `context:` option instead, but
- *  then `ctx` is only known to carry unknowns, because the two call sites are independent. */
+ *  Without it, `ctx` is only known to carry unknowns: the values then come from the `context:`
+ *  option, which is a separate call site TypeScript cannot link to this one. */
 export function context<TBuild extends ContextBuilder, TValue>(
-  build: TBuild,
   make: (ctx: ContextOf<TBuild>) => TValue,
+  build: TBuild,
 ): Contextual<TValue>
 export function context<TValue>(
   make: (ctx: Context & Record<string, unknown>) => TValue,
 ): Contextual<TValue>
 export function context(
-  buildOrMake: ContextBuilder | ((ctx: never) => unknown),
-  make?: (ctx: never) => unknown,
+  make: (ctx: never) => unknown,
+  build?: ContextBuilder,
 ): Contextual<unknown> {
-  if (!make) return { [CONTEXT]: buildOrMake as (ctx: Context & Record<string, unknown>) => unknown }
-  return {
-    [CONTEXT]: make as (ctx: Context & Record<string, unknown>) => unknown,
-    [CONTEXT_BUILD]: buildOrMake as ContextBuilder,
-  }
+  const value = { [CONTEXT]: make as (ctx: Context & Record<string, unknown>) => unknown }
+  return build ? { ...value, [CONTEXT_BUILD]: build } : value
 }
 
 export const isContextual = <TValue,>(value: unknown): value is Contextual<TValue> =>
