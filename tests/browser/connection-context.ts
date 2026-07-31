@@ -96,11 +96,10 @@ export const theSelectorDecidesWhatAConnectionIs = async () => {
 export const theSelectorCanReturnAnything = async () => {
   const { port1, port2 } = newPair()
   expose({ ping: async () => 'pong' }, { transport: port1 })
-  const appId = await expose({}, {
-    transport: port2,
-    context: () => ({ appId: 'npm:example' }),
-    connection: ({ context }) => context.appId,
-  })
+  const appId = await expose(
+    context(() => ({}), () => ({ appId: 'npm:example' })),
+    { transport: port2, connection: ({ context }) => context.appId },
+  )
   expect(appId, 'a connection can be just the one field this caller cares about').to.equal('npm:example')
 }
 

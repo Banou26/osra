@@ -102,28 +102,6 @@ export type StartConnectionsOptions<
   revivableModules?: (defaults: DefaultRevivableModules) => TModules
   uuid?: Uuid
   remoteUuid?: Uuid
-  /** Builds the custom values on every connection's context, from THIS side's knowledge only. Never
-   *  from anything the peer sends: nothing here is transmitted, and nothing in the peer's payload can
-   *  reach it. That is the whole point of the option, so it is worth restating at every call site.
-   *
-   *  Two local sources feed it. What the transport observed, which is browser-set and so cannot be
-   *  forged: a window message carries `origin` and `source`, a MessagePort carries neither. And
-   *  whatever this side already knew, which is the only option for a port, since the side that
-   *  received the port learned the identity from the trustworthy window message that delivered it.
-   *
-   *  Always a function, receiving what was observed. Fixed values are just a function that ignores
-   *  its input, so there is one shape rather than two:
-   *
-   *  ```ts
-   *  expose(context(ctx => resolvers(ctx)), {
-   *    transport,
-   *    context: ({ origin }) => ({ appId: appIdFor(origin) }),
-   *  })
-   *  ```
-   *
-   *  Observed browser-set fields win over declared ones, so a declaration can never overwrite a real
-   *  origin with a made-up one. */
-  context?: ContextBuilder
   /** Decides what one connection resolves to, for the await and for iteration alike. Omit it and that
    *  is the peer's value, which is what `expose` has always given back:
    *
@@ -147,8 +125,8 @@ export type StartConnectionsOptions<
 }
 
 /** An established connection: the value that realm exposed, and what this side knows about the realm
- *  it came from. `context` carries the observed origin, whatever the `context:` builder declared, and
- *  an `abort` that drops this one peer. */
+ *  it came from. `context` carries whatever the transport observed, whatever a builder passed to
+ *  `context(make, build)` declared, and an `abort` that drops this one peer. */
 export type Connected<TValue, TDeclared = unknown> = {
   value: TValue
   context: Context & TDeclared
@@ -293,8 +271,10 @@ export type Contextual<TValue, TBuild extends ContextBuilder = ContextBuilder> =
 /** Build the exposed value once per connection, from that connection's context, rather than sharing
  *  one value across every realm that connects.
  *
- *  Optionally pass a context builder second, and `ctx` is inferred exactly from it, with no type
- *  argument to write and no separate `context:` option to keep in sync:
+ *  Pass a context builder second and `ctx` is inferred exactly from it, with no type argument to
+ *  write. It runs before the value is built, which is the whole reason it exists here rather than in
+ *  `connection:`: it decides what this side EXPOSES to that peer, where the selector only decides
+ *  what this side READS back.
  *
  *  ```ts
  *  expose(
@@ -303,8 +283,8 @@ export type Contextual<TValue, TBuild extends ContextBuilder = ContextBuilder> =
  *  )
  *  ```
  *
- *  Without it, `ctx` is only known to carry unknowns: the values then come from the `context:`
- *  option, which is a separate call site TypeScript cannot link to this one. */
+ *  Values a caller only needs at read time do not belong here: derive them in `connection:` instead,
+ *  which sees the same context and needs no declaration. */
 export function context<TBuild extends ContextBuilder, TValue>(
   make: (ctx: ContextOf<TBuild>) => TValue,
   build: TBuild,

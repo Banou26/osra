@@ -104,12 +104,11 @@ export const expose = <
   value:
     | CapableCheck<TValue, TModules, RevivableContextOf<TTransport>>
     | Contextual<CapableCheck<TValue, TModules, RevivableContextOf<TTransport>>, TBuild>,
-  // Both are re-declared here to carry inference (TBuild, TResult) that the base option type states
-  // only broadly. Intersecting instead of omitting gives `connection` two signatures at once, and its
-  // parameter degrades to a union of both.
-  options: Omit<StartConnectionsOptions<TModules>, 'context' | 'connection'> & {
+  // Re-declared here to carry the TResult inference that the base option type states only broadly.
+  // Intersecting instead of omitting gives `connection` two signatures at once, and its parameter
+  // degrades to a union of both.
+  options: Omit<StartConnectionsOptions<TModules>, 'connection'> & {
     transport: TTransport
-    context?: TBuild
     connection?: (connected: Connected<Remote<T>, ReturnType<TBuild>>) => TResult
   }
 ): Exposed<TResult> =>

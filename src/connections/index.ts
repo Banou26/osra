@@ -75,7 +75,6 @@ export const startConnections = <
     revivableModules: configureRevivableModules,
     uuid: _uuid,
     remoteUuid: presetRemoteUuid,
-    context: buildContext,
     // A connection is the peer's value unless the caller says otherwise, which is what expose has
     // always resolved to. Its type-level counterpart is `TResult`'s default in src/index.ts: a type
     // parameter default cannot be read off a value, so those two state the same fact separately and
@@ -104,10 +103,10 @@ export const startConnections = <
   type MergedModules = typeof mergedRevivableModules
   const connectionContexts = new Map<string, ConnectionContext<MergedModules>>()
 
-  // A builder passed to `context(make, build)` travels with the value, so one definition types the
-  // resolvers AND populates the context. The `context:` option covers a builder defined elsewhere.
-  const contextBuilder = () =>
-    (isContextual(value) ? value[CONTEXT_BUILD] : undefined) ?? buildContext
+  // The builder travels with the value, passed as `context(make, build)`, so one definition both
+  // types the resolvers and populates the context. There is no separate option: anything a caller
+  // only needs at read time can be derived in `connection:` instead.
+  const contextBuilder = () => isContextual(value) ? value[CONTEXT_BUILD] : undefined
 
   // uuids aborted before they were registered; consumed by claimPendingAbort at registration
   const pendingAborts = new Set<string>()
