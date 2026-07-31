@@ -73,7 +73,7 @@ export const startConnections = <
     revivableModules: configureRevivableModules,
     uuid: _uuid,
     remoteUuid: presetRemoteUuid,
-    localContext: declaredContext = {},
+    context: buildContext,
   }: StartConnectionsOptions<TModules>
 ): Connections<T> => {
   const transport = normalizeTransport(_transport)
@@ -114,7 +114,7 @@ export const startConnections = <
 
   const ctx: ProtocolContext<MergedModules> = {
     transport,
-    declaredContext: typeof declaredContext === 'function' ? declaredContext({}) : declaredContext,
+    declaredContext: buildContext?.({}) ?? {},
     valueFor: (peer: Context) =>
       (isContextual<Capable<MergedModules>>(value)
         ? value[CONTEXT](peer as Context & Record<string, unknown>)
@@ -149,7 +149,7 @@ export const startConnections = <
       ...(messageContext.sender ? { sender: messageContext.sender } : {}),
     }
     const peer: Context = {
-      ...(typeof declaredContext === 'function' ? declaredContext(observed) : declaredContext),
+      ...(buildContext?.(observed) ?? {}),
       ...(messageContext.origin ? { origin: messageContext.origin } : {}),
       ...(messageContext.source ? { source: messageContext.source } : {}),
       ...(messageContext.port ? { port: messageContext.port } : {}),

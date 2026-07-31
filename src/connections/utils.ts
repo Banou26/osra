@@ -94,29 +94,28 @@ export type StartConnectionsOptions<
   revivableModules?: (defaults: DefaultRevivableModules) => TModules
   uuid?: Uuid
   remoteUuid?: Uuid
-  /** Custom values to put on every connection's context. Named `local` because that is the whole
-   *  point: a connection's context is built from THIS side's knowledge, never from anything the peer
-   *  sends. Nothing here is transmitted, and nothing in the peer's payload can reach it.
+  /** Builds the custom values on every connection's context, from THIS side's knowledge only. Never
+   *  from anything the peer sends: nothing here is transmitted, and nothing in the peer's payload can
+   *  reach it. That is the whole point of the option, so it is worth restating at every call site.
    *
    *  Two local sources feed it. What the transport observed, which is browser-set and so cannot be
    *  forged: a window message carries `origin` and `source`, a MessagePort carries neither. And
    *  whatever this side already knew, which is the only option for a port, since the side that
    *  received the port learned the identity from the trustworthy window message that delivered it.
    *
-   *  Pass an object for fixed values, or a function to derive them from what was observed:
+   *  Always a function, receiving what was observed. Fixed values are just a function that ignores
+   *  its input, so there is one shape rather than two:
    *
    *  ```ts
    *  expose(context(ctx => resolvers(ctx)), {
    *    transport,
-   *    localContext: ({ origin }) => ({ appId: appIdFor(origin) }),
+   *    context: ({ origin }) => ({ appId: appIdFor(origin) }),
    *  })
    *  ```
    *
    *  Observed browser-set fields win over declared ones, so a declaration can never overwrite a real
    *  origin with a made-up one. */
-  localContext?:
-    | (Context & Record<string, unknown>)
-    | ((observed: Context) => Context & Record<string, unknown>)
+  context?: (observed: Context) => Context & Record<string, unknown>
 }
 
 /** An established connection: what this side knows about the realm on the other end, plus the value
