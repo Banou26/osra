@@ -21,8 +21,7 @@ export type Context =
   | { type: 'resolve', data: Capable }
   | { type: 'reject', error: Capable }
 
-// Error branches intersect with T so the user's own keys land on the target -
-// otherwise TS's excess-property check flags a user key instead of the failure.
+// error branches intersect with T so the excess-property check flags the failure, not a user key
 type CapablePromise<T> = T extends Promise<infer U>
   ? U extends Capable
     ? T
@@ -51,9 +50,7 @@ export type BoxedPromise<T extends Capable = Capable> =
   & { port: BoxedMessagePort<Context> }
   & { [UnderlyingType]: T }
 
-// Pins the revived port between executor return and result arrival - the
-// port↔listener cycle has no other anchor (the caller only holds the
-// returned Promise). The once-listener removes its entry on settle.
+// pins the revived port until settle: the port↔listener cycle has no other anchor
 const inFlightPromisePorts = new Set<AnyPort<Context>>()
 
 export const isType = (value: unknown): value is Promise<any> =>
@@ -84,9 +81,7 @@ export const revive = <T extends BoxedPromise, T2 extends RevivableContext>(
 ) => {
   const port = reviveMessagePort(value.port, context)
   inFlightPromisePorts.add(port)
-  // portId boxes route over the wire and die with the connection; real
-  // transferred MessagePorts (clone transports) keep working past protocol
-  // teardown, so those must stay pending rather than reject.
+  // transferred MessagePorts keep working past protocol teardown, so those must stay pending rather than reject
   const wireRouted = 'portId' in value.port
   return new Promise<T[UnderlyingType]>((resolve, reject) => {
     const settle = () => {

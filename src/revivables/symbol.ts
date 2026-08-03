@@ -12,11 +12,8 @@ export const box = <T extends symbol, T2 extends RevivableContext>(
   value: T,
   context: T2,
 ) => {
-  // Registry symbols carry global identity through their key.
   const registryKey = Symbol.keyFor(value)
   if (registryKey !== undefined) return { ...BoxBase, type, registryKey }
-  // Everything else routes through identity so the same symbol revives to
-  // the same symbol on every send (and round-trips to the original).
   return boxByReference(value, { ...BoxBase, type, description: value.description }, context)
 }
 

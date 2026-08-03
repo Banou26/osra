@@ -12,17 +12,8 @@ import {
   isWebExtensionPort, isWebExtensionRuntime, isWebSocket, isWindow, isSharedWorker
 } from './type-guards.js'
 
-/** What the local side knows about the realm on the other end of a connection.
- *
- *  `origin` and `source` are only OBSERVABLE on window transports. A MessagePort message carries
- *  origin "" and source null, so for a port the identity has to be declared by whoever created the
- *  transport, which is the side that received the port over a trustworthy window message. That is why
- *  `expose` takes a `context` option rather than only reporting what it can see: without it, every
- *  port-based consumer would rebuild the same out-of-band handshake to learn who it is talking to. */
+/** `origin` and `source` are only OBSERVABLE on window transports: a MessagePort message carries origin "" and source null. */
 export type Context = {
-  /** Tears down THIS connection and nothing else: the peer is sent a close, its revivables are torn
-   *  down, and it stops being tracked. `unregisterSignal` is the whole-expose equivalent; this is the
-   *  one a server reaches for when a single realm misbehaves or is finished with. */
   abort?: () => void
   origin?: string
   source?: MessageEventSource | null
@@ -31,11 +22,11 @@ export type Context = {
 }
 
 export type MessageContext = {
-  port?: MessagePort | WebExtPort // WebExtension
-  sender?: WebExtSender // WebExtension
+  port?: MessagePort | WebExtPort // WebExtension only
+  sender?: WebExtSender // WebExtension only
   receiveTransport?: ReceivePlatformTransport
-  source?: MessageEventSource | null // Window, Worker, WebSocket, ect...
-  origin?: string // Window
+  source?: MessageEventSource | null // Window, Worker, WebSocket
+  origin?: string // Window only
 }
 
 export type ReceiveHandler = (listener: (event: Message, messageContext: MessageContext) => void) => void | (() => void)
@@ -72,10 +63,7 @@ export type JsonPlatformTransport =
   | EmitJsonPlatformTransport
   | ReceiveJsonPlatformTransport
 
-// A worker's own global scope (`self`/`globalThis` inside a worker), typed structurally:
-// lib.webworker can't be loaded next to lib.dom (conflicting `self` declarations), and the
-// shape also has to cover worker code compiled under lib.dom, where the globals carry
-// Window-style postMessage signatures. Runtime treats it like Worker (last-resort branch).
+// typed structurally because lib.webworker can't be loaded next to lib.dom (conflicting `self` declarations)
 export type WorkerSelf = {
   postMessage(...args: any[]): void
   addEventListener(type: string, listener: (event: any) => void): void
@@ -111,9 +99,7 @@ export type Transport =
   | PlatformTransport
   | CustomTransport
 
-// Typed via the shipped webextension-polyfill module types - referencing the
-// ambient `browser`/`chrome` globals here would leak unresolvable names into
-// the published .d.ts (those @types are devDependencies only).
+// Typed via the shipped webextension-polyfill module types - referencing the ambient `browser`/`chrome` globals here would leak unresolvable names into the published .d.ts
 type WebExtGlobals = { browser?: Browser, chrome?: Browser }
 export const getWebExtensionGlobal = (): Browser | undefined =>
   (globalThis as unknown as WebExtGlobals).browser ?? (globalThis as unknown as WebExtGlobals).chrome
@@ -148,7 +134,6 @@ export const registerOsraMessageListener = (
   const receiveTransport: Extract<CustomTransport, { receive: any }>['receive'] =
     isCustomTransport(transport) ? transport.receive : transport
 
-  // Custom function handler
   if (typeof receiveTransport === 'function') {
     const unregister = receiveTransport((message, ctx) => {
       if (unregisterSignal?.aborted) return
@@ -160,7 +145,6 @@ export const registerOsraMessageListener = (
     return
   }
 
-  // WebExtension family - subscribe to an `onMessage`-style listener.
   if (
     isWebExtensionRuntime(receiveTransport)
     || isWebExtensionPort(receiveTransport)
@@ -186,21 +170,17 @@ export const registerOsraMessageListener = (
       onAbort(unregisterSignal, () => receiveTransport.removeListener(_listener))
     } else if (isWebExtensionOnMessage(receiveTransport)) {
       listenOnWebExtOnMessage(receiveTransport)
-    } else { // WebExtPort
+    } else {
       listenOnWebExtOnMessage(receiveTransport.onMessage as WebExtOnMessage)
     }
     return
   }
 
-  // Window, Worker, WebSocket, ServiceWorkerContainer, MessagePort, SharedWorker, …
-  // SharedWorker dispatches messages on its .port, not on the worker object.
+  // SharedWorker dispatches messages on its .port, not on the worker object
   const target = isSharedWorker(receiveTransport) ? receiveTransport.port : receiveTransport
-  // Inbound origin filtering is a cross-origin *window* concern - WebSocket
-  // and ServiceWorkerContainer events carry their own unrelated origins and
-  // a page-origin value would silently drop all their traffic.
+  // Inbound origin filtering is a cross-origin *window* concern - WebSocket and ServiceWorkerContainer events carry their own unrelated origins
   const filterByOrigin = origin !== '*' && isWindow(receiveTransport)
   const messageListener = (event: MessageEvent<Message | string>) => {
-    // JSON transports (WebSocket) deliver strings - parse before the key check.
     let data = event.data
     if (typeof data === 'string') {
       try { data = JSON.parse(data) as Message } catch { return }
@@ -211,8 +191,7 @@ export const registerOsraMessageListener = (
     listener(data, { receiveTransport, source: event.source, origin: event.origin })
   }
   target.addEventListener('message', messageListener as EventListener)
-  // addEventListener alone never enables a MessagePort's queue - only
-  // .start() or assigning onmessage does.
+  // addEventListener alone never enables a MessagePort's queue - only .start() or assigning onmessage does
   if (target instanceof MessagePort) target.start()
   onAbort(unregisterSignal, () =>
     target.removeEventListener('message', messageListener as EventListener),
@@ -231,12 +210,12 @@ export const sendOsraMessage = (
   if (typeof emitTransport === 'function') {
     emitTransport(message, transferables)
   } else if (isWindow(emitTransport)) {
-    // Must check first - cross-origin windows throw on other property access.
+    // Must check first - cross-origin windows throw on other property access
     emitTransport.postMessage(message, origin, transferables)
   } else if (isWebExtensionPort(emitTransport)) {
     emitTransport.postMessage(message)
   } else if (isWebExtensionRuntime(emitTransport)) {
-    // Rejects while no receiver exists yet (announce retries) - swallow only that.
+    // Rejects while no receiver exists yet (announce retries) - swallow only that
     emitTransport.sendMessage(message)?.catch?.((error: unknown) => {
       if (!String((error as { message?: unknown })?.message).includes('Receiving end does not exist')) throw error
     })
@@ -249,7 +228,7 @@ export const sendOsraMessage = (
     }
   } else if (isSharedWorker(emitTransport)) {
     emitTransport.port.postMessage(message, transferables)
-  } else { // MessagePort | ServiceWorker | Worker | WorkerSelf
+  } else {
     emitTransport.postMessage(message, transferables)
   }
 }

@@ -18,16 +18,11 @@ import * as teardownTests from './teardown'
 import * as typeGuards from './type-guards'
 import * as workerHandshake from './worker-handshake'
 
-// Filter helper: collect functions only, drop constants like
-// baseMemory.DEFAULT_ITERATIONS that share the same module namespace.
 const fns = <Fn extends (...args: any[]) => any>(o: Record<string, unknown>): Record<string, Fn> =>
   Object.fromEntries(
     Object.entries(o).filter((entry): entry is [string, Fn] => typeof entry[1] === 'function'),
   )
 
-// Transport-parameterized: each test runs once per registered transport.
-// New tests added to base-tests.ts (or any of these source modules) appear
-// automatically - no per-transport wiring file to update.
 export const transportTests: Readonly<Record<string, Readonly<Record<string, (transport: Transport) => Promise<void>>>>> = {
   Base: base,
   Identity: fns(identityTests),
@@ -39,17 +34,12 @@ export const transportTests: Readonly<Record<string, Readonly<Record<string, (tr
   },
 }
 
-// Memory tests take (transport, iterations) - the runner pulls iterations
-// from the per-transport config so JSON gets fewer rounds than Web.
 export const memoryTests: Readonly<Record<string, (transport: Transport, iterations: number) => Promise<void>>> =
   fns(baseMemory)
 
-// GC tests take (transport) but rely on the spec runner exposing
-// globalThis.__osraForceGc which drives CDP HeapProfiler.collectGarbage.
 export const gcTests: Readonly<Record<string, (transport: Transport) => Promise<void>>> =
   fns(gc)
 
-// Standalone: no transport parameterization. One execution per test.
 export const standaloneTests: Readonly<Record<string, Readonly<Record<string, () => Promise<void>>>>> = {
   ConnectionContext: fns(connectionContext),
   EventPort: fns(eventPort),

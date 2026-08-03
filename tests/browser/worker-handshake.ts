@@ -2,15 +2,7 @@ import { expect } from 'chai'
 
 import { expose } from '../../src/index'
 
-// The worker imports osra from the published build (/build/index.js)
-// and calls expose() inside the dynamic import resolution. A
-// synchronous busy-wait at the top of the module body blocks the event
-// loop and delays both the import and the expose() - that is, no
-// 'message' listener exists in the worker scope for `delayMs`. Firefox
-// silently drops messages posted to a worker during that window;
-// Chrome and WebKit buffer them. This mirrors libav-wasm's real shape:
-// static imports and setup come first, the listener is attached only
-// when expose() runs.
+// Firefox silently drops messages posted to a worker with no 'message' listener yet; the busy-wait holds that window open.
 const buildWorkerSource = (osraUrl: string, delayMs: number) => `
   const __deadline = performance.now() + ${delayMs}
   while (performance.now() < __deadline) {}
@@ -26,9 +18,6 @@ const osraUrl = () => new URL('/build/index.js', location.href).href
 
 type Remote = { ping: (n: number) => Promise<number> }
 
-// Healthy worker handshake completes in well under 100ms in Chrome and
-// Firefox. A 1s deadline catches hangs without dragging out CI when the
-// suite happens to be misconfigured.
 const HANDSHAKE_DEADLINE_MS = 1_000
 
 const makeWorker = (url: string) =>
@@ -45,8 +34,6 @@ const awaitHandshake = async (worker: Worker) => {
   return outcome
 }
 
-// Single fresh module worker. With the FF race fixed, the handshake
-// must complete in well under the deadline and the remote must be usable.
 export const moduleWorkerHandshake = async () => {
   const url = URL.createObjectURL(
     new Blob([buildWorkerSource(osraUrl(), 100)], { type: 'application/javascript' }),
@@ -63,9 +50,6 @@ export const moduleWorkerHandshake = async () => {
   }
 }
 
-// Stress: open module workers back-to-back. Per the brief, the race
-// is intermittent - one round may slip through. N sequential rounds
-// give Firefox plenty of opportunities to drop the first announce.
 export const moduleWorkerHandshakeStress = async () => {
   const url = URL.createObjectURL(
     new Blob([buildWorkerSource(osraUrl(), 100)], { type: 'application/javascript' }),
@@ -85,8 +69,6 @@ export const moduleWorkerHandshakeStress = async () => {
   }
 }
 
-// Parallel: spawn many workers concurrently and wait for every
-// handshake. Concurrent spawns hit the same race once per worker.
 export const moduleWorkerHandshakeParallel = async () => {
   const url = URL.createObjectURL(
     new Blob([buildWorkerSource(osraUrl(), 100)], { type: 'application/javascript' }),

@@ -7,8 +7,7 @@ import type { BoxedMap } from '../../src/revivables/map'
 import type { BoxedSet } from '../../src/revivables/set'
 import type { DefaultRevivableModule } from '../../src/revivables'
 
-// Compile-time test scaffolding. None of these run at runtime - TypeScript's
-// errors are the test results.
+// none of these run at runtime - TypeScript's errors are the test results
 
 type Expect<T extends true> = T
 type Equals<A, B> =
@@ -16,8 +15,6 @@ type Equals<A, B> =
     ? true
     : false
 type Assignable<From, To> = From extends To ? true : false
-
-// --- Jsonable / Structurable / Capable membership --------------------------
 
 type _JsonablePositives = [
   Expect<Assignable<string, Jsonable>>,
@@ -54,39 +51,20 @@ type _CapablePositives = [
   Expect<Assignable<Array<Map<string, Promise<number>>>, Capable>>,
 ]
 
-// --- Negative cases (these should NOT be Capable) --------------------------
-//
-// Note: any function type IS Capable via the function revivable, even if its
-// signature references non-Capable params. The CapableFunction constraint is
-// applied at expose() call sites, not on Capable membership in general.
-
+// any function type IS Capable via the function revivable: the CapableFunction constraint is
+// applied at expose() call sites, not on Capable membership in general
 type _CapableNegatives = [
   Expect<Equals<WeakMap<object, string> extends Capable ? true : false, false>>,
   Expect<Equals<WeakSet<object> extends Capable ? true : false, false>>,
 ]
 
-// Symbol is Capable via the `symbol` revivable (description-based).
 type _CapableSymbol = [
   Expect<Assignable<symbol, Capable>>,
 ]
 
-// --- Transport-aware Capable narrowing -----------------------------------
-//
-// On a JSON-only transport, `Capable<modules, JsonCtx>` excludes the
-// types that would silently coerce to `"{}"` via JSON.stringify (Blob,
-// File, RegExp, ImageBitmap, OffscreenCanvas, …). Modules that *do*
-// support JSON encoding (Date / Map / Set / BigInt / Function / etc.)
-// keep their types in via `InferRevivables`.
-//
-// On a clone-capable transport (or the broad-Transport default),
-// nothing changes.
-
 type JsonCtx = RevivableContext & { transport: { isJson: true; emit: any; receive: any } }
 type CloneCtx = RevivableContext & { transport: typeof window }
 
-// On a clone transport, Blob / File / OffscreenCanvas / RegExp / ImageBitmap
-// are all assignable to Capable (File / FileList ride the clonable fallback,
-// Blob rides the clone-only `blob` module).
 type _CapableCloneCtxPositives = [
   Expect<Assignable<Blob, Capable<DefaultRevivableModule[], CloneCtx>>>,
   Expect<Assignable<File, Capable<DefaultRevivableModule[], CloneCtx>>>,
@@ -94,10 +72,6 @@ type _CapableCloneCtxPositives = [
   Expect<Assignable<ImageData, Capable<DefaultRevivableModule[], CloneCtx>>>,
 ]
 
-// On a JSON-only transport, those same types are NOT assignable -
-// the type system rejects them at the `expose()` call site. Blob / File /
-// FileList are clone-only, so they are NOT Capable on JSON either (callers
-// send ArrayBuffers there).
 type _CapableJsonCtxNegatives = [
   Expect<Equals<RegExp extends Capable<DefaultRevivableModule[], JsonCtx> ? true : false, false>>,
   Expect<Equals<ImageData extends Capable<DefaultRevivableModule[], JsonCtx> ? true : false, false>>,
@@ -105,9 +79,6 @@ type _CapableJsonCtxNegatives = [
   Expect<Equals<File extends Capable<DefaultRevivableModule[], JsonCtx> ? true : false, false>>,
 ]
 
-// Module-handled types stay Capable on JSON transports - their boxes
-// produce JSON-clonable shapes (date → ISO string, map/set → entries,
-// etc).
 type _CapableJsonCtxPositives = [
   Expect<Assignable<bigint, Capable<DefaultRevivableModule[], JsonCtx>>>,
   Expect<Assignable<Date, Capable<DefaultRevivableModule[], JsonCtx>>>,
@@ -118,13 +89,8 @@ type _CapableJsonCtxPositives = [
   Expect<Assignable<symbol, Capable<DefaultRevivableModule[], JsonCtx>>>,
 ]
 
-// --- ReplaceWithBox: confirm value-shape revivables transform correctly ---
-//
-// Function & Promise box-replacement aren't asserted here: TS's inference of
-// `infer B` over a generic `box<T>(...)` signature loses the parameter on the
-// way through `FindMatchingBox`, so the runtime behaviour is solid but a
-// compile-time assertion can't pin down `BoxedFunction<T>` cleanly. The
-// function/promise round-trip is covered exhaustively by the runtime tests.
+// Function & Promise box-replacement aren't asserted here: TS's inference of `infer B` over a
+// generic `box<T>(...)` signature loses the parameter on the way through `FindMatchingBox`
 
 type _ReplaceMap =
   ReplaceWithBox<Map<string, number>, DefaultRevivableModule>
@@ -144,13 +110,10 @@ type _CheckBigIntReplaced = Expect<
   _ReplaceBigInt extends BoxBase<'bigint'> ? true : false
 >
 
-// Plain values pass through unchanged.
 type _PlainPassthrough = ReplaceWithBox<{ foo: string }, DefaultRevivableModule>
 type _CheckPlainPassthrough = Expect<
   Equals<_PlainPassthrough, { foo: string }>
 >
-
-// --- DeepReplaceWithBox: recursion through containers --------------------
 
 type _DeepReplaceObjMap =
   DeepReplaceWithBox<{ m: Map<string, number>, plain: string }, DefaultRevivableModule>
@@ -163,11 +126,6 @@ type _DeepReplaceArrMap =
 type _CheckDeepArrMap = Expect<
   _DeepReplaceArrMap extends Array<BoxBase<'map'>> ? true : false
 >
-
-// --- Custom RevivableModule inference ------------------------------------
-//
-// A locally-declared module satisfying RevivableModule preserves its literal
-// `type` so users can still discriminate boxed shapes downstream.
 
 type Point = { x: number; y: number }
 type BoxedPoint = BoxBase<'point'> & { x: number; y: number }

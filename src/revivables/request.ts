@@ -37,10 +37,7 @@ export const revive = <T extends ReturnType<typeof box>, T2 extends RevivableCon
 ): Request => {
   const headers = reviveHeaders(value.headers, context)
 
-  // Firefox normalizes `body: null` in the constructor to a Request whose
-  // `.body` getter returns `undefined` instead of `null`. Only pass `body`
-  // when there's an actual stream so a bodyless source round-trips to a
-  // bodyless Request on every browser.
+  // Firefox turns `body: null` into a `.body` getter returning `undefined`, so only pass `body` when there's a stream
   const init: RequestInit & { duplex?: 'half' } = {
     method: value.method,
     headers,

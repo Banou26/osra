@@ -16,17 +16,13 @@ export * from './revivables/index.js'
 export * from './connections/index.js'
 export * from './utils/index.js'
 
-/** Synthetic context so `Capable` can narrow on the inferred transport
- *  without an actual context object at the call site. Only `transport`
- *  matters; the rest is stubbed with the broadest types.
- *  Named for the revivable context specifically: `ContextOf` is the PUBLIC helper for a connection
- *  context builder, re-exported from connections/utils, and two of them in one module is a trap. */
+// named for the revivable context specifically: `ContextOf` is the PUBLIC helper for a connection
+// context builder, re-exported from connections/utils, and two of them in one module is a trap
 type RevivableContextOf<TTransport extends Transport> = RevivableContext & { transport: TTransport }
 
-/** Error text for a failed check. When the value only fails because the
- *  transport is JSON (it would pass under the broad `RevivableContext`,
- *  whose transport union resolves to structured-clone semantics), blame
- *  the transport instead of the value. */
+// picks between two error texts: when the value fails ONLY because the transport is JSON (it would
+// pass under the broad `RevivableContext`, whose transport union resolves to structured-clone
+// semantics), blame the transport instead of the value
 type CapableCheckMessage<
   T,
   TModules extends readonly RevivableModule[],
@@ -67,8 +63,8 @@ type CapableCheck<
  * for await (const remote of expose(resolvers, { transport })) { } // every peer's value
  * ```
  *
- * `connection` decides what that shape is. Omit it and it is the peer's value, which is what expose
- * has always resolved to. Return whatever a connection should mean instead:
+ * `connection` decides what that shape is. Omit it and it is the peer's value. Return whatever a
+ * connection should mean instead:
  *
  * ```ts
  * const { value, context } = await expose(resolvers, {
@@ -93,19 +89,16 @@ export const expose = <
   T = unknown,
   const TModules extends readonly RevivableModule[] = DefaultRevivableModules,
   const TTransport extends Transport = Transport,
-  // After TValue, not before it. These are positional, so slotting a new one into the middle silently
-  // reassigns every explicit type argument a consumer already wrote.
+  // after TValue, not before it: these are positional, so slotting a new one into the middle
+  // silently reassigns every explicit type argument a consumer already wrote
   const TValue = Capable<TModules, RevivableContextOf<TTransport>>,
-  // Defaults to the peer's value, so omitting `connection` keeps expose resolving to the remote.
-  // Given one, it is inferred from that function's return type.
   TResult = Remote<T>
 >(
   value:
     | CapableCheck<TValue, TModules, RevivableContextOf<TTransport>>
     | Contextual<CapableCheck<TValue, TModules, RevivableContextOf<TTransport>>>,
-  // Re-declared here to carry the TResult inference that the base option type states only broadly.
-  // Intersecting instead of omitting gives `connection` two signatures at once, and its parameter
-  // degrades to a union of both.
+  // intersecting instead of omitting gives `connection` two signatures at once, and its parameter
+  // degrades to a union of both
   options: Omit<StartConnectionsOptions<TModules>, 'connection'> & {
     transport: TTransport
     connection?: (connected: Connected<Remote<T>>) => TResult

@@ -1,18 +1,6 @@
-/*
- * osra docs theme: MDN-style structure in the same spirit as the fkn.dev docs
- * (see fkn/dev/src/styles/custom.css), painted with osra's own palette.
- * Starlight ships its own `--sl-*` variables; we define the osra `--o-*`
- * palette per theme and map every Starlight token onto it. Custom-property
- * references resolve lazily on the same element, so the `--sl-* : var(--o-*)`
- * mappings below only need to be declared once and re-resolve when the
- * `--o-*` palette swaps per theme.
- *
- * Theme attribute: Starlight sets `<html data-theme="dark|light">` (dark is the
- * default when no attribute is present). This file is loaded unlayered, so it
- * wins over Starlight's `@layer starlight.*` component styles.
- */
+/* Starlight sets `<html data-theme="dark|light">`, dark when the attribute is absent.
+ * Loaded unlayered so it wins over Starlight's `@layer starlight.*` component styles. */
 
-/* ---- osra palette: dark (Starlight default) ------------------------------- */
 :root,
 :root[data-theme='dark'] {
   --o-bg: #131720;
@@ -37,7 +25,6 @@
   --o-brand-glow: rgba(79, 156, 240, .13);
 }
 
-/* ---- osra palette: light --------------------------------------------------- */
 :root[data-theme='light'] {
   --o-bg: #f6f7f9;
   --o-bg-2: #edeff3;
@@ -61,12 +48,9 @@
   --o-brand-glow: rgba(47, 124, 214, .10);
 }
 
-/* ---- Map Starlight tokens onto the osra palette ---------------------------- */
 :root {
-  /* Inter (self-hosted via @fontsource), MDN's typeface; system stack fallback. */
   --sl-font: 'Inter Variable', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 
-  /* Grayscale -> osra ink/border scale */
   --sl-color-white: var(--o-ink);
   --sl-color-gray-1: var(--o-ink);
   --sl-color-gray-2: var(--o-ink-dim);
@@ -77,40 +61,33 @@
   --sl-color-gray-7: var(--o-card-2);
   --sl-color-black: var(--o-bg);
 
-  /* Semantic surfaces + text */
   --sl-color-text: var(--o-ink);
   --sl-color-bg: var(--o-bg);
   --sl-color-bg-nav: var(--o-card);
   --sl-color-bg-sidebar: var(--o-bg);
   --sl-color-bg-inline-code: var(--o-card-2);
 
-  /* Accent = osra brand (links, active states) */
   --sl-color-accent-low: var(--o-brand-soft);
   --sl-color-accent: var(--o-brand);
   --sl-color-accent-high: var(--o-brand-ink);
   --sl-color-text-accent: var(--o-brand-ink);
   --sl-color-bg-accent: var(--o-brand);
 
-  /* Hairlines */
   --sl-color-hairline-light: var(--o-border);
   --sl-color-hairline: var(--o-border);
   --sl-color-hairline-shade: var(--o-border);
 
-  /* Radius scale. */
   --or-sm: 8px;
   --or-md: 11px;
   --or-lg: 16px;
   --or-xl: 20px;
   --or-2xl: 26px;
 
-  /* Layout proportions, MDN-ish: roomy sidebar + TOC. */
   --sl-content-width: calc(46rem + 10px);
   --sl-sidebar-width: 19.5rem;
   --sl-line-height: 1.65;
-  /* Max width of the whole centred shell (sidebar + content + TOC). */
   --osra-shell-max: 88rem;
 
-  /* Header is two stacked rows (nav + breadcrumb); see below. */
   --osra-nav-row: 3.75rem;
   --osra-crumb-row: 3rem;
   --sl-nav-height: calc(var(--osra-nav-row) + var(--osra-crumb-row));
@@ -128,7 +105,6 @@
   }
 }
 
-/* ---- Body: subtle brand glow ------------------------------------------------ */
 html,
 body {
   background-color: var(--o-bg);
@@ -140,36 +116,21 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* ===========================================================================
- * Header: two-row MDN bar. Neutralise PageFrame's fixed `.header` wrapper so
- * our override paints both rows edge-to-edge. (Targets the wrapper Starlight
- * renders around the Header slot.)
- * ======================================================================== */
 .page > header.header {
   padding: 0;
   background: transparent;
   border-bottom: none;
 }
 
-/* ===========================================================================
- * Layout: open and borderless, MDN-style. No divider between the side panels
- * and the content; the panels just float in the page.
- * ======================================================================== */
 .sidebar-pane {
   border-inline-end: none;
   background: transparent;
 }
-/* No divider on the right "In this article" panel either. */
 .right-sidebar {
   border-inline-start: none;
 }
 
-/* ---------------------------------------------------------------------------
- * Centred shell: on big screens, centre the whole sidebar+content+TOC group
- * within --osra-shell-max instead of pinning the sidebar to the viewport edge.
- * --osra-gutter is resolved from `100%` on .page (scrollbar-safe) and inherited
- * by the fixed header and sidebar, so they line up with the centred content.
- * ------------------------------------------------------------------------ */
+/* --osra-gutter resolves from `100%` on .page (scrollbar-safe) and is inherited by the fixed header and sidebar */
 .page {
   --osra-gutter: max(0px, (100% - var(--osra-shell-max)) / 2);
 }
@@ -185,10 +146,6 @@ body {
   }
 }
 
-/* ===========================================================================
- * Left sidebar - soft, open: a quiet rounded highlight for the current page,
- * no accent bars, no tree lines.
- * ======================================================================== */
 #starlight__sidebar a {
   font-size: 1rem;
   line-height: 1.5;
@@ -226,9 +183,6 @@ body {
   margin-block: 0.1rem;
 }
 
-/* ===========================================================================
- * Right "In this article" TOC - open: no rail, just a coloured current item.
- * ======================================================================== */
 starlight-toc nav h2 {
   color: var(--o-ink);
   font-size: 1.3rem;
@@ -253,9 +207,6 @@ starlight-toc nav a[aria-current='true'] {
   background: transparent;
 }
 
-/* ===========================================================================
- * Markdown content: MDN-flavoured links, inline code, tables, asides.
- * ======================================================================== */
 .sl-markdown-content {
   --sl-text-h1: 2.4rem;
 }
@@ -271,7 +222,6 @@ starlight-toc nav a[aria-current='true'] {
   text-decoration-color: currentColor;
 }
 
-/* Inline code - subtle tint, no border (MDN-style). */
 .sl-markdown-content :not(pre) > code:not(:where(.not-content *)) {
   background-color: var(--o-card-2);
   border-radius: 5px;
@@ -283,13 +233,11 @@ starlight-toc nav a[aria-current='true'] {
   color: var(--o-brand-ink);
 }
 
-/* Headings: anchor hierarchy with a hairline under h2 like MDN. */
 .sl-markdown-content :is(h1, h2, h3, h4, h5) {
   color: var(--o-ink);
   letter-spacing: -.018em;
 }
 
-/* Content tables - open, horizontal-rule style (no card, no shadow, no zebra). */
 .sl-markdown-content table:not(:where(.not-content *)) {
   display: block;
   width: 100%;
@@ -309,21 +257,16 @@ starlight-toc nav a[aria-current='true'] {
   border-bottom: 2px solid var(--o-border-2);
 }
 
-/* Fenced code blocks (expressive-code) - quiet rounding. Set EC's own radius
- * variable instead of overriding the pre directly, so framed blocks with a
- * header (file-name tabs, terminal bars) keep the header and code area
- * geometry in sync: the header carries the top rounding, the pre the bottom. */
+/* set expressive-code's own radius variable, not the pre: framed blocks need the header and code area rounding to stay in sync */
 .expressive-code {
   --ec-brdRad: 10px;
 }
 
-/* Blockquotes / asides keep the brand accent. */
 .sl-markdown-content blockquote:not(:where(.not-content *)) {
   border-inline-start: 3px solid var(--o-brand);
   color: var(--o-ink-dim);
 }
 
-/* Starlight <Card> components (used on the splash page). */
 .card {
   border-radius: 16px;
   border: 1px solid var(--o-border);
@@ -334,17 +277,11 @@ starlight-toc nav a[aria-current='true'] {
   background: var(--o-brand-soft);
 }
 
-/* Splash hero call-to-action buttons. */
 .hero a[href].sl-flex {
   border-radius: 14px;
 }
 
-/* ---------------------------------------------------------------------------
- * Mobile: the header is two rows, but Starlight centres its fixed sidebar
- * toggle against the whole --sl-nav-height. Re-centre it against the nav (top)
- * row so it sits beside the logo and clears the breadcrumb-row theme toggle.
- * (Header.astro reserves matching right padding on the nav row.)
- * ------------------------------------------------------------------------ */
+/* Starlight centres its fixed sidebar toggle against the whole --sl-nav-height; Header.astro reserves the matching right padding on the nav row */
 @media (max-width: 50rem) {
   .sidebar-pane {
     background: var(--o-bg);

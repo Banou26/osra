@@ -8,27 +8,12 @@ import { expose, relay } from '../../src/index'
 import { OSRA_BOX, OSRA_KEY, OSRA_DEFAULT_KEY } from '../../src/types'
 import { makeJsonTransport } from './utils'
 
-// Regression coverage for the per-port sequence + reorder-buffer fix (0.5.7).
-//
-// A connectionless transport (chrome's runtime.sendMessage between a content
-// script and the service worker) gives NO ordering guarantee: a logical port's
-// messages can arrive out of order under concurrency. osra multiplexes a
-// stream's chunk/credit/end/close traffic over one such port, and the protocol
-// pre-0.5.7 assumed in-order delivery - so a reordered chunk storm corrupted
-// the stream's content or let its close overtake trailing chunks, wedging the
-// consumer forever (the heimdall rapid-seek deadlock). The fix stamps each port
-// message with a monotonic seq and the receiver delivers strictly in send-order.
-// These tests reproduce the reordering at the transport and assert the stream
-// survives it; before the fix they corrupt the byte order or hang.
+// regression coverage for the per-port sequence + reorder-buffer fix (0.5.7): on a connectionless
+// transport a reordered chunk storm corrupted a stream's content or wedged the consumer forever
 
 type Listener = (message: Message, ctx: MessageContext) => void
 
-// A self-contained JSON transport pair (a <-> b). When `reorder` is set, every
-// message emitted within one macrotask tick is flushed REVERSED on the next
-// tick. Causally-separated traffic (the handshake, a call and its return) lands
-// alone in its own tick and is untouched; a synchronous burst (a stream's chunk
-// pump, whose posts chain across microtasks inside one macrotask) is fully
-// reversed - the exact condition that broke the old protocol.
+// with `reorder`, every message emitted within one macrotask tick is flushed REVERSED on the next tick
 const transportPair = (reorder: boolean): { a: Transport, b: Transport } => {
   const listeners: Partial<Record<'a' | 'b', Listener>> = {}
   const side = (self: 'a' | 'b', other: 'a' | 'b'): Transport => {
@@ -76,8 +61,6 @@ const readAll = async (stream: ReadableStream<number>): Promise<number[]> => {
 
 const CHUNKS = 300
 
-// The fix's core guarantee, end to end through the public API: a stream
-// multiplexed over a reordering transport still arrives complete and in order.
 export const streamSurvivesReorderingTransport = async () => {
   const { a, b } = transportPair(true)
   const apiA = { stream: async () => sequentialStream(CHUNKS) }
@@ -89,13 +72,9 @@ export const streamSurvivesReorderingTransport = async () => {
   expect(received, 'delivered in send-order').to.deep.equal([...Array(CHUNKS).keys()])
 }
 
-// Same guarantee through the actual failing topology: producer -> relay ->
-// consumer, where only the relay<->consumer hop reorders (mirroring the
-// content-script<->service-worker link that wedged seeking). The relay re-boxes
-// the stream onto a fresh port, so this exercises sequencing across the hop.
 export const streamSurvivesReorderingRelay = async () => {
-  const producerSide = transportPair(false) // producer <-> relay: ordered
-  const consumerSide = transportPair(true)  // relay <-> consumer: reordering
+  const producerSide = transportPair(false)
+  const consumerSide = transportPair(true)
   relay(producerSide.b, consumerSide.a)
 
   const apiA = { stream: async () => sequentialStream(CHUNKS) }
@@ -107,8 +86,6 @@ export const streamSurvivesReorderingRelay = async () => {
   expect(received, 'delivered in send-order').to.deep.equal([...Array(CHUNKS).keys()])
 }
 
-// A reordered transport must not corrupt ordinary multi-message port traffic
-// either: a callback invoked many times in a burst must fire in call-order.
 export const callbackBurstSurvivesReorderingTransport = async () => {
   const { a, b } = transportPair(true)
   const seen: number[] = []
@@ -121,18 +98,11 @@ export const callbackBurstSurvivesReorderingTransport = async () => {
   const remote = await expose<typeof apiA>({}, { transport: b })
 
   await remote.drive((n) => { seen.push(n) })
-  // Let the reversed macrotask batches flush.
   await new Promise((resolve) => setTimeout(resolve, 200))
   expect(seen, 'callbacks fire in call-order').to.deep.equal([...Array(64).keys()])
 }
 
-// Routing hardening (0.6.0): closed portIds are tombstoned so late in-flight
-// messages can't resurrect routing state, handler-less routing entries are
-// bounded, and a reorder buffer whose gap can't close fails the port closed.
-// Driven by a hand-rolled wire peer so portIds, seqs, and ordering are fully
-// deterministic.
-
-// Mirror the (unexported) limits in src/revivables/message-port.ts.
+// mirror the (unexported) limits in src/revivables/message-port.ts
 const REORDER_LIMIT = 2048
 const PENDING_PORT_LIMIT = 1024
 
@@ -145,9 +115,6 @@ const boxedPort = (portId: string, synthetic: boolean) => ({
   synthetic,
 })
 
-// Exposes { take } locally over a JSON MessagePort transport and hand-rolls
-// the peer's side of the protocol: announce/init handshake, then raw port
-// messages with caller-chosen portIds and seqs.
 const connectWirePeer = async () => {
   const { port1, port2 } = new MessageChannel()
   const peerUuid = crypto.randomUUID() as Uuid
@@ -208,15 +175,12 @@ const connectWirePeer = async () => {
 
 const settle = () => new Promise(resolve => setTimeout(resolve, 50))
 
-// A wire close tombstones the portId: late in-flight messages for it are
-// dropped and unrelated ports keep working.
 export const closedPortIgnoresLateMessages = async () => {
   const peer = await connectWirePeer()
   const portId = crypto.randomUUID()
   await peer.callTake(portId)
   peer.sendPortMessage(portId, 0, 'pre-close')
-  // Let the pre-close delivery land: WebKit drops in-flight local port
-  // messages when the entangled end closes right behind them.
+  // WebKit drops in-flight local port messages when the entangled end closes right behind them
   await settle()
   peer.sendPortClose(portId, 1)
   peer.sendPortMessage(portId, 2, 'late-a')
@@ -233,9 +197,6 @@ export const closedPortIgnoresLateMessages = async () => {
   expect(peer.taken[1]!.closes).to.equal(0)
 }
 
-// Reviving a boxed port whose portId was already closed must yield a port
-// whose synthesized 'close' is still observable by the consumer - the
-// listener is only attached after the revived port is delivered.
 export const reviveOfTombstonedPortIdFiresClose = async () => {
   const peer = await connectWirePeer()
   const portId = crypto.randomUUID()
@@ -249,13 +210,11 @@ export const reviveOfTombstonedPortIdFiresClose = async () => {
   expect(peer.taken[1]!.messages).to.deep.equal([])
 }
 
-// A reorder buffer whose gap never closes must fail the port closed at the
-// cap instead of growing forever or wedging silently.
 export const reorderOverflowFailsPortClosed = async () => {
   const peer = await connectWirePeer()
   const portId = crypto.randomUUID()
   await peer.callTake(portId)
-  // seq 0 never arrives: everything buffers until the cap fails the port.
+  // seq 0 never arrives: everything buffers until the cap fails the port
   for (let seq = 1; seq <= REORDER_LIMIT + 1; seq++) peer.sendPortMessage(portId, seq, seq)
 
   const freshPortId = crypto.randomUUID()
@@ -268,8 +227,6 @@ export const reorderOverflowFailsPortClosed = async () => {
   expect(peer.taken[1]!.messages).to.deep.equal(['alive'])
 }
 
-// Messages arriving before their port's handler registers allocate a pending
-// routing entry - admitted and buffered right up to the cap.
 export const earlyPortMessageBuffersBelowPendingCap = async () => {
   const peer = await connectWirePeer()
   for (let i = 0; i < PENDING_PORT_LIMIT - 1; i++) {
@@ -284,9 +241,6 @@ export const earlyPortMessageBuffersBelowPendingCap = async () => {
   expect(peer.taken[0]!.messages).to.deep.equal(['early', 'follow-up'])
 }
 
-// At the cap, an early message for an unknown portId is dropped instead of
-// allocating another entry - and the port itself still works once its box
-// registers the handler.
 export const earlyPortMessageDroppedAtPendingCap = async () => {
   const peer = await connectWirePeer()
   for (let i = 0; i < PENDING_PORT_LIMIT; i++) {

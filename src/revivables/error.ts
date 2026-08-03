@@ -13,7 +13,6 @@ export type BoxedError =
     message: string
     stack: string
     cause?: Capable
-    /** AggregateError only */
     errors?: Capable
     isDOMException?: boolean
   }

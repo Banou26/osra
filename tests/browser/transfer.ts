@@ -4,12 +4,9 @@ import { expect } from 'chai'
 
 import { expose, transfer } from '../../src/index'
 
-// Helper: hash hex of a BufferSource, used to compare data round-trips.
 const hashToHex = async (arrayBuffer: BufferSource) =>
   new Uint8Array((await crypto.subtle.digest('SHA-256', arrayBuffer))).toHex() as string
 
-// Behavior 1: unwrapped transferables are COPIED, not transferred.
-// After the RPC returns, the caller's buffer is still usable on the sender.
 export const unwrappedBufferIsCopied = async (transport: Transport) => {
   const value = async (data: ArrayBuffer) => data.byteLength
   expose(value, { transport })
@@ -19,13 +16,10 @@ export const unwrappedBufferIsCopied = async (transport: Transport) => {
   new Uint8Array(buffer).fill(7)
   const result = await remote(buffer)
   expect(result).to.equal(1024)
-  // Copy semantics: sender-side buffer is still usable.
   expect(buffer.byteLength).to.equal(1024)
   expect(new Uint8Array(buffer)[0]).to.equal(7)
 }
 
-// Behavior 2: transfer-wrapped transferables are MOVED (neutered on the sender).
-// Skipped in JSON-only mode since detachment isn't observable there.
 export const transferredBufferIsDetached = async (transport: Transport) => {
   const value = async (data: ArrayBuffer) => data.byteLength
   expose(value, { transport })
@@ -35,17 +29,12 @@ export const transferredBufferIsDetached = async (transport: Transport) => {
   new Uint8Array(buffer).fill(5)
   const result = await remote(transfer(buffer))
   expect(result).to.equal(1024)
-  // Transfer semantics: sender-side buffer is neutered.
-  // Only observable when the platform actually transfers - JSON-only transports
-  // serialize to base64 and always "copy" regardless.
+  // JSON-only transports serialize to base64 and always "copy", so detachment isn't observable there
   if (!('isJson' in transport && transport.isJson === true)) {
     expect(buffer.byteLength).to.equal(0)
   }
 }
 
-// Behavior 3: broadcasting works with the copy default.
-// The same unwrapped buffer can be sent on TWO separate RPCs (here through
-// two separate exposed connections) and remain usable on the caller.
 export const broadcastUnwrappedWorks = async (transport: Transport) => {
   const value = async (data: ArrayBuffer) => data.byteLength
   expose(value, { transport })
@@ -59,24 +48,17 @@ export const broadcastUnwrappedWorks = async (transport: Transport) => {
   const r2 = await remote2(buffer)
   expect(r1).to.equal(512)
   expect(r2).to.equal(512)
-  // Buffer is still usable after both sends.
   expect(buffer.byteLength).to.equal(512)
   expect(new Uint8Array(buffer)[0]).to.equal(9)
 }
 
-// Behavior 4: transfer() is idempotent.
-// transfer(transfer(x)) == transfer(x) - wrapping twice is a no-op.
 export const transferIsIdempotent = async (_transport: Transport) => {
   const buffer = new ArrayBuffer(64)
   const once = transfer(buffer)
   const twice = transfer(once)
   expect(twice).to.equal(once)
-  // And it still behaves as a transfer marker when sent.
-  // (We only check reference equality here; behavior-over-wire is covered
-  // elsewhere.)
 }
 
-// Behavior 4b: transfer() is idempotent across typed arrays too.
 export const transferIsIdempotentTypedArray = async (_transport: Transport) => {
   const u8 = new Uint8Array(32)
   const once = transfer(u8)
@@ -84,7 +66,6 @@ export const transferIsIdempotentTypedArray = async (_transport: Transport) => {
   expect(twice).to.equal(once)
 }
 
-// Behavior 4c: wrapping twice inline inside an RPC call still works.
 export const transferTwiceInlineStillTransfers = async (transport: Transport) => {
   const value = async (data: ArrayBuffer) => data.byteLength
   expose(value, { transport })
@@ -98,7 +79,6 @@ export const transferTwiceInlineStillTransfers = async (transport: Transport) =>
   }
 }
 
-// Behavior 5: transfer works for typed arrays - the underlying .buffer moves.
 export const transferTypedArrayMovesUnderlyingBuffer = async (transport: Transport) => {
   const value = async (data: Uint8Array) => data.length
   expose(value, { transport })
@@ -110,14 +90,11 @@ export const transferTypedArrayMovesUnderlyingBuffer = async (transport: Transpo
   const result = await remote(transfer(u8))
   expect(result).to.equal(256)
   if (!('isJson' in transport && transport.isJson === true)) {
-    // Underlying buffer is detached on the sender side.
     expect(u8.byteLength).to.equal(0)
   }
-  // Sanity: the hash matches what we expected before sending.
   expect(originalHash.length).to.equal(64)
 }
 
-// Behavior 5b: transfer works for ReadableStream (platform permitting).
 export const transferReadableStream = async (transport: Transport) => {
   const chunks = ['a', 'b', 'c']
   const value = async (stream: ReadableStream<Uint8Array>) => {
@@ -144,8 +121,6 @@ export const transferReadableStream = async (transport: Transport) => {
   expect(result).to.equal('abc')
 }
 
-// Behavior 6: primitives and non-transferables are a no-op.
-// transfer(x) returns its argument unchanged.
 export const nonTransferablesAreNoOp = async (_transport: Transport) => {
   expect(transfer(42)).to.equal(42)
   expect(transfer('hi')).to.equal('hi')
@@ -158,21 +133,15 @@ export const nonTransferablesAreNoOp = async (_transport: Transport) => {
   expect(transfer(arr)).to.equal(arr)
 }
 
-// Behavior 6b: sending a non-transferable through an RPC with transfer() still works.
-// (i.e. we don't crash normal payloads if the user accidentally wraps one.)
 export const transferDoesNotCrashNonTransferable = async (transport: Transport) => {
   const value = async (data: { foo: number }) => data.foo
   expose(value, { transport })
   const remote = await expose<typeof value>({}, { transport })
 
-  // transfer({ foo: 1 }) returns the object unchanged; the RPC should still succeed.
   const result = await remote(transfer({ foo: 7 }) as { foo: number })
   expect(result).to.equal(7)
 }
 
-// Behavior 7: MessagePort is always transferred, with or without the wrapper.
-// This mirrors the existing userMessagePort test and proves the must-transfer
-// allow-list still works.
 export const messagePortStillTransfersWithoutWrapper = async (transport: Transport) => {
   const { port1: _port1, port2 } = new MessageChannel()
   const value = {
@@ -197,12 +166,6 @@ export const messagePortStillTransfersWithoutWrapper = async (transport: Transpo
   await expect(port2Promise).to.eventually.equal(1)
 }
 
-// Behavior 8: existing tests still pass - covered by the base test suite wiring
-// (not re-asserted here; the full suite is run from web-context-transport.ts and
-// json-transport.ts).
-
-// Behavior 2b: data integrity round-trip with transfer().
-// The receiver sees the exact same bytes we sent.
 export const transferredBufferDataRoundTrips = async (transport: Transport) => {
   const value = async (data: ArrayBuffer) => new Uint8Array(data).toHex() as string
   expose(value, { transport })
@@ -217,13 +180,11 @@ export const transferredBufferDataRoundTrips = async (transport: Transport) => {
   expect(receivedHex).to.equal(expectedHex)
 }
 
-// Behavior 9: OffscreenCanvas is a Transferable that also extends EventTarget - it must
-// transfer as a real canvas, not get boxed into an eventTarget husk. (Skipped on JSON.)
+// OffscreenCanvas also extends EventTarget: it must not get boxed into an eventTarget husk
 export const offscreenCanvasTransfersAsCanvas = async (transport: Transport) => {
   if ('isJson' in transport && transport.isJson === true) return
 
-  // Draw receiver-side: a canvas with a context can't be transferred, so the real use case
-  // (and this test) transfers a fresh canvas and draws in the worker.
+  // a canvas with a context can't be transferred, so this transfers a fresh canvas and draws in the worker
   const value = async (canvas: OffscreenCanvas) => {
     const ctx = canvas.getContext('2d')!
     ctx.fillStyle = 'rgb(10, 20, 30)'
@@ -242,10 +203,8 @@ export const offscreenCanvasTransfersAsCanvas = async (transport: Transport) => 
   expect([result.r, result.g, result.b, result.a]).to.deep.equal([10, 20, 30, 255])
 }
 
-// Behavior 10: VideoFrame is a clonable Transferable - copied bare, MOVED under
-// transfer(). Regression: isWrappableTransferable omitted VideoFrame/AudioData,
-// so transfer() silently degraded to a copy. Feature-detected; skipped on JSON
-// (no transfer list there).
+// regression: isWrappableTransferable omitted VideoFrame/AudioData, so transfer() silently
+// degraded to a copy
 export const videoFrameTransferDetachesSource = async (transport: Transport) => {
   if ('isJson' in transport && transport.isJson === true) return
   if (typeof VideoFrame === 'undefined') return
@@ -265,11 +224,9 @@ export const videoFrameTransferDetachesSource = async (transport: Transport) => 
   expect(result.isFrame).to.equal(true)
   expect(result.width).to.equal(2)
   expect(result.height).to.equal(2)
-  // Moved: the transfer closes the sender-side frame.
   expect(frame.format).to.equal(null)
 }
 
-// Behavior 10b: same for AudioData.
 export const audioDataTransferDetachesSource = async (transport: Transport) => {
   if ('isJson' in transport && transport.isJson === true) return
   if (typeof AudioData === 'undefined') return

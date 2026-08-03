@@ -11,9 +11,7 @@ import type {
 import { OSRA_KEY } from '../types.js'
 import { getWebExtensionRuntime } from './transport.js'
 
-// Pulled from globalThis so module evaluation doesn't crash on platforms
-// that haven't shipped Float16Array yet (Node ≤ 23, Chrome ≤ 134, Firefox
-// ≤ 132). Platforms without it just don't round-trip Float16 values.
+// Pulled from globalThis so module evaluation doesn't crash on platforms that haven't shipped Float16Array yet (Node ≤ 23, Chrome ≤ 134, Firefox ≤ 132)
 const Float16ArrayCtor = (globalThis as { Float16Array?: typeof Float16Array }).Float16Array
 
 const typedArrayConstructorsByName = {
@@ -40,8 +38,7 @@ const typedArrayConstructors = Object.values(typedArrayConstructorsByName)
 export const typedArrayToType = (value: TypedArray): TypedArrayType => {
   const name = value.constructor.name as TypedArrayType
   if (name in typedArrayConstructorsByName) return name
-  // Subclasses (e.g. Node's Buffer extends Uint8Array). Find the nearest
-  // TypedArray ancestor by walking the prototype chain.
+  // Subclasses (e.g. Node's Buffer extends Uint8Array) resolve to the nearest TypedArray ancestor
   for (const [ancestorName, ctor] of Object.entries(typedArrayConstructorsByName)) {
     if (ctor && value instanceof ctor) return ancestorName as TypedArrayType
   }
@@ -60,8 +57,6 @@ export const isWebSocket = (value: unknown): value is WebSocket => value instanc
 export const isServiceWorkerContainer = (value: unknown): value is ServiceWorkerContainer => !!globalThis.ServiceWorkerContainer && value instanceof ServiceWorkerContainer
 export const isServiceWorker = (value: unknown): value is ServiceWorker => !!globalThis.ServiceWorker && value instanceof ServiceWorker
 export const isWorker = (value: unknown): value is Worker => !!globalThis.Worker && value instanceof Worker
-// Structural stand-in: the real DedicatedWorkerGlobalScope type lives in
-// lib.webworker, which consumers of the published .d.ts may not load.
 export type DedicatedWorkerGlobalScopeLike = typeof globalThis & {
   postMessage: (message: unknown, transfer?: Transferable[]) => void
   name: string
@@ -81,8 +76,6 @@ export const isOsraMessage = (value: unknown): value is Message =>
 
 type AnyConstructor = abstract new (...args: any[]) => unknown
 
-/** True if `value` is an instance of any of the given constructors.
- *  Tolerates undefined entries (constructors missing on this platform). */
 export const instanceOfAny = (value: unknown, ctors: readonly (AnyConstructor | undefined)[]): boolean => {
   for (const ctor of ctors) if (ctor && value instanceof ctor) return true
   return false
@@ -94,9 +87,7 @@ export const isSharedArrayBuffer = (value: unknown): boolean =>
  *  the unrelated clonable fallback module. Use isSharedArrayBuffer. */
 export const isClonable = isSharedArrayBuffer
 
-// Types eligible for transfer when the user opts in via `transfer()`. Some
-// entries are also clonable (ArrayBuffer, ImageBitmap, …) - outside a
-// `transfer` box they fall back to clone.
+// Some entries are also clonable (ArrayBuffer, ImageBitmap, …) - outside a `transfer` box they fall back to clone
 export const isTransferable = (value: unknown): value is Transferable =>
   instanceOfAny(value, [
     globalThis.ArrayBuffer,
@@ -126,18 +117,15 @@ export const isWebExtensionRuntime = (value: unknown): value is WebExtRuntime =>
 export type WebExtPort = ReturnType<WebExtRuntime['connect']> | Runtime.Port
 export const isWebExtensionPort = (value: unknown, connectPort: boolean = false): value is WebExtPort => {
   if (!value || typeof value !== 'object') return false
-  // Prevent SecurityError when `value` is a cross-origin window.
+  // prevents a SecurityError when `value` is a cross-origin window - the property probes below would throw; no test covers this guard (the cross-origin tests only cover isJsonOnlyTransport and normalizeTransport), so it reads as dead code
   if (isWindow(value)) return false
   if (!('name' in value) || !('disconnect' in value) || !('postMessage' in value)) return false
-  // these properties are only present on WebExtPorts created through runtime.connect()
   if (!connectPort) return true
   return 'sender' in value && 'onMessage' in value && 'onDisconnect' in value
 }
 
 export type WebExtSender = NonNullable<WebExtPort['sender']>
 
-// Structural guard. Can't distinguish onConnect from onMessage on its own -
-// they share this exact shape.
 const hasListenerApi = (value: unknown): boolean =>
   !!value
   && typeof value === 'object'
@@ -146,9 +134,7 @@ const hasListenerApi = (value: unknown): boolean =>
   && 'hasListener' in value
   && 'removeListener' in value
 
-// Identity-compare against runtime.onConnect - structural checks can't
-// distinguish onConnect from onMessage, and misclassifying causes us to
-// treat each incoming message as a port and crash.
+// Identity-compare against runtime.onConnect - structural checks can't distinguish onConnect from onMessage, which share the exact same shape
 export type WebExtOnConnect = WebExtRuntime['onConnect']
 export const isWebExtensionOnConnect = (value: unknown): value is WebExtOnConnect => {
   const runtime = getWebExtensionRuntime()
@@ -165,8 +151,7 @@ export const isWindow = (value: unknown): value is Window => {
   try {
     return 'window' in value && value.window === value
   } catch {
-    // Cross-origin Window access can throw SecurityError - fall back to a
-    // shape probe over properties that don't trigger the security check.
+    // Cross-origin Window access can throw SecurityError - fall back to a shape probe over properties that don't trigger the security check
     try {
       return 'closed' in value
         && typeof value.closed === 'boolean'
@@ -192,8 +177,6 @@ export const isReceiveJsonOnlyTransport = (value: unknown): value is ReceiveJson
 
 export type IsJsonOnlyTransport<T extends Transport> = T extends JsonPlatformTransport ? true : false
 export const isJsonOnlyTransport = (value: unknown): value is Extract<Transport, JsonPlatformTransport> =>
-  // `'isJson' in value` triggers SecurityError on a cross-origin Window (the iframe-broker
-  // `emit: window.parent` case) - exclude windows first; the marker only lives on normalized transports.
      (!!value && typeof value === 'object' && !isWindow(value) && 'isJson' in value && value.isJson === true)
   || isEmitJsonOnlyTransport(value)
   || isReceiveJsonOnlyTransport(value)
@@ -201,7 +184,6 @@ export const isJsonOnlyTransport = (value: unknown): value is Extract<Transport,
 export const isEmitTransport = (value: unknown): value is EmitTransport =>
      isWindow(value)
   || isEmitJsonOnlyTransport(value)
-  // ServiceWorker instances can postMessage; the container cannot - it only receives.
   || isServiceWorker(value)
   || isWorker(value)
   || isDedicatedWorker(value)
@@ -227,13 +209,10 @@ export function assertReceiveTransport(transport: Transport): asserts transport 
   if (!isReceiveTransport(transport)) throw new Error('Transport is not receiveable')
 }
 
-// Custom transports must be plain objects: Node's worker_threads MessagePort
-// (an EventEmitter) has an inherited `emit` and would otherwise be
-// misclassified, then gutted by normalizeTransport's object spread.
+// Custom transports must be plain objects: Node's worker_threads MessagePort (an EventEmitter) has an inherited `emit` and would otherwise be misclassified
 const isPlainObjectShape = (value: unknown): value is Record<string, unknown> => {
   if (!value || typeof value !== 'object') return false
-  // Prevent SecurityError when `value` is a cross-origin window - its
-  // [[GetPrototypeOf]] returns null, which would pass the proto check.
+  // a cross-origin window's [[GetPrototypeOf]] returns null, which would pass the proto check
   if (isWindow(value)) return false
   const proto = Object.getPrototypeOf(value)
   return proto === Object.prototype || proto === null

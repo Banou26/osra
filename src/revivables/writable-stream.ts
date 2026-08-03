@@ -11,13 +11,13 @@ import {
 
 export const type = 'writableStream' as const
 
-// Outgoing wire shape (revive → box): one of these per call.
+// outgoing wire shape revive -> box, one per call
 export type WriteContext =
   | { type: 'write', chunk: Capable }
   | { type: 'close' }
   | { type: 'abort', reason: Capable }
 
-// Reply from box → revive after a write completes (so writer.write() awaits).
+// reply box -> revive after a write completes, which is what lets writer.write() await
 export type WriteAck =
   | { type: 'ack' }
   | { type: 'err', error: string }
@@ -47,7 +47,6 @@ export const box = <T extends WritableStream, T2 extends RevivableContext>(
       .then(() => {
         if (!terminal) return
         terminated = true
-        // Terminal op acked - release the channel on both sides.
         queueMicrotask(() => localPort.close())
       })
 
@@ -57,8 +56,7 @@ export const box = <T extends WritableStream, T2 extends RevivableContext>(
     else if (data.type === 'close') settle(writer.close(), true)
     else if (data.type === 'abort') settle(writer.abort((data as { reason: Capable }).reason as any), true)
   })
-  // Abnormal channel death (consumer dropped, connection closed): abort the
-  // sink and release the writer lock instead of holding both forever.
+  // Abnormal channel death: abort the sink and release the writer lock instead of holding both forever.
   localPort.addEventListener('close', () => {
     if (terminated) return
     terminated = true
@@ -76,8 +74,6 @@ export const revive = <T extends BoxedWritableStream, T2 extends RevivableContex
   const port = reviveMessagePort(value.port, context)
   port.start()
 
-  // Channel death mid-write (sink dropped, connection closed): reject every
-  // pending request instead of hanging the writer forever.
   const pending = new Set<(error: Error) => void>()
   let dead = false
   port.addEventListener('close', () => {
@@ -87,9 +83,7 @@ export const revive = <T extends BoxedWritableStream, T2 extends RevivableContex
     pending.clear()
   }, { once: true })
 
-  // Each `write` call posts a 'write' message and awaits an 'ack'/'err'.
-  // The port is shared, so we serialize via a chain - without it, two
-  // concurrent writes would race and could mis-pair their ack messages.
+  // The port is shared, so we serialize via a chain - concurrent writes would mis-pair their ack messages.
   let chain: Promise<void> = Promise.resolve()
   const request = (msg: WriteContext): Promise<void> => {
     const next = chain.then(() => new Promise<void>((resolve, reject) => {

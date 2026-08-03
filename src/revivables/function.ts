@@ -16,8 +16,7 @@ type ResultMessage =
 
 type CallContext = [EventPort<Capable>, Capable[]]
 
-// Pins return-value ports between call-site return and result arrival -
-// the (port ↔ once-listener ↔ resolve/reject) cycle has no other anchor.
+// Pins return-value ports between call-site return and result arrival - the cycle has no other anchor.
 const inFlightReturnPorts = new Set<EventPort<Capable>>()
 
 export type BoxedFunction<T extends (...args: any[]) => any = (...args: any[]) => any> =
@@ -38,13 +37,11 @@ export const box = <T extends (...args: any[]) => any, T2 extends RevivableConte
   value: T & CapableFunction<T>,
   context: T2,
 ): BoxedFunction<T> => {
-  // EventChannel rather than MessageChannel: revived live values arriving
-  // in args (functions, EventTarget façades, …) aren't structured-clonable.
+  // EventChannel rather than MessageChannel: revived live values arriving in args aren't structured-clonable.
   const { port1: localPort, port2: remotePort } = new EventChannel<CallContext, CallContext>()
 
   localPort.addEventListener('message', ({ data }) => {
-    // Don't recursiveRevive - message-port handler already revived in place.
-    // Re-walking would Object.fromEntries plain args, breaking identity.
+    // Don't recursiveRevive - re-walking would Object.fromEntries plain args, breaking identity.
     const [returnPort, args] = data as CallContext
     ;(async () => {
       let message: ResultMessage
@@ -54,7 +51,6 @@ export const box = <T extends (...args: any[]) => any, T2 extends RevivableConte
       } catch (error) {
         message = { type: 'throw', error: error as Capable }
       }
-      // Result boxing can throw too (e.g. Blob over JSON) - reject the caller instead of hanging.
       const boxedResult = (() => {
         try {
           return recursiveBox(message as Capable, context)
@@ -63,9 +59,7 @@ export const box = <T extends (...args: any[]) => any, T2 extends RevivableConte
         }
       })()
       returnPort.postMessage(boxedResult, getTransferableObjects(boxedResult))
-      // Defer close so the result reaches the peer before tear-down. The
-      // close fires _onClose, dropping per-call routing entries on both
-      // sides - without it portHandlers grows one entry per call.
+      // Defer close so the result reaches the peer before tear-down; without the close portHandlers grows one entry per call.
       queueMicrotask(() => {
         try { returnPort.close() } catch { /* may already be closed */ }
       })
@@ -96,9 +90,7 @@ export const revive = <T extends BoxedFunction, T2 extends RevivableContext>(
         inFlightReturnPorts.delete(returnLocal)
         removeTeardown()
       }
-      // Calls always route over the wire (EventPorts are synthetic on every
-      // transport), so connection death must reject them - GC-drop of the
-      // proxy intentionally does not (see funcDropDoesNotRejectPending).
+      // Connection death must reject calls - GC-drop of the proxy intentionally does not (see funcDropDoesNotRejectPending).
       const removeTeardown = onTeardown(context, () => {
         reject(new Error('osra: connection closed'))
         settle()

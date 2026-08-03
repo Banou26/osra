@@ -2,17 +2,12 @@ import { expect } from 'chai'
 
 import { expose, context } from '../../src/index'
 
-// Platform transports that the parameterized matrix can't cover: a real
-// SharedWorker (messages arrive on .port, which must also be start()ed)
-// and real WebSockets (string frames that must be JSON.parsed on receive).
-// Workers import osra from the published build (/build/index.js), like
-// worker-handshake.ts.
+// Platform transports the parameterized matrix can't cover: a real SharedWorker and real WebSockets.
 
 const osraUrl = () => new URL('/build/index.js', location.href).href
 
 type AddApi = { add: (a: number, b: number) => Promise<number> }
 
-// onconnect can fire before the dynamic import resolves - buffer until ready.
 const sharedWorkerSource = () => `
   const pending = []
   globalThis.onconnect = (event) => pending.push(event)
@@ -40,15 +35,9 @@ export const sharedWorkerRpc = async () => {
   }
 }
 
-// The relay (tests/ws-relay.mjs, port 3001) broadcasts every frame to every OTHER client, and all
-// three browser projects share the one server. Two sockets on the default key therefore pair with
-// whichever peer answers first, which may belong to the same test running in another browser: socketB
-// pairs with a foreign socketB, gets its empty value, and `.add` is undefined. A key unique per call
-// scopes the announce so only this pair can see each other.
+// All three browser projects share the one relay (tests/ws-relay.mjs, port 3001), so a per-call key keeps a foreign peer from answering the announce.
 const relayKey = () => `ws-${globalThis.crypto.randomUUID()}`
 
-// expose() is called while the sockets are still CONNECTING - outbound
-// envelopes must queue until open instead of throwing.
 export const webSocketRpc = async () => {
   const socketA = new WebSocket('ws://localhost:3001')
   const socketB = new WebSocket('ws://localhost:3001')
@@ -79,9 +68,7 @@ export const webSocketCallback = async () => {
   }
 }
 
-// A window transport is the one shape that observes a peer origin, and it is what a broker embedded
-// in an iframe relies on to know which realm it is serving. srcdoc inherits this page's origin, so
-// the observed value is a real origin rather than an opaque one.
+// srcdoc inherits this page's origin, so the observed value is a real origin rather than an opaque one.
 export const windowTransportObservesThePeerOrigin = async () => {
   const osraUrl = new URL('/build/index.js', location.href).href
   const key = `ctx-origin-${globalThis.crypto.randomUUID()}`

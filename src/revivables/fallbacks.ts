@@ -5,12 +5,7 @@ import { instanceOfAny, isJsonOnlyTransport } from '../utils/type-guards.js'
 
 type AnyCtor = abstract new (...args: any[]) => unknown
 
-// -------------------------------------------------------------------------
-// clonable - pass-through fast path for HTML structured-clone types not
-// owned by another revivable. Short-circuits findBoxModule so unclonable's
-// structuredClone probe never fires on a known-safe value.
-// -------------------------------------------------------------------------
-
+// clonable is a pass-through fast path that short-circuits findBoxModule so unclonable's structuredClone probe never fires on a known-safe value
 const TYPED_CLONABLE_CTORS = [
   globalThis.File,
   globalThis.FileList,
@@ -49,9 +44,8 @@ const EXPERIMENTAL_CLONABLE_CTORS = [
 export type Clonable = InstanceType<typeof TYPED_CLONABLE_CTORS[number]>
 export type BoxedClonable = BoxBaseType<'clonable'>
 
-// `capableOnly: true` tells ExtractType to elide this module from the
-// Capable union on JSON transports - TS can't narrow `isType<Ctx>` via
-// generic inference, so we use a marker flag.
+// `capableOnly: true` tells ExtractType to elide this module from the Capable union on JSON transports
+// it is a marker flag because TS can't narrow `isType<Ctx>` through generic inference
 const isClonable = (value: unknown): value is Clonable =>
   instanceOfAny(value, TYPED_CLONABLE_CTORS) || instanceOfAny(value, EXPERIMENTAL_CLONABLE_CTORS)
 
@@ -59,17 +53,12 @@ export const clonable = {
   type: 'clonable',
   capableOnly: true,
   isType: isClonable,
-  // Pass-through; structured-clone handles these on the wire. `revive` is
-  // never reached - `box` returns the raw value so isRevivableBox is false.
+  // `revive` is never reached - `box` returns the raw value so isRevivableBox is false
   box: (value: Clonable, _context: RevivableContext<any>): Clonable => value,
   revive: (value: BoxedClonable, _context: RevivableContext<any>): Clonable => value as unknown as Clonable,
 } as const
 
-// -------------------------------------------------------------------------
-// transferable - pass-through fast path for transfer-only host objects.
-// getTransferableObjects pulls them out of the envelope at send time.
-// -------------------------------------------------------------------------
-
+// getTransferableObjects pulls these out of the envelope at send time
 const TYPED_TRANSFERABLE_CTORS = [
   globalThis.ImageBitmap,
   globalThis.OffscreenCanvas,
@@ -102,14 +91,7 @@ export const transferable = {
   revive: (value: BoxedTransferable, _context: RevivableContext<any>): Transferable => value as unknown as Transferable,
 } as const
 
-// -------------------------------------------------------------------------
-// blob - clone-only pass-through, same deal as File on clonable: structured
-// clone carries the bytes natively. JSON has no synchronous encoding for a
-// Blob (`.arrayBuffer()` is async), so `capableOnly` elides it from Capable
-// there and the runtime throws instead of letting JSON.stringify silently
-// coerce it to `{}`. Must sit after clonable so File keeps riding it.
-// -------------------------------------------------------------------------
-
+// Must sit after clonable so File keeps riding it
 export type BoxedBlob = BoxBaseType<'blob'>
 
 const isBlob = (value: unknown): value is Blob =>
@@ -127,11 +109,6 @@ export const blob = {
   },
   revive: (value: BoxedBlob, _context: RevivableContext<any>): Blob => value as unknown as Blob,
 } as const
-
-// -------------------------------------------------------------------------
-// unclonable - catch-all that probes via structuredClone and coerces
-// unclonables to `{}` so the wire never blows up on exotic host objects.
-// -------------------------------------------------------------------------
 
 const isPlainObject = (value: unknown): boolean => {
   if (value === null || typeof value !== 'object') return false
@@ -155,8 +132,7 @@ const isUnclonable = (value: unknown): boolean => {
 
 export type BoxedUnclonable = BoxBaseType<'unclonable'>
 
-// Type-level lie: `value is never` so this module doesn't widen Capable.
-// Coercion to `{}` is a runtime rescue for values we shouldn't see.
+// Type-level lie: `value is never` so this module doesn't widen Capable
 const isUnclonableTyped = isUnclonable as (value: unknown) => value is never
 
 export const unclonable = {

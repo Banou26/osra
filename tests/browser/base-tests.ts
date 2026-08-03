@@ -95,8 +95,6 @@ export const userMessagePort = async (transport: Transport) => {
 
   const { port1 } = await expose<typeof value>({}, { transport })
 
-  // A user-owned MessagePort must revive as a real MessagePort regardless
-  // of whether the transport supports structured clone or is JSON-only.
   expect(port1).to.be.instanceOf(MessagePort)
 
   let port1Resolve: ((value: number) => void)
@@ -217,7 +215,6 @@ export const userDate = async (transport: Transport) => {
 
   const { date } = await expose<typeof value>({}, { transport })
 
-  // Test that the date is correctly transferred
   expect(date).to.be.instanceOf(Date)
   expect(date.toISOString()).to.equal(_date.toISOString())
 }
@@ -253,21 +250,6 @@ export const asyncInit = async (transport: Transport) => {
   expect(foo).to.equal(1)
 }
 
-// export const userWritableStream = async (transport: Transport) => {
-//   const writableStream = new WritableStream({
-//     write(chunk) {
-//       expect(chunk).to.deep.equal(new Uint8Array([1, 2, 3]))
-//     }
-//   })
-//   const value = {
-//     writableStream
-//   }
-//   expose(value, { transport })
-
-//   const { writableStream: resultWritableStream } = await expose<typeof value>({}, { transport })
-//   resultWritableStream.write(new Uint8Array([1, 2, 3]))
-// }
-
 export const userAbortSignal = async (transport: Transport) => {
   const controller = new AbortController()
   const value = {
@@ -280,7 +262,6 @@ export const userAbortSignal = async (transport: Transport) => {
   expect(signal).to.be.instanceOf(AbortSignal)
   expect(signal.aborted).to.be.false
 
-  // Event-driven instead of timed: the listener resolves when abort lands.
   const aborted = new Promise<unknown>(resolve => {
     signal.addEventListener('abort', () => resolve(signal.reason), { once: true })
   })
@@ -306,10 +287,6 @@ export const userAbortSignalAlreadyAborted = async (transport: Transport) => {
   expect(signal.aborted).to.be.true
 }
 
-// The eagerly-aborted reason rides the wrapper object instead of the
-// revivable channel, so it has to be recursively boxed at send time. If
-// it isn't, a reason carrying live values (functions, nested AbortSignals,
-// etc.) fails - DataCloneError on clone transports, silent loss on JSON.
 export const userAbortSignalAlreadyAbortedWithLiveReason = async (transport: Transport) => {
   const inner = new AbortController()
   const controller = new AbortController()
@@ -393,12 +370,7 @@ export const userResponseNoBody = async (transport: Transport) => {
   expect(response.body).to.be.null
 }
 
-// A fetched Response can arrive with a null-body status (204/205/304) yet still
-// carry body bytes - the network doesn't enforce the constructor's null-body
-// rule, but `new Response(body, { status: 204 })` throws, which used to crash
-// revive (heimdall hit this on googlevideo SABR responses). Shadow the status on
-// a body-carrying Response to simulate that wire shape; each must round-trip
-// body-less instead of throwing.
+// a fetched Response can carry body bytes on a null-body status (204/205/304), which `new Response(body, { status: 204 })` refuses to construct
 export const userResponseNullBodyStatusWithBody = async (transport: Transport) => {
   const withStatus = (status: number) => {
     const response = new Response('unexpected body', { status: 200 })
@@ -437,11 +409,7 @@ export const userRequest = async (transport: Transport) => {
   expect(request.headers.get('X-Custom')).to.equal('test')
 }
 
-// Firefox does not yet support ReadableStream as a Request body (Bugzilla
-// 1387483). The Request constructor silently coerces the stream to its
-// toString - `req.body` ends up `undefined` and `req.text()` returns the
-// literal "[object ReadableStream]". Probe for the capability so the test
-// short-circuits cleanly on Firefox instead of failing on a platform gap.
+// Firefox does not support ReadableStream as a Request body (Bugzilla 1387483) and silently coerces it to its toString
 const supportsStreamingRequestBody = (): boolean => {
   try {
     const probe = new Request('https://example.com', {
@@ -501,8 +469,7 @@ export const userRequestNoBody = async (transport: Transport) => {
   expect(request).to.be.instanceOf(Request)
   expect(request.method).to.equal('GET')
   expect(request.url).to.equal('https://example.com/resource')
-  // Firefox 146 returns `undefined` for a bodyless Request's `.body` instead
-  // of the spec-mandated `null`. Both encode "no body" - accept either.
+  // Firefox 146 returns `undefined` for a bodyless Request's `.body` instead of the spec-mandated `null`
   // eslint-disable-next-line eqeqeq
   expect(request.body == null).to.be.true
 }
@@ -576,7 +543,6 @@ export const userMapWithComplexKeys = async (transport: Transport) => {
 
   expect(map).to.be.instanceOf(Map)
   expect(map.size).to.equal(2)
-  // Keys are revived as fresh Date instances; look them up by ISOString match.
   const entries = [...map.entries()]
   const jan = entries.find(([k]) => k.toISOString() === d1.toISOString())
   const jun = entries.find(([k]) => k.toISOString() === d2.toISOString())
@@ -667,17 +633,12 @@ export const userBigUint64Array = async (transport: Transport) => {
 
 export const userPromiseRejected = async (transport: Transport) => {
   const value = { failing: Promise.reject(new Error('boom')) }
-  // Swallow the unhandledrejection on the local side - we re-reject on the wire.
   ;(value.failing as Promise<unknown>).catch(() => {})
   expose(value, { transport })
 
   const { failing } = await expose<typeof value>({}, { transport })
 
-  // Error rejections round-trip via the error revivable as Error instances
-  // (name, message, stack, cause preserved). Asserting the type as well as
-  // the message guards against regressing back to the old stringified-stack
-  // serialization, where on Firefox the stack lacked the message prefix and
-  // a /boom/ match would silently fail.
+  // asserting instanceof as well as the message guards against regressing to the old stringified-stack serialization, where on Firefox the stack lacked the message prefix and a bare /boom/ match would silently pass
   let caught: unknown
   try { await failing } catch (e) { caught = e }
   expect(caught).to.be.instanceOf(Error)
@@ -788,8 +749,6 @@ export const userReadableStreamCancel = async (transport: Transport) => {
   const first = await reader.read()
   expect(first.value?.[0]).to.equal(1)
   await reader.cancel()
-  // Cancel must propagate back to the source so it can release resources.
-  // Allow extra time for the JSON-transport portId roundtrip.
   for (let i = 0; i < 20 && !cancelled; i++) {
     await new Promise(resolve => setTimeout(resolve, 50))
   }
@@ -890,8 +849,6 @@ export const userEventTarget = async (transport: Transport) => {
   const seen = new Promise<Event>(r => { resolveSeen = r })
   et.addEventListener('ping', resolveSeen!)
 
-  // Wait for the subscribe message to reach the source side before firing,
-  // otherwise the source has no listener attached yet.
   await new Promise(r => setTimeout(r, 50))
   await fire('ping')
 
@@ -917,7 +874,6 @@ export const userEventTargetMultipleListeners = async (transport: Transport) => 
   await new Promise(r => setTimeout(r, 50))
   await fire()
 
-  // Wait for forwarded event to dispatch on receiver.
   await new Promise(r => setTimeout(r, 50))
   expect(count).to.equal(11)
 }
@@ -952,14 +908,9 @@ export const userEventTargetUnsubscribe = async (transport: Transport) => {
     et: _et,
     fire: async () => { _et.dispatchEvent(new Event('tick')) },
     listenerCount: async () => {
-      // Dispatch a probe; if there's a forwarder, we'll see it via instrumentation
-      // below. We can't directly inspect EventTarget listeners - use a sentinel
-      // counter instead.
       return probeCount
     },
   }
-  // Sentinel: the forwarding listener installed by the box() side increments
-  // this on every dispatch. After unsubscribe the count must stop changing.
   let probeCount = 0
   _et.addEventListener('tick', () => { probeCount++ })
   expose(value, { transport })
@@ -977,14 +928,10 @@ export const userEventTargetUnsubscribe = async (transport: Transport) => {
   const probeAfterFirst = await listenerCount()
 
   et.removeEventListener('tick', handler)
-  // Allow the unsubscribe message to reach the source.
   await new Promise(r => setTimeout(r, 50))
   await fire()
   await new Promise(r => setTimeout(r, 50))
-  // Receiver must NOT have observed the second event.
   expect(receiverCount).to.equal(1)
-  // Sentinel still ticks since we didn't unregister it; proves the source
-  // dispatched but our forwarder didn't deliver to us.
   expect(await listenerCount()).to.equal(probeAfterFirst + 1)
 }
 
@@ -1014,11 +961,6 @@ export const userEventTargetMultipleEventTypes = async (transport: Transport) =>
   expect(bCount).to.equal(1)
 }
 
-// Box-side postMessage of a non-clonable result pre-fix threw DataCloneError
-// and the caller hung forever because the once-listener on returnLocal was
-// never fired. Fix surfaces the error as __osra_err__ so the Promise rejects
-// (clone transport). JSON silently coerces but still settles - the load-
-// bearing assertion is "does not hang".
 export const functionNonClonableResultRejects = async (transport: Transport) => {
   const value = async (): Promise<any> => new WeakMap()
   expose(value, { transport })
@@ -1035,9 +977,6 @@ export const functionNonClonableResultRejects = async (transport: Transport) => 
   expect(settled).to.not.equal('hung')
 }
 
-// Same listener registered with capture=true and capture=false is two
-// distinct DOM registrations per spec; proves the revive-side tracking
-// keys on (listener, capture) rather than listener identity alone.
 export const userEventTargetCaptureBothFlags = async (transport: Transport) => {
   const _et = new EventTarget()
   const value = {
@@ -1056,10 +995,8 @@ export const userEventTargetCaptureBothFlags = async (transport: Transport) => {
   await new Promise(r => setTimeout(r, 50))
   await fire()
   await new Promise(r => setTimeout(r, 50))
-  // Both registrations fired.
   expect(count).to.equal(2)
 
-  // Remove only the bubble registration - the capture one must survive.
   et.removeEventListener('ping', handler, { capture: false })
   await new Promise(r => setTimeout(r, 50))
   await fire()
@@ -1067,10 +1004,6 @@ export const userEventTargetCaptureBothFlags = async (transport: Transport) => {
   expect(count).to.equal(3)
 }
 
-// `{ once: true }` auto-removes the native registration after first fire;
-// the revive-side must mirror that in its subscription map so it actually
-// sends the unsubscribe message when the listener self-removes. Uses the
-// same probe-counter trick as userEventTargetUnsubscribe.
 export const userEventTargetOnceUnsubscribes = async (transport: Transport) => {
   const _et = new EventTarget()
   let probeCount = 0
@@ -1093,9 +1026,6 @@ export const userEventTargetOnceUnsubscribes = async (transport: Transport) => {
   expect(receiverCount).to.equal(1)
   const probeAfterFirst = await probe()
 
-  // Second fire: source still ticks (probe increments), but the revive-side
-  // forwarder should have torn down because once:true consumed the only
-  // subscription - so the receiver's listener must NOT fire again.
   await fire()
   await new Promise(r => setTimeout(r, 50))
   expect(receiverCount).to.equal(1)
@@ -1111,8 +1041,7 @@ export const userSymbol = async (transport: Transport) => {
 
   expect(typeof sym).to.equal('symbol')
   expect(sym.description).to.equal('hello symbol')
-  // Description-based serialization can't preserve identity - a fresh
-  // Symbol() with the same description is intentionally !== the original.
+  // description-based serialization cannot preserve identity, so a fresh Symbol() is intentionally !== the original
   expect(sym).to.not.equal(_sym)
 }
 
@@ -1223,7 +1152,6 @@ export const userAsyncGeneratorEarlyBreak = async (transport: Transport) => {
   for await (const item of await remote.infinite()) {
     if ((item as number) >= 2) break
   }
-  // break drives iterator.return() across the wire into the source finally
   await until(() => remote.didFinally())
 }
 
@@ -1297,8 +1225,7 @@ export const userReadableStreamSourceErrorPropagates = async (transport: Transpo
 
   const { stream: revived } = await expose<typeof value>({}, { transport })
   const reader = revived.getReader()
-  // Chunks produced before the error must still be delivered - the credit
-  // pump runs ahead of the consumer and must not let the error eat them.
+  // chunks produced before the error must still be delivered: the credit pump runs ahead of the consumer
   expect((await reader.read()).value?.[0]).to.equal(1)
   expect((await reader.read()).value?.[0]).to.equal(2)
   await expect(reader.read()).to.be.rejectedWith(/source exploded/)
@@ -1319,7 +1246,6 @@ export const userReadableStreamBackpressure = async (transport: Transport) => {
   const reader = revived.getReader()
   for (let i = 0; i < 5; i++) await reader.read()
   await new Promise(resolve => setTimeout(resolve, 200))
-  // Pipelined ahead of the consumer, but bounded by the credit window.
   expect(produced).to.be.greaterThan(5)
   expect(produced).to.be.at.most(80)
   await reader.cancel()
@@ -1340,8 +1266,7 @@ export const userReadableStreamObjectBackpressure = async (transport: Transport)
   const reader = revived.getReader()
   for (let i = 0; i < 3; i++) await reader.read()
   await new Promise(resolve => setTimeout(resolve, 200))
-  // Unmeasurable chunks must stay on the conservative initial window, not
-  // jump to the maximum with zero byte accounting.
+  // unmeasurable chunks stay on the conservative initial credit window, not the maximum
   expect(produced).to.be.greaterThan(3)
   expect(produced).to.be.at.most(16)
   await reader.cancel()
@@ -1368,9 +1293,7 @@ export const userNonFinitePrimitives = async (transport: Transport) => {
   expect('maybe' in result).to.be.true
 }
 
-// Blob is clone-only (like File): structured clone carries the bytes on clone
-// transports, JSON transports must throw a clear error instead of the silent
-// `{}` coercion JSON.stringify would produce.
+// Blob is clone-only, so JSON transports must throw instead of the silent `{}` JSON.stringify produces
 export const userBlobArg = async (transport: Transport) => {
   const value = { echo: async (input: unknown) => input }
   expose(value, { transport })
@@ -1402,8 +1325,6 @@ export const userBlobNestedArg = async (transport: Transport) => {
   }
 }
 
-// The return direction must reject the caller too - result boxing happens on
-// the exposer's side, and its failure has to travel back instead of hanging.
 export const userBlobReturnRejects = async (transport: Transport) => {
   const value = { getBlob: async () => new Blob(['osra-blob'], { type: 'text/plain' }) }
   expose(value, { transport })
@@ -1418,9 +1339,7 @@ export const userBlobReturnRejects = async (transport: Transport) => {
   }
 }
 
-// Every completed call tombstones its per-call return port on both sides;
-// hundreds of sequential calls churn far past TOMBSTONE_LIMIT (128) and must
-// keep working as old tombstones evict.
+// 300 calls churns past TOMBSTONE_LIMIT (128) in message-port.ts, so old tombstones must evict cleanly
 export const manyCallsChurnTombstonedPorts = async (transport: Transport) => {
   const value = { echo: async (n: number) => n }
   expose(value, { transport })

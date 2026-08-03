@@ -2,17 +2,12 @@ import type { Transport } from '../../src'
 import type { Message } from '../../src/types'
 import type { MessageContext } from '../../src/utils/transport'
 
-// Transport registry - adding a new transport here automatically runs every
-// transport-parameterized test against it.
-
 export type TransportName = 'Web' | 'JSON'
 
 export type TransportEntry = {
   readonly name: TransportName
   readonly factory: () => Transport
-  /** Iteration count for memory leak tests on this transport. */
   readonly memoryIterations: number
-  /** Allowed heap growth (bytes) before a memory test fails. */
   readonly memoryThreshold: number
 }
 
@@ -28,9 +23,7 @@ const jsonLoopback = (): Transport => ({
   },
 })
 
-// Surface the bundle exposes on globalThis for the Playwright runner to call
-// via page.evaluate. Defined here (not in a .d.ts) so the implementation in
-// _run.ts can `satisfies` against it and pinpoint mismatches at the lambda.
+// surface the bundle exposes on globalThis for the Playwright runner to call via page.evaluate
 export type OsraRunner = {
   transport: (group: string, name: string, transportName: TransportName) => Promise<void>
   memory: (name: string, transportName: TransportName) => Promise<void>
@@ -49,10 +42,7 @@ export const transports: readonly TransportEntry[] = [
     name: 'JSON',
     factory: jsonLoopback,
     memoryIterations: 2_500,
-    // Baseline growth sits near 1.25 MB for the heaviest test
-    // (nestedCallbacksNoLeak) - leave real headroom so constant overhead
-    // (instrumentation, module growth) doesn't masquerade as a leak. A true
-    // per-call leak scales with the 2 500 iterations and still trips this.
+    // baseline growth sits near 1.25 MB for the heaviest test, so leave headroom
     memoryThreshold: 1_600_000,
   },
 ]

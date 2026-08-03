@@ -1,8 +1,5 @@
-// Compiled against the built declarations with `types: []` and
-// `skipLibCheck: false` - exactly what an npm consumer without our
-// devDependency @types sees. If an ambient global (browser, chrome,
-// DedicatedWorkerGlobalScope, …) leaks into the shipped .d.ts, the
-// Transport union collapses to `any` and these assertions fail.
+// Compiled against the built declarations with `types: []` and `skipLibCheck: false`, exactly what an npm consumer without our devDependency @types sees.
+// If an ambient global (browser, chrome, DedicatedWorkerGlobalScope, …) leaks into the shipped .d.ts, the Transport union collapses to `any` and these assertions fail.
 
 import { expose } from '../../build/index.js'
 import type { Transport, Remote, DefaultRevivableModules, ErrorMessage } from '../../build/index.js'
@@ -25,23 +22,16 @@ const checkRemote = async () => {
   return sum
 }
 
-// A worker's own global scope - commonly compiled under lib.dom, where it is NOT
-// assignable to Window - must be accepted via the structural WorkerSelf member.
+// A worker's own global scope is commonly compiled under lib.dom, where it is NOT assignable to Window
 const workerSelf: Transport = globalThis
 expose({}, { transport: globalThis, key: 'worker-self' })
 
-// Capable regression: lib.dom declares empty-interface Transferable members
-// (MediaSourceHandle) that once structurally absorbed every object, silencing
-// all of these rejections.
+// lib.dom declares empty-interface Transferable members (MediaSourceHandle) that structurally absorb every object, silencing all of these rejections
 // @ts-expect-error WeakMap is not Capable
 expose({ ok: async () => 1, cache: new WeakMap() }, { transport: worker, key: 'capable-1' })
 // @ts-expect-error a WeakSet nested deep must still be caught
 expose({ a: { b: [new WeakSet()] } }, { transport: worker, key: 'capable-2' })
 
-// And the check must not over-reject: everything Capable stays assignable,
-// including inline array literals - the `const` type parameter infers them as
-// readonly tuples, which the mutable-Array union used to exclude (masked by
-// the same absorption).
 expose({
   fn: async (n: number) => n + 1,
   date: new Date(),
@@ -56,19 +46,14 @@ expose({
   nested: { deep: [{ ok: true }] },
 }, { transport: worker, key: 'capable-3' })
 
-// JSON transports narrow Capable: clone-only types (File rides the clonable
-// module, elided on JSON) must be rejected there but stay accepted on clone.
 declare const jsonTransport: { isJson: true, emit: Worker, receive: Worker }
 // @ts-expect-error File is only supported on structured-clone transports
 expose({ foo: new File([], '') }, { transport: jsonTransport, key: 'json-1' })
 expose({ foo: new File([], '') }, { transport: worker, key: 'clone-file' })
 
-// `value` accepts the checked value OR its `context()` wrapper, so the parameter is a union and the
-// branded branch has to be picked out before the message can be read off it.
+// `value` accepts the checked value OR its `context()` wrapper, so the branded branch has to be picked out of that union before the message can be read off it
 type Branded<T> = Extract<T, { [ErrorMessage]: unknown }>
 
-// And the rejection must carry the transport-specific error text, not the
-// generic one - pin both messages via an instantiation expression on expose.
 type JsonFileError = Branded<Parameters<typeof expose<
   unknown, DefaultRevivableModules,
   typeof jsonTransport,
@@ -79,8 +64,6 @@ const jsonFileMessage: JsonFileError[typeof ErrorMessage] =
 // @ts-expect-error the generic message must not be the one resolved for File
 const jsonFileWrong: JsonFileError[typeof ErrorMessage] = 'Value type must resolve to a Capable'
 
-// Blob is clone-only too, riding its own `blob` module instead of clonable:
-// accepted on clone transports, rejected on JSON with the same message.
 expose({ blob: new Blob(['x']) }, { transport: worker, key: 'clone-blob' })
 // @ts-expect-error Blob is only supported on structured-clone transports
 expose({ blob: new Blob(['x']) }, { transport: jsonTransport, key: 'json-2' })
@@ -92,7 +75,6 @@ type JsonBlobError = Branded<Parameters<typeof expose<
 const jsonBlobMessage: JsonBlobError[typeof ErrorMessage] =
   'Value type is only supported on structured-clone transports, not on JSON transports'
 
-// A type unsupported on EVERY transport keeps the generic message on JSON too.
 type JsonWeakMapError = Branded<Parameters<typeof expose<
   unknown, DefaultRevivableModules,
   typeof jsonTransport,

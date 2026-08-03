@@ -1,14 +1,10 @@
 import type { TypedMessagePort, TypedMessagePortEventMap } from './typed-message-channel.js'
 
-// NOT `extends EventTarget`: Firefox content-script / privileged sandboxes don't
-// support subclassing platform interfaces - `super()` returns a bare EventTarget
-// and the subclass methods (start/postMessage/close) vanish. EventPort keeps its
-// own listener registry so it works in every realm.
+// NOT `extends EventTarget`: Firefox privileged sandboxes don't support subclassing platform interfaces
 type EventPortListener = EventListenerOrEventListenerObject
 
 export class EventPort<T> {
-  // Per (type, listener): value = once. Duplicate adds are ignored,
-  // matching EventTarget (options on a duplicate add don't apply).
+  // per (type, listener): value = once, and duplicate adds are ignored, matching EventTarget
   private _listeners = new Map<string, Map<EventPortListener, boolean>>()
 
   addEventListener<K extends keyof TypedMessagePortEventMap<T> & string>(
@@ -115,8 +111,7 @@ export class EventPort<T> {
     this._closed = true
     this._queue.length = 0
     this._onClose?.()
-    // Mirror the platform 'close' event: closing a port notifies its peer.
-    // Deferred so messages posted before the close still deliver first.
+    // deferred so messages posted before the close still deliver first
     const peer = this._peer
     if (peer && !peer._closed) {
       queueMicrotask(() => {

@@ -36,10 +36,7 @@ export type BoxedMessagePort<T = Capable> =
   )
   & { [UnderlyingType]: TypedMessagePort<T> }
 
-// `[T] extends [Capable]` disables distributive conditionals so `A | B` gives
-// back `AnyPort<A | B>`, not `AnyPort<A> | AnyPort<B>`. The error branch
-// intersects with AnyPort<T> so excess-property check targets the failure
-// rather than the user's port-shaped keys.
+// `[T] extends [Capable]` disables distributive conditionals so `A | B` gives back `AnyPort<A | B>`, not `AnyPort<A> | AnyPort<B>`
 type StructurableTransferablePort<T> = [T] extends [Capable]
   ? AnyPort<T>
   : AnyPort<T> & {
@@ -49,37 +46,25 @@ type StructurableTransferablePort<T> = [T] extends [Capable]
       [ParentObject]: BadFieldParent<T, Capable>
     }
 
-// Per-port routing. A connectionless transport (e.g. runtime.sendMessage) gives no
-// ordering guarantee: a port's messages can arrive out of order, and even before the
-// message that revives the port (registering its handler). Each side stamps its outgoing
-// port messages with a monotonic `seq`; the receiver buffers by seq and delivers strictly
-// in send-order once a handler exists. So neither reordering nor early arrival can drop or
-// misorder a port's stream - which the credit-window readable-stream protocol relies on.
+// wire contract: each side stamps its outgoing port messages with a monotonic `seq`, and the receiver buffers by seq and delivers strictly in send-order once a handler exists
+// the credit-window readable-stream protocol relies on that in-order delivery; port messages can also arrive BEFORE the message that revives the port and registers its handler, which is why handler-less routing entries exist at all
 type PortRouting = {
   handler?: (message: Messages) => void
-  /** Next incoming seq to deliver. */
   nextSeq: number
-  /** Out-of-order / early incoming messages, keyed by their seq. */
   buffer: Map<number, Messages>
-  /** Next outgoing seq to stamp on this side's messages for the port. */
   outSeq: number
 }
 
-// Cap the per-port reorder buffer so a peer that never sends the awaited seq can't grow
-// it without bound; overflow fails the port closed instead of wedging it silently.
+// caps the per-port reorder buffer so a peer that never sends the awaited seq can't grow it without bound - overflow fails the port closed instead of wedging it silently
 const REORDER_LIMIT = 2048
-// Closed portIds remembered so late in-flight messages can't resurrect routing state.
+// remembers closed portIds so late in-flight messages can't resurrect routing state
 const TOMBSTONE_LIMIT = 128
-// Cap routing entries allocated by messages arriving before their port's handler registers.
+// caps routing entries allocated by messages arriving before their port's handler registers
 const PENDING_PORT_LIMIT = 1024
 
 type ConnectionMessagePortState = {
-  /** O(1) per-portId routing - avoids the O(N) addEventListener scan that was the
-   *  bottleneck for tight-loop RPC traffic. */
   ports: Map<string, PortRouting>
-  /** Recently closed portIds, insertion-ordered for bounded eviction. */
   tombstones: Set<string>
-  /** Count of handler-less entries in `ports`. */
   pendingPorts: number
 }
 
@@ -112,7 +97,6 @@ const tombstonePort = (state: ConnectionMessagePortState, portId: string): void 
   state.tombstones.add(portId)
 }
 
-// Deliver buffered messages along the contiguous seq run, once a handler exists.
 const drainPort = (port: PortRouting): void => {
   if (!port.handler) return
   for (let next = port.buffer.get(port.nextSeq); next !== undefined; next = port.buffer.get(port.nextSeq)) {
@@ -122,7 +106,6 @@ const drainPort = (port: PortRouting): void => {
   }
 }
 
-// Next outgoing seq for a port (monotonic per sending side).
 const nextOutSeq = (context: RevivableContext, portId: Uuid): number => getPort(getState(context), portId).outSeq++
 
 const registerPortHandler = (
@@ -132,8 +115,7 @@ const registerPortHandler = (
 ): void => {
   const state = getState(context)
   if (state.tombstones.has(portId)) {
-    // Macrotask, not microtask: revived ports reach their consumer through microtask
-    // chains (function args, init data), which must win so close listeners attach first.
+    // macrotask, not microtask: revived ports reach their consumer through microtask chains, which must win so close listeners attach first
     setTimeout(() => handler({ type: 'message-port-close', remoteUuid: context.remoteUuid, portId }))
     return
   }
@@ -151,8 +133,7 @@ export const init = (context: RevivableContext): void => {
     if (detail.type !== 'message' && detail.type !== 'message-port-close') return
     if (state.tombstones.has(detail.portId)) return
     let port = state.ports.get(detail.portId)
-    // Legacy peer (osra <= 0.5.6) doesn't stamp seq - its transport was assumed ordered,
-    // so deliver in arrival order; only seq-stamped messages are reordered.
+    // a legacy peer (osra <= 0.5.6) does not stamp seq, so deliver in arrival order
     if (detail.seq === undefined) { port?.handler?.(detail); return }
     if (!port) {
       if (state.pendingPorts >= PENDING_PORT_LIMIT) return
@@ -160,7 +141,6 @@ export const init = (context: RevivableContext): void => {
     }
     if (detail.seq < port.nextSeq) return
     if (port.buffer.size >= REORDER_LIMIT && !(detail.seq === port.nextSeq && port.handler)) {
-      // A full buffer whose gap can't close is unrecoverable - fail the port closed.
       port.buffer.clear()
       tombstonePort(state, detail.portId)
       port.handler?.({ type: 'message-port-close', remoteUuid: context.remoteUuid, portId: detail.portId })
@@ -170,8 +150,6 @@ export const init = (context: RevivableContext): void => {
     drainPort(port)
   })
 
-  // Connection death = every routed port is dead: run each handler's close
-  // arm so user-facing ports close and routing entries clear.
   onTeardown(context, () => {
     for (const [portId, port] of [...state.ports]) {
       port.handler?.({ type: 'message-port-close', remoteUuid: context.remoteUuid, portId: portId as Uuid })
@@ -187,12 +165,11 @@ export const isType = (value: unknown): value is MessagePort | EventPort<Structu
 
 const sendClose = (context: RevivableContext, portId: Uuid) => {
   try {
-    // Stamp the close with the next seq so it's ordered after this side's data messages
-    // (a close that overtakes trailing data would drop it); a missing entry means the
-    // port is already torn down, so read without resurrecting routing state.
+    // the close MUST carry the next seq so it stays ordered after this side's data messages, which it would otherwise drop
+    // a missing routing entry means the port is already torn down, so `seq: port ? port.outSeq++ : 0` reads it without resurrecting routing state (do not switch to getPort here)
     const port = getState(context).ports.get(portId)
     context.sendMessage({ type: 'message-port-close', remoteUuid: context.remoteUuid, portId, seq: port ? port.outSeq++ : 0 })
-  } catch { /* connection torn down */ }
+  } catch {}
 }
 
 const postRevived = <T>(port: AnyPort<T>, data: T, synthetic: boolean) => {
@@ -200,10 +177,7 @@ const postRevived = <T>(port: AnyPort<T>, data: T, synthetic: boolean) => {
   else port.postMessage(data, getTransferableObjects(data))
 }
 
-// Built in its own scope so the FR-held closure can't share box()'s
-// environment record and transitively pin context/liveRef/handlers - the
-// gc-tracker contract. By the time it fires both derefs are usually dead;
-// its job is to not retain anything, so abandoned connections can collect.
+// MUST stay in its own scope: sharing box()'s environment record would let the FR-held closure pin context/liveRef/handlers, breaking the gc-tracker contract
 const makeBoxGcNet = (
   contextWeak: WeakRef<RevivableContext>,
   stateWeak: WeakRef<ConnectionMessagePortState>,
@@ -220,8 +194,7 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
   context: T2,
   options?: { autoBox?: boolean },
 ): BoxedMessagePort<T> => {
-  // Synthetic EventPorts aren't structured-clonable, so even on a clone
-  // transport we route them via portId.
+  // synthetic EventPorts are not structured-clonable, so even a clone transport routes them via portId
   const synthetic = value instanceof EventPort
   if (!synthetic && !isJsonOnlyTransport(context.transport)) {
     return {
@@ -234,9 +207,6 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
   const liveRef: AnyPort<T> = value
   const portId: Uuid = globalThis.crypto.randomUUID()
 
-  // The FR-held cleanup must not (transitively) strong-hold liveRef or the
-  // context - the gc-tracker contract - or the registry pins them forever
-  // and the safety net can never fire.
   const liveRefWeak = new WeakRef(liveRef)
   const contextWeak = new WeakRef(context)
   const stateWeak = new WeakRef(state)
@@ -256,7 +226,6 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
   const handler = (message: Messages) => {
     if (message.type === 'message-port-close') {
       performCleanup()
-      // Peer side closed - surface the platform 'close' event before closing.
       liveRef.dispatchEvent(new Event('close'))
       liveRef.close()
       return
@@ -274,9 +243,6 @@ export const box = <T, T2 extends RevivableContext = RevivableContext>(
     })
   }
 
-  // Safety net only - `handler` strong-holds liveRef via portHandlers, so
-  // the FR won't fire while the connection is alive. Real cleanup runs via
-  // the wire `message-port-close`, EventPort `_onClose`, or teardown.
   const unregisterGc = trackGc(liveRef, makeBoxGcNet(contextWeak, stateWeak, portId))
 
   liveRef.addEventListener('message', outgoingListener as EventListener)
@@ -306,9 +272,6 @@ export const revive = <T extends Capable, T2 extends RevivableContext>(
   return reviveViaPortId<T>(value.portId, context, value.synthetic)
 }
 
-/** Wraps a real MessagePort so revivables can treat it like a transparent
- *  EventTarget that auto-boxes/revives - letting live values (Promises,
- *  Functions, …) ride a clone-only transport. */
 const createProtocolPort = <T>(
   port: TypedMessagePort<Capable>,
   ctx: RevivableContext,
@@ -317,8 +280,6 @@ const createProtocolPort = <T>(
   const onMessage = ({ data }: MessageEvent<Capable>): void => {
     target.dispatchEvent(new MessageEvent('message', { data: recursiveRevive(data, ctx) }))
   }
-  // Modern browsers fire 'close' on a MessagePort when its entangled peer
-  // closes or its realm dies - forward it so consumers can clean up.
   const onClose = (): void => {
     target.dispatchEvent(new Event('close'))
   }
@@ -339,9 +300,6 @@ const createProtocolPort = <T>(
   return target
 }
 
-/** Factory for revivable-internal channels. Returns a local port that
- *  auto-boxes live values regardless of transport, plus a pre-boxed remote
- *  port the revivable embeds in its Boxed* structure. */
 export const createRevivableChannel = <T extends Capable>(
   context: RevivableContext,
 ): { localPort: AnyPort<T>, boxedRemote: BoxedMessagePort<T> } => {
@@ -370,8 +328,7 @@ const reviveViaPortId = <T extends Capable>(
       ? new EventChannel<T, T>()
       : new MessageChannel() as unknown as TypedMessageChannel<T, T>
   const userPortRef = new WeakRef(userPort)
-  // For synthetic EventChannels, internalPort._peer === userPort - holding
-  // internalPort strongly from the trackGc cleanup would re-pin userPort.
+  // for synthetic EventChannels internalPort._peer === userPort, so holding internalPort strongly from the trackGc cleanup would re-pin userPort
   const internalPortRef = new WeakRef(internalPort)
 
   let cleanedUp = false
@@ -389,7 +346,6 @@ const reviveViaPortId = <T extends Capable>(
     if (message.type === 'message-port-close') {
       performCleanup()
       const user = userPortRef.deref()
-      // Peer side closed - surface the platform 'close' event before closing.
       user?.dispatchEvent(new Event('close'))
       user?.close()
       return

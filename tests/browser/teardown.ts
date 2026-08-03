@@ -5,10 +5,6 @@ import type { Uuid } from '../../src/types'
 import { expose } from '../../src/index'
 import { OSRA_KEY, OSRA_DEFAULT_KEY } from '../../src/types'
 
-// Error and teardown paths: misconfiguration must reject (not hang),
-// abort must reject pending work locally, and the protocol 'close' must
-// tear the peer down too.
-
 export const emitOnlyTransportRejects = async () => {
   await expect(
     expose({}, { transport: { emit: () => {} } }),
@@ -54,8 +50,6 @@ export const abortRejectsPendingCalls = async () => {
   await expect(call).to.eventually.be.rejectedWith(/connection closed/)
 }
 
-// Aborting one side sends a protocol 'close' - the *peer*'s pending calls
-// must reject too, not hang forever.
 export const peerCloseRejectsPendingCalls = async () => {
   const { port1, port2 } = new MessageChannel()
   const exposerController = new AbortController()
@@ -69,9 +63,6 @@ export const peerCloseRejectsPendingCalls = async () => {
   await expect(call).to.eventually.be.rejectedWith(/connection closed/)
 }
 
-// A hand-rolled peer completes the announce dance, then sends an init
-// whose payload contains an unrevivable box - expose() must reject with
-// the revive error instead of hanging with an unhandled rejection.
 export const malformedInitRejects = async () => {
   const { port1, port2 } = new MessageChannel()
   port2.start()

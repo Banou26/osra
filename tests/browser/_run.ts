@@ -6,8 +6,7 @@ import type { OsraRunner, TransportName } from './transports'
 import { use } from 'chai'
 import chaiAsPromised from 'chai-as-promised'
 
-// Side-effect import: type-tests.ts is compile-time only - its presence here
-// keeps the type-level assertions part of the test bundle's typecheck.
+// Side-effect import: type-tests.ts is compile-time only, its presence keeps the type-level assertions in the test bundle's typecheck
 import './type-tests'
 
 import { transportTests, memoryTests, standaloneTests, gcTests } from './registry'

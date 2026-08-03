@@ -4,7 +4,6 @@ import { expose } from '../../src/index'
 import * as contentTests from './content-tests'
 import { setApi, setBgInitiatedApi } from './content-tests'
 
-// API exposed by content script to background
 const resolvers = {
   getContentInfo: async () => ({ location: window.location.href, timestamp: Date.now() }),
   processInContent: async (data: string) => `content-processed: ${data}`,
@@ -17,7 +16,6 @@ const resolvers = {
 
 export type Resolvers = typeof resolvers
 
-// Content-initiated connection to background
 const port = chrome.runtime.connect({ name: `content-${Date.now()}` })
 const api = await expose<BackgroundResolvers>(resolvers, {
   transport: { isJson: true, emit: port, receive: port }
@@ -25,7 +23,6 @@ const api = await expose<BackgroundResolvers>(resolvers, {
 
 setApi(api)
 
-// Listen for background-initiated connections
 chrome.runtime.onConnect.addListener(async (port) => {
   if (port.name.startsWith('bg-to-content-')) {
     const bgInitiatedApi = await expose<BackgroundResolvers>(resolvers, {
@@ -35,7 +32,6 @@ chrome.runtime.onConnect.addListener(async (port) => {
   }
 })
 
-// Runtime transport connection (sendMessage-based, alongside the port-based one)
 import * as runtimeContentTests from './runtime-content-tests'
 import { setApi as setRuntimeApi } from './runtime-content-tests'
 

@@ -106,8 +106,6 @@ export type BidirectionalConnection<
   remoteValue: Promise<Capable>
 }
 
-/** Mounts bidirectional mode on the shared protocol context. Only active
- *  when the transport can both emit and receive. */
 export const init = <TModules extends readonly RevivableModule[]>(
   ctx: ProtocolContext<TModules>
 ): void => {
@@ -120,22 +118,14 @@ export const init = <TModules extends readonly RevivableModule[]>(
         return
       }
       if (message.remoteUuid !== ctx.getUuid()) return
-      // Already-tracked uuid is the normal handshake-echo (peer re-announcing
-      // back after our reply), not a collision - drop it.
+      // Already-tracked uuid is the normal handshake-echo (peer re-announcing back after our reply), not a collision
       if (ctx.connectionContexts.has(message.uuid)) return
-      // Echo announce back in case the peer missed our initial one.
       ctx.sendMessage({ type: 'announce', remoteUuid: message.uuid })
       const eventTarget = ctx.createConnectionEventTarget()
-      // Bound to this peer's uuid, so a resolver can drop its own connection without touching the
-      // others. A no-op if called while the value is still being built, since there is nothing
-      // tracked to tear down until the handshake below registers it.
       const connectionContextValues = { ...peer(), abort: () => ctx.abortConnection(message.uuid) }
       let connection: ReturnType<typeof startBidirectionalConnection<TModules>>
       try {
-        // Built BEFORE the connection starts, because starting it sends our value. A factory that
-        // calls ctx.abort() is refusing this peer, so the refusal has to be observable before the
-        // value goes out: sending first and closing after handed the peer a resolved connection it
-        // then had to discover was dead.
+        // Built BEFORE the connection starts, because starting it sends our value: a factory that calls ctx.abort() has to be observable before the value goes out
         const built = ctx.valueFor(connectionContextValues)
         if (ctx.claimPendingAbort(message.uuid)) {
           ctx.sendMessage({ type: 'close', remoteUuid: message.uuid })
@@ -150,9 +140,7 @@ export const init = <TModules extends readonly RevivableModule[]>(
           revivableModules: ctx.revivableModules
         })
       } catch (error) {
-        // Building or boxing our own value failed: a context factory that threw or refused, or
-        // cyclic data. Surface it locally instead of swallowing it inside EventTarget dispatch, AND
-        // tell the peer, or its own expose() waits on a handshake that will never come.
+        // Surface it locally instead of swallowing it inside EventTarget dispatch, AND tell the peer, or its own expose() waits on a handshake that will never come
         ctx.sendMessage({ type: 'close', remoteUuid: message.uuid })
         ctx.rejectRemoteValue(error)
         return
@@ -175,15 +163,12 @@ export const init = <TModules extends readonly RevivableModule[]>(
       if (!connectionContext) return
       ctx.connectionContexts.delete(message.uuid)
       runTeardown(connectionContext.connection.revivableContext)
-      // No-op when the handshake already resolved; a close that beats init
-      // must not leave the caller pending forever.
+      // No-op when the handshake already resolved; a close that beats init must not leave the caller pending forever
       ctx.rejectRemoteValue(new Error('osra: peer closed the connection'))
       return
     }
-    // "init" | "message" | "message-port-close"
     if (message.remoteUuid !== ctx.getUuid()) return
     const connection = ctx.connectionContexts.get(message.uuid)
-    // drop messages from peers we haven't tracked (pre-announce or post-close)
     if (!connection) return
     connection.eventTarget.dispatchEvent(
       new CustomEvent('message', { detail: message })
@@ -196,14 +181,8 @@ export const init = <TModules extends readonly RevivableModule[]>(
     let connection: ReturnType<typeof startBidirectionalConnection<TModules>>
     let presetContextValues: Context
     try {
-      // inside the try: the caller's context builder runs here, and a throw from it must reject like
-      // any other setup failure rather than escaping synchronously out of expose
-      // Nothing was observed on this path: there is no inbound message to read, so all a preset
-      // connection knows about its peer is that it can be dropped.
       presetContextValues = { abort: () => ctx.abortConnection(presetRemoteUuid) }
-      // no inbound message to read here, so all this connection knows is what the caller declared
       const built = ctx.valueFor(presetContextValues)
-      // same ordering as the announce branch: refuse before the value is sent, not after
       if (ctx.claimPendingAbort(presetRemoteUuid)) {
         ctx.sendMessage({ type: 'close', remoteUuid: presetRemoteUuid })
         return
@@ -234,20 +213,12 @@ export const init = <TModules extends readonly RevivableModule[]>(
     return
   }
 
-  // A lone announce is lost when the counterpart isn't listening yet (still-loading iframe,
-  // relay attached after a worker exposes) - re-announce with capped backoff until a peer
-  // connects. The uuid is stable across retries, so duplicates are dropped as handshake echoes.
-  // Posted with '*' instead of the configured origin: until a cross-origin iframe commits,
-  // its window still holds the initial about:blank document (which inherits the embedder's
-  // origin), so a strict targetOrigin fails the browser's delivery check - the message is
-  // dropped and a mismatch error is logged on every retry. The bare announce carries only
-  // channel identifiers (no data), inbound replies stay origin-filtered on receive, and every
-  // other message type is sent strict after the peer's own message proved its committed origin.
+  // Posted with '*' instead of the configured origin: until a cross-origin iframe commits, its window still holds the initial about:blank document, so a strict targetOrigin fails the browser's delivery check
   let announceDelay = 50
   let announceTimeout: ReturnType<typeof setTimeout> | undefined
   const announce = () => {
     if (ctx.unregisterSignal?.aborted || ctx.connectionContexts.size > 0) return
-    try { ctx.sendMessage({ type: 'announce' }, '*') } catch { /* transient send failure - keep retrying */ }
+    try { ctx.sendMessage({ type: 'announce' }, '*') } catch {}
     announceTimeout = setTimeout(announce, announceDelay)
     announceDelay = Math.min(announceDelay * 2, 1_000)
   }

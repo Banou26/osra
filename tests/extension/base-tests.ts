@@ -1,7 +1,6 @@
 import type { TestAPI } from './types'
 import { expect } from 'chai'
 
-// Content -> Background tests
 export const echo = async (api: TestAPI) => {
   expect(await api.echo({ foo: 'bar' })).to.deep.equal({ foo: 'bar' })
 }
@@ -56,8 +55,6 @@ export const getBuffer = async (api: TestAPI) => {
 }
 
 export const getPromise = async (api: TestAPI) => {
-  // The resolver returns Promise.resolve(123); JS flattens nested promises,
-  // so awaiting once already yields the number.
   const result = await api.getPromise()
   expect(result).to.equal(123)
 }
@@ -77,7 +74,6 @@ export const getStream = async (api: TestAPI) => {
   expect(Array.from(chunks[1]!)).to.deep.equal([4, 5, 6])
 }
 
-// Background -> Content tests (via content-initiated connection)
 export const bgToContentGetInfo = async (api: TestAPI) => {
   const info = await api.bgToContent.getInfo()
   expect(info).to.have.property('location')
@@ -116,7 +112,6 @@ export const bgToContentProcessBuffer = async (api: TestAPI) => {
   expect(Array.from(result)).to.deep.equal([2, 3, 4, 5])
 }
 
-// Background-initiated connection tests
 export const bgInitiatedConnect = async (api: TestAPI) => {
   const result = await api.bgInitiated.connect()
   expect(result).to.be.true

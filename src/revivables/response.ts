@@ -31,8 +31,7 @@ export const revive = <T extends ReturnType<typeof box>, T2 extends RevivableCon
   if (value.status === 0) return Response.error()
 
   const headers = reviveHeaders(value.headers, context)
-  // 101/204/205/304 forbid a body; `new Response` throws if given one. Cancel any
-  // boxed stream (so the sender isn't left pushing into a dead port) and pass null.
+  // 101/204/205/304 forbid a body, so cancel the boxed stream to stop the sender pushing into a dead port
   const stream = value.body ? reviveReadableStream(value.body, context) : null
   const isNullBodyStatus =
     value.status === 101 || value.status === 204 || value.status === 205 || value.status === 304
@@ -44,8 +43,6 @@ export const revive = <T extends ReturnType<typeof box>, T2 extends RevivableCon
     statusText: value.statusText,
     headers
   })
-  // url/redirected are read-only getters fed by internal state the
-  // constructor can't set - shadow them so the round trip is faithful.
   if (value.url) Object.defineProperty(response, 'url', { value: value.url, configurable: true })
   if (value.redirected) Object.defineProperty(response, 'redirected', { value: true, configurable: true })
   return response

@@ -33,9 +33,6 @@ export const callbackAsArgNoLeak = async (transport: Transport, iterations = DEF
 }
 
 export const promiseValuesNoLeak = async (transport: Transport, iterations = DEFAULT_ITERATIONS) => {
-  // Each call returns an object containing a fresh inner Promise so the
-  // promise revivable boxes/revives per iteration - awaiting a singleton
-  // from a single expose() doesn't exercise the box/revive churn.
   const value = async (n: number) => ({ inner: Promise.resolve(n) })
   expose(value, { transport })
   const remote = await expose<typeof value>({}, { transport })
@@ -63,7 +60,7 @@ export const largeDataTransferNoLeak = async (transport: Transport, iterations =
   expose(value, { transport })
   const remote = await expose<typeof value>({}, { transport })
   for (let i = 0; i < iterations; i++) {
-    const largeBuffer = new Uint8Array(100 * 1024) // 100KB
+    const largeBuffer = new Uint8Array(100 * 1024)
     await remote(transfer(largeBuffer))
   }
 }
@@ -86,7 +83,7 @@ export const errorHandlingNoLeak = async (transport: Transport, iterations = DEF
   const remote = await expose<typeof value>({}, { transport })
   for (let i = 0; i < iterations; i++) {
     await remote(false)
-    try { await remote(true) } catch { /* Expected */ }
+    try { await remote(true) } catch { }
   }
 }
 
@@ -99,10 +96,7 @@ export const nestedCallbacksNoLeak = async (transport: Transport, iterations = D
   }
 }
 
-// Each iteration fires 5 concurrent calls, so the call count is already
-// 5× the other tests' for the same iteration budget. Scale iterations
-// down to match the per-call workload - concurrency is what we're
-// exercising, not raw call count.
+// each iteration fires 5 concurrent calls, so scale iterations down to match the per-call workload
 const CONCURRENT_CALL_FAN_OUT = 5
 export const concurrentCallsNoLeak = async (transport: Transport, iterations = DEFAULT_ITERATIONS) => {
   const value = async (id: number) => id * 2
@@ -149,8 +143,6 @@ export const eventTargetDispatchNoLeak = async (transport: Transport, iterations
   }
   expose(value, { transport })
   const remote = await expose<typeof value>({}, { transport })
-  // Subscribe once and fire repeatedly - exercises the per-dispatch wire
-  // overhead (subscribe is one-shot at the 0→1 listener edge).
   remote.et.addEventListener('tick', () => {})
   await new Promise(r => setTimeout(r, 50))
   for (let i = 0; i < iterations; i++) {

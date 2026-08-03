@@ -51,7 +51,6 @@ test.beforeAll(async () => {
     page.goto('http://localhost:3000')
   })
 
-  // Wait for both Content and RuntimeContent tests to be ready
   await new Promise<void>(async (resolve) => {
     while (true) {
       const { result } = await cdp.send('Runtime.evaluate', {
@@ -71,7 +70,6 @@ test.afterAll(async () => {
   await context?.close()
 })
 
-// Port-based transport tests
 test.describe('Content', () => {
   const contentTests = tests.Content as TestObject
   for (const [key, value] of Object.entries(contentTests)) {
@@ -90,7 +88,6 @@ test.describe('Content', () => {
   }
 })
 
-// Runtime transport tests (sendMessage/onMessage) - same extension, same page
 test.describe('Runtime Transport Content', () => {
   const runtimeTests = tests.RuntimeContent as TestObject
   for (const [key, value] of Object.entries(runtimeTests)) {

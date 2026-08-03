@@ -2,14 +2,7 @@ import { expect } from 'chai'
 
 import { expose, relay } from '../../src/index'
 
-// Each test simulates "two workers" with two MessageChannel pairs:
-//
-//   workerA ─ chanA.port1 ── chanA.port2 ─ relay ─ chanB.port1 ── chanB.port2 ─ workerB
-//
-// The MessagePort hop on each side stands in for a real Worker / iframe
-// transport - same structured-clone serialization, same transferable
-// semantics. The relay sits in the middle and is a pure wire: it never
-// constructs an osra connection of its own.
+// workerA ─ chanA.port1 ── chanA.port2 ─ relay ─ chanB.port1 ── chanB.port2 ─ workerB
 
 type Wire = {
   workerATransport: MessagePort
@@ -20,8 +13,7 @@ type Wire = {
 const wire = (opts?: { key?: string }): Wire => {
   const chanA = new MessageChannel()
   const chanB = new MessageChannel()
-  // Neither expose nor relay starts ports - do it here so queued envelopes
-  // (including the first announce) actually flow.
+  // Neither expose nor relay starts ports - do it here so queued envelopes actually flow.
   chanA.port1.start()
   chanA.port2.start()
   chanB.port1.start()
@@ -61,7 +53,6 @@ export const relayedBidirectional = async () => {
 
   const [bSide, aSide] = await Promise.all([remoteFromA, remoteFromB])
 
-  // workerA sees workerB's api; workerB sees workerA's.
   await expect(bSide.greet('one')).to.eventually.equal('B:one')
   await expect(aSide.greet('two')).to.eventually.equal('A:two')
 }
@@ -69,9 +60,6 @@ export const relayedBidirectional = async () => {
 export const relayedCallback = async () => {
   const { workerATransport, workerBTransport } = wire()
 
-  // workerB will pass a callback to workerA's function. The callback's
-  // per-call return-port routing rides the same protocol channel - the
-  // relay must forward every direction of that traffic.
   const apiA = {
     runWith: async (cb: (n: number) => Promise<number>) => (await cb(41)) + 1,
   }
@@ -108,12 +96,6 @@ export const relayedPromise = async () => {
   await expect(remoteA.fetchValue()).to.eventually.equal('payload')
 }
 
-// The defining behavior of the relay: a real MessagePort exposed by workerA
-// is structured-cloned twice (worker→relay, relay→worker) so its ownership
-// lands in workerB. Once delivered, the underlying MessageChannel is a
-// direct workerA ↔ workerB wire - the relay's transports never see traffic
-// on it. We assert that by aborting the relay and confirming the pair still
-// talks.
 export const relayedUserMessagePortTransfersEndToEnd = async () => {
   const { workerATransport, workerBTransport, relayController } = wire()
 
@@ -124,8 +106,6 @@ export const relayedUserMessagePortTransfersEndToEnd = async () => {
   const remoteA = await expose<typeof apiA>({}, { transport: workerBTransport })
   expect(remoteA.takeMyPort).to.be.instanceOf(MessagePort)
 
-  // Pull the relay out from under the pair - if the user port still works,
-  // it can only be because it was actually transferred end-to-end.
   relayController.abort()
 
   remoteA.takeMyPort.start()
@@ -144,9 +124,6 @@ export const relayedUserMessagePortTransfersEndToEnd = async () => {
   await expect(fromB).to.eventually.equal('b→a')
 }
 
-// Two relays sharing the same physical transports but different protocol
-// keys must not cross-talk: each peer pair's messages stay on their own
-// logical channel.
 export const relayKeyIsolation = async () => {
   const chanA = new MessageChannel()
   const chanB = new MessageChannel()
@@ -170,8 +147,6 @@ export const relayKeyIsolation = async () => {
   await expect(remoteB.which()).to.eventually.equal('B')
 }
 
-// Aborting the relay's signal removes both forwarders. A peer that joins
-// after the abort must never complete its handshake.
 export const relayUnregisterStopsForwarding = async () => {
   const { workerATransport, workerBTransport, relayController } = wire()
 

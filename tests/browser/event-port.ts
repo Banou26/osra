@@ -2,11 +2,7 @@ import { expect } from 'chai'
 
 import { EventChannel, EventPort } from '../../src/utils/event-channel'
 
-// EventPort MUST NOT extend EventTarget: Firefox content-script / privileged
-// sandboxes don't support subclassing platform interfaces - `new EventPort()`
-// returns a bare EventTarget there, dropping start/postMessage/close. Guard the
-// invariant so it can't silently regress (every osra function/stream revivable
-// rides on EventChannel, so this breaks the whole bridge in Firefox extensions).
+// EventPort MUST NOT extend EventTarget: Firefox privileged sandboxes don't support subclassing platform interfaces
 export const eventPortIsNotAnEventTarget = async () => {
   const { port1 } = new EventChannel()
   expect(port1 instanceof EventPort).to.equal(true)
@@ -51,8 +47,6 @@ export const eventPortRemoveListenerStops = async () => {
   expect(received).to.deep.equal(['one'])
 }
 
-// EventTarget semantics: adding the same callback twice registers it once,
-// and a single removeEventListener fully unregisters it.
 export const eventPortDuplicateAddRegistersOnce = async () => {
   const { port1, port2 } = new EventChannel<string, string>()
   let calls = 0
@@ -79,14 +73,12 @@ export const eventPortOnceListenerFiresOnceAndSelfRemoves = async () => {
   port1.postMessage('b')
   await new Promise((resolve) => setTimeout(resolve, 0))
   expect(calls).to.equal(1)
-  // Re-adding after the once fired registers fresh, like EventTarget.
   port2.addEventListener('message', listener, { once: true })
   port1.postMessage('c')
   await new Promise((resolve) => setTimeout(resolve, 0))
   expect(calls).to.equal(2)
 }
 
-// Options on a duplicate add don't apply: the first registration wins.
 export const eventPortDuplicateAddDoesNotUpgradeToOnce = async () => {
   const { port1, port2 } = new EventChannel<string, string>()
   let calls = 0

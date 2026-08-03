@@ -33,9 +33,7 @@ export { transfer } from './transfer.js'
 
 export * from './utils.js'
 
-// `any` on box/revive/init: each module's concrete box has a narrower input
-// than the shared interface can express, and TS treats readonly function
-// types contravariantly. The bivariance escape hatch lets modules assign.
+// `any` on box/revive/init: the bivariance escape hatch that lets modules assign.
 export type RevivableModule<
   T extends string = string,
   T2 = any,
@@ -71,24 +69,17 @@ export const defaultRevivableModules = [
   bigInt,
   symbol,
   event,
-  // After readableStream (some platforms make streams async-iterable),
-  // before the fallbacks so generators don't coerce to {}.
+  // After readableStream, before the fallbacks so generators don't coerce to {}.
   asyncIterator,
   nonFiniteNumber,
   undefinedValue,
-  // clonable/transferable before eventTarget: OffscreenCanvas & co. are Transferables
-  // that also extend EventTarget, which eventTarget would otherwise box as façade husks.
+  // clonable/transferable before eventTarget: OffscreenCanvas & co. also extend EventTarget.
   clonable,
   transferable,
-  // After clonable (File rides it): bare Blobs pass through on clone transports
-  // but throw on JSON, where they'd otherwise silently coerce to `{}`.
+  // After clonable (File rides it): bare Blobs would otherwise silently coerce to `{}` on JSON.
   blob,
-  // eventTarget MUST be last among instanceof-EventTarget revivables -
-  // MessagePort/AbortSignal/Window/Worker all extend EventTarget; the
-  // specific ones need first dibs via findBoxModule iteration order.
+  // eventTarget MUST be last among instanceof-EventTarget revivables - the specific ones need first dibs.
   eventTarget,
-  // Catch-all: structuredClone-probes and coerces unclonables to `{}`,
-  // matching JSON.stringify(new WeakMap()) === "{}".
   unclonable,
 ] as const
 
@@ -122,10 +113,7 @@ const descend = <TOut>(value: unknown, transform: (v: Capable) => unknown): TOut
   return value as TOut
 }
 
-// Walk path for cycle detection. Box/revive are fully synchronous, so a
-// module-global set with balanced enter/exit is safe; tracking the *path*
-// (not all visited values) keeps sibling aliasing working - only a true
-// ancestor revisit, which would recurse forever, throws.
+// Box/revive are fully synchronous, so a module-global set with balanced enter/exit is safe; tracking the *path* (not all visited values) keeps sibling aliasing working.
 const boxPath = new WeakSet<object>()
 const revivePath = new WeakSet<object>()
 
@@ -140,8 +128,6 @@ export const recursiveBox = <
   context: RevivableContext<TModules>
 ): DeepReplaceWithBox<T, TModules[number]> => {
   type ReturnCastType = DeepReplaceWithBox<T, TModules[number]>
-  // Already-boxed values pass through - revivables may embed a pre-built
-  // BoxedX in their outgoing payload; descending would re-box raw ports.
   if (isRevivableBox(value)) return value as ReturnCastType
   const track = isTrackable(value)
   if (track) {
@@ -171,8 +157,6 @@ export const recursiveRevive = <
   type ReturnCastType = DeepReplaceWithRevive<T, TModules[number]>
   const track = isTrackable(value)
   if (track) {
-    // Structured clone can deliver cyclic graphs a peer crafted - fail
-    // with a clear error instead of blowing the stack mid-dispatch.
     if (revivePath.has(value)) {
       throw new TypeError('osra: cannot revive a circular structure')
     }

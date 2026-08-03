@@ -42,10 +42,7 @@ const isWrappableTransferable = (value: unknown): boolean => {
   ])
 }
 
-/** Opt into transfer (move) semantics for a transferable value. Idempotent;
- *  non-transferable inputs pass through unchanged. Silently degrades to a
- *  copy when the platform/transport can't transfer the given type. Lies at
- *  the type level - runtime value is a TransferWrapper<T> typed as T. */
+/** Opt into transfer (move) semantics: non-transferable inputs pass through, and transports that can't move ownership silently degrade to a copy. */
 export const transfer = <T>(value: T): T =>
   (isWrappableTransferable(value)
     ? { [TRANSFER_MARKER]: true, value }
@@ -59,9 +56,7 @@ export const box = <T extends Capable, TContext extends RevivableContext>(
   wrapper: TransferWrapper<T>,
   context: TContext,
 ): BoxedTransfer<T> =>
-  // `degraded` tells the send-time walker in getTransferableObjects to treat
-  // this box as a regular value (no transfer-list entry). JSON transports
-  // can't move ownership, so transfer semantics don't apply.
+  // `degraded` tells the send-time walker in getTransferableObjects to skip the transfer-list entry
   ({
     ...BoxBase,
     type,

@@ -8,11 +8,7 @@ import { box, revive, BoxedReadableStream } from '../../src/revivables/readable-
 import { createRevivableChannel, revive as reviveMessagePort } from '../../src/revivables/message-port'
 import { BoxBase } from '../../src/revivables/utils'
 
-// Wire-compat coverage for the credit-window stream protocol: the box/revive
-// below are VERBATIM osra 0.5.5 implementations, so these tests prove a new
-// peer interoperates with a published one in both directions. The legacy box
-// cancels the stream on ANY message it does not know - if the new revive ever
-// sent it a credit grant, these tests would break.
+// legacyBox/legacyRevive below are VERBATIM osra 0.5.5 implementations - do not modernize them.
 
 const fakeContext = (): RevivableContext => ({
   transport: window,
@@ -184,8 +180,6 @@ export const chunkBoxingFailureErrorsConsumer = async () => {
     },
   })
   const reader = revive(box(stream, context), context).getReader()
-  // 0.5.5 rejected the read on an unboxable chunk - the credit pump must
-  // surface the same failure instead of hanging the consumer.
   let rejected = false
   await reader.read().then(() => {}, () => { rejected = true })
   expect(rejected).to.be.true
@@ -206,8 +200,6 @@ export const creditFloodFailsClosed = async () => {
   const context = fakeContext()
   const reader = revive(floodingBox(context), context).getReader()
   await reader.read()
-  // A consumer that keeps reading keeps granting - the flood only overruns
-  // the window while the reader is stalled, so stall it.
   await new Promise(resolve => setTimeout(resolve, 100))
   let error: unknown
   try {
@@ -252,7 +244,5 @@ export const streamCreditBench = async () => {
   }
   const pullMs = await run((s, ctx) => legacyRevive(legacyBox(s, ctx), ctx))
   const creditMs = await run((s, ctx) => revive(box(s, ctx), ctx))
-  // ~2.6x here in practice; anything below 1x means the pipelining regressed
-  // back to a per-chunk round trip.
   expect(creditMs, `pull=${pullMs.toFixed(0)}ms credit=${creditMs.toFixed(0)}ms`).to.be.lessThan(pullMs)
 }

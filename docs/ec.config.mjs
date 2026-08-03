@@ -2,9 +2,7 @@ import { defineEcConfig } from 'astro-expressive-code'
 import ecTwoSlash from 'expressive-code-twoslash'
 import { definePlugin } from '@expressive-code/core'
 
-// TS quickinfo prints `typeof import("<abs path>/node_modules/osra/build/…")`
-// in hover popups; strip the machine-specific prefix so popups read
-// `import("osra/build/…")` and build output is identical across machines.
+// Strip the machine-specific prefix so build output is identical across machines.
 const stripNodeModulesPaths = () =>
   definePlugin({
     name: 'osra-strip-node-modules-paths',
@@ -21,21 +19,12 @@ const stripNodeModulesPaths = () =>
     },
   })
 
-// Blocks tagged ```ts twoslash are type-checked against the PUBLISHED osra package at build time and
-// render hover popups with the real types. Keep compilerOptions in sync with
-// scripts/check-twoslash.mjs, which is the fast per-file checker.
-//
-// A failing block does NOT fail the build. It silently drops the whole page's body, so the page
-// deploys as a title and nav with no content, and the build still reports success. Documenting an
-// unreleased API therefore blanks every page that mentions it until the release lands. Run
-// `npm run docs-check-twoslash` before pushing docs; a red result there is a blank page, not a
-// warning.
+// Keep compilerOptions in sync with scripts/check-twoslash.mjs, the fast per-file checker.
+// A failing twoslash block does NOT fail the build: it silently drops the whole page's body.
+// ```ts twoslash blocks are checked against the PUBLISHED osra package (docs/package.json depends on osra ^0.6.3), so documenting an unreleased API blanks every page that mentions it until the release lands
+// run `npm run docs-check-twoslash` before pushing docs, a red result there is a blank deployed page, not a warning
 export default defineEcConfig({
-  // Inline the EC styles into each page instead of the shared ec.*.css asset.
-  // The external file put every token color and code background in one extra
-  // request; when that transfer was interrupted mid-download (observed as
-  // intermittently colorless code blocks on refresh in Firefox), the parsed
-  // prefix styled the frames but the theme sections at the tail never arrived.
+  // Inlined: an interrupted transfer of the shared ec.*.css left code blocks colorless in Firefox.
   emitExternalStylesheet: false,
   themes: ['github-dark', 'github-light'],
   plugins: [

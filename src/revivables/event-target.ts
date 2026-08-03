@@ -10,8 +10,6 @@ type ListenerOpts = boolean | { capture?: boolean, once?: boolean, passive?: boo
 export const isType = (value: unknown): value is EventTarget => value instanceof EventTarget
 
 export const box = <T extends EventTarget, T2 extends RevivableContext>(value: T, context: T2) => {
-  // Track what this box added so the façade's GC cleanup can drop everything
-  // through one zero-argument RPC - holding no reference to user listeners.
   const added: { eventType: string, listener: EventListener, capture: boolean }[] = []
   const captureOf = (options?: ListenerOpts) =>
     typeof options === 'boolean' ? options : !!options?.capture
@@ -48,8 +46,7 @@ export const box = <T extends EventTarget, T2 extends RevivableContext>(value: T
 
 export type BoxedEventTarget = ReturnType<typeof box>
 
-// Stable EventListener per EventListenerObject so identity() yields the
-// same id on add and remove.
+// Stable EventListener per EventListenerObject so identity() yields the same id on add and remove.
 const objectWrappers = new WeakMap<EventListenerObject, EventListener>()
 const toListener = (listerObject: EventListenerOrEventListenerObject): EventListener => {
   if (typeof listerObject === 'function') return listerObject
@@ -67,8 +64,7 @@ export const revive = <T extends BoxedEventTarget, T2 extends RevivableContext>(
   const addRpc = reviveFunction(value.addListener, context)
   const removeRpc = reviveFunction(value.removeListener, context)
   const removeAllRpc = reviveFunction(value.removeAllListeners, context)
-  // Façade only - events never dispatch through it. Source-side EventTarget
-  // owns all semantics; we just track regs for cleanup.
+  // Façade only - events never dispatch through it; the source-side EventTarget owns all semantics.
   const target = new EventTarget()
   const regs: Reg[] = []
 
@@ -84,8 +80,6 @@ export const revive = <T extends BoxedEventTarget, T2 extends RevivableContext>(
       const capture = typeof options === 'boolean' ? options : !!options?.capture
       if (findReg(regs, eventType, fn, capture)) return
       const once = typeof options === 'object' && !!options?.once
-      // The source side auto-removes once/aborted listeners - prune the
-      // local reg in step so the same listener can be re-added later.
       const wire: EventListener = once
         ? (event) => {
             prune(reg)
@@ -112,10 +106,7 @@ export const revive = <T extends BoxedEventTarget, T2 extends RevivableContext>(
     },
   })
 
-  // Cleanup must NOT close over `target`, `regs`, or any user listener -
-  // the FR strong-holds it, and a listener closing over the façade would
-  // otherwise pin the whole subgraph forever. removeAllRpc only references
-  // its own RPC port.
+  // Cleanup must NOT close over `target`, `regs`, or any user listener - the FR strong-holds it.
   trackGc(target, () => {
     removeAllRpc().catch(() => {})
   })

@@ -29,9 +29,7 @@ export * from './utils.js'
 
 export type ConnectionModule<T> = {
   readonly type: string
-  // ProtocolContext<any> rather than ProtocolContext<readonly RevivableModule[]>
-  // for the same bivariance reason as RevivableModule.box - concrete modules
-  // declare narrower context generics than the shared interface can express.
+  // ProtocolContext<any> for the same bivariance reason as RevivableModule.box
   readonly init: (ctx: ProtocolContext<any>) => void
   readonly Messages?: T
 }
@@ -74,23 +72,15 @@ export const startConnections = <
     revivableModules: configureRevivableModules,
     uuid: _uuid,
     remoteUuid: presetRemoteUuid,
-    // A connection is the peer's value unless the caller says otherwise, which is what expose has
-    // always resolved to. Its type-level counterpart is `TResult`'s default in src/index.ts: a type
-    // parameter default cannot be read off a value, so those two state the same fact separately and
-    // have to move together.
+    // type-level counterpart is `TResult`'s default in src/index.ts: those two state the same fact separately and have to move together
     connection: selectConnection = ({ value }) => value,
   }: StartConnectionsOptions<TModules>
 ): Exposed<TResult> => {
   const select = selectConnection as (connected: Connected<T>) => TResult
   const transport = normalizeTransport(_transport)
   if (!(isEmitTransport(transport) && isReceiveTransport(transport))) {
-    // A REJECTION, not a throw. `expose` used to be an async function, so this surfaced as a rejected
-    // promise and callers wrote `.catch`; returning Connections directly would have made it throw
-    // synchronously instead and blown past every one of those handlers.
     const queue = createConnectionQueue<T>()
     queue.close()
-    // same fire-and-forget guard the normal path gets below: `expose(...)` with no await must not
-    // surface an unhandled rejection, while an awaiting caller still sees the error
     const rejected = Promise.reject(new Error(
       'osra: transport must be able to both emit and receive to establish a connection'
       + '; pass a bidirectional platform transport or a custom { emit, receive } pair',
@@ -102,18 +92,13 @@ export const startConnections = <
   type MergedModules = typeof mergedRevivableModules
   const connectionContexts = new Map<string, ConnectionContext<MergedModules>>()
 
-  // uuids aborted before they were registered; consumed by claimPendingAbort at registration
   const pendingAborts = new Set<string>()
 
   const connectionQueue = createConnectionQueue<T>()
 
-  // Resolves with the FIRST established connection. The value view derives from this, so both views
-  // settle off one handshake rather than racing two.
   const { promise: firstConnection, resolve: resolveFirstConnection, reject: rejectRemoteValue } =
     Promise.withResolvers<Connected<T>>()
-  // Keeps a fire-and-forget `expose(value, …)` (the documented server-side
-  // pattern) from surfacing an unhandled rejection on abort/close; awaiting
-  // callers still observe the rejection through the original promise.
+  // Keeps a fire-and-forget `expose(value, …)` from surfacing an unhandled rejection on abort/close
   firstConnection.catch(() => {})
 
   const uuid: Uuid = _uuid ?? globalThis.crypto.randomUUID()
@@ -145,15 +130,11 @@ export const startConnections = <
     rejectRemoteValue,
     abortConnection: (remoteUuid: Uuid) => {
       const connectionContext = connectionContexts.get(remoteUuid)
-      // Raised from inside the value factory, which runs BEFORE the connection is registered. Record
-      // it so registration refuses instead of silently completing: the deny pattern
-      // `ctx.abort()` used to hand the peer a working connection anyway.
+      // Raised from inside the value factory, which runs BEFORE the connection is registered
       if (!connectionContext) { pendingAborts.add(remoteUuid); return }
       connectionContexts.delete(remoteUuid)
       sendEnvelope({ type: 'close', remoteUuid })
       runTeardown(connectionContext.connection.revivableContext)
-      // Same reason the peer-initiated close rejects: an abort that beats the peer's init drops that
-      // init at the untracked-peer guard, so nothing would ever settle the caller's promise.
       rejectRemoteValue(new Error('osra: connection aborted'))
     },
     claimPendingAbort: (remoteUuid) => pendingAborts.delete(remoteUuid),
@@ -167,14 +148,8 @@ export const startConnections = <
   }
 
   const listener = (message: Message, messageContext: MessageContext) => {
-    // own message looped back on the channel
     if (message.uuid === uuid) return
-    // Built from LOCAL knowledge only: `messageContext` is what the browser told us about the
-    // delivery, which the peer cannot forge. Nothing from the peer's payload participates, and none
-    // of it is ever sent back.
-    //
-    // A thunk, because only the announce branch consumes it: building it eagerly ran on every RPC
-    // frame and stream chunk rather than once per connection.
+    // Built from LOCAL knowledge only: nothing from the peer's payload participates, and none of it is ever sent back
     const peer = (): Context => ({
       ...(messageContext.origin ? { origin: messageContext.origin } : {}),
       ...(messageContext.source ? { source: messageContext.source } : {}),
@@ -195,25 +170,20 @@ export const startConnections = <
     unregisterSignal
   })
 
-  // A signal that is already aborted at call time rejects immediately and
-  // registers nothing: its 'abort' event has fired and will never fire again,
-  // so the listener below would leave the promise pending forever.
+  // an already-aborted signal's 'abort' event has fired and will never fire again, so the listener below would leave the promise pending forever
   if (unregisterSignal?.aborted) {
     rejectRemoteValue(unregisterSignal.reason)
     connectionQueue.close()
     return asExposed<T, TResult>(firstConnection, connectionQueue, select)
   }
 
-  // Abort = explicit local teardown: notify every tracked peer, dispose
-  // per-connection state, and reject the (possibly still pending) handshake.
   unregisterSignal?.addEventListener('abort', () => {
     for (const [peerUuid, connectionContext] of connectionContexts) {
       sendEnvelope({ type: 'close', remoteUuid: peerUuid as Uuid })
       runTeardown(connectionContext.connection.revivableContext)
     }
     connectionContexts.clear()
-    // the other two exit paths close the queue; without this a `for await` over connections never
-    // terminates and its async function never resumes
+    // the other two exit paths close the queue; without this a `for await` over connections never terminates
     connectionQueue.close()
     rejectRemoteValue(unregisterSignal.reason)
   }, { once: true })

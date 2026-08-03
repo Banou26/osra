@@ -8,17 +8,11 @@ import { mkdir, writeFile } from 'fs/promises'
 import { transportTests, memoryTests, standaloneTests, gcTests } from './registry'
 import { transports } from './transports'
 
-// Heaviest memory test (concurrentCallsNoLeak) lands around 50s on a
-// quiet machine and pushes higher under parallel CPU contention. Give
-// the group enough headroom that the timeout fires on real hangs, not
-// on scheduling jitter from sibling tests.
+// Heaviest memory test (concurrentCallsNoLeak) lands around 50s on a quiet machine.
 const MEMORY_TEST_TIMEOUT_MS = 120_000
 const GC_TEST_TIMEOUT_MS = 30_000
 
-// Resolve the test bundle's absolute path from this file's location so
-// page.addScriptTag works regardless of which cwd the per-browser
-// Playwright worker is launched from (WebKit's worker resolves relative
-// paths from a different directory and fails ENOENT on './build/...').
+// Absolute so addScriptTag works from any cwd - WebKit's Playwright worker resolves relative paths elsewhere.
 const TEST_BUNDLE_PATH = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
   '..',
@@ -30,7 +24,6 @@ const TEST_BUNDLE_PATH = path.join(
 test.beforeEach(async ({ page }) => {
   await page.goto('http://localhost:3000')
   await page.addScriptTag({ path: TEST_BUNDLE_PATH, type: 'module' })
-  // The bundle exposes globalThis.__osraRun once side-effect imports settle.
   await page.waitForFunction(() => '__osraRun' in globalThis)
 })
 
@@ -45,9 +38,6 @@ test.afterEach(async ({ page }) => {
   )
 })
 
-// Heap measurement bracket - call before the test body, await the returned
-// finalizer afterwards. Iterates GC + a microtask break so FinalizationRegistry
-// callbacks fire before the final measurement.
 const measureHeapGrowth = async (page: Page, threshold: number) => {
   const client = await page.context().newCDPSession(page)
   await client.send('Performance.enable')
@@ -69,9 +59,6 @@ const measureHeapGrowth = async (page: Page, threshold: number) => {
   }
 }
 
-// Transport-parameterized matrix: every test in transportTests runs once per
-// registered transport. Adding a new transport in transports.ts grows the
-// matrix automatically; adding a new test in any registered module the same.
 for (const t of transports) {
   test.describe(t.name, () => {
     for (const [group, suite] of Object.entries(transportTests)) {
@@ -87,9 +74,6 @@ for (const t of transports) {
       })
     }
 
-    // measureHeapGrowth uses CDP's Performance.getMetrics +
-    // HeapProfiler.collectGarbage to take deterministic heap snapshots.
-    // Both are Chromium-only; skip on other browsers.
     test.describe('MemoryLeaks', () => {
       test.skip(({ browserName }) => browserName !== 'chromium', 'CDP required')
       for (const name of Object.keys(memoryTests)) {
@@ -105,12 +89,7 @@ for (const t of transports) {
       }
     })
 
-    // page.requestGC() triggers GC across Chromium, Firefox, and WebKit
-    // (added in Playwright 1.48 via PR microsoft/playwright#32383). We
-    // still need to drain macrotasks between collections so
-    // FinalizationRegistry callbacks (queued as jobs, not sync) actually
-    // fire. The macrotask sleep is what makes the WeakRef-based assertions
-    // observe the post-GC state.
+    // Drain macrotasks between collections so FinalizationRegistry callbacks actually fire.
     test.describe('GcTests', () => {
       for (const name of Object.keys(gcTests)) {
         test(name, async ({ page }) => {
@@ -131,7 +110,6 @@ for (const t of transports) {
   })
 }
 
-// Standalone groups: not transport-parameterized.
 for (const [group, suite] of Object.entries(standaloneTests)) {
   test.describe(group, () => {
     for (const name of Object.keys(suite)) {

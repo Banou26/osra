@@ -1,13 +1,5 @@
-// Builds the test extension for the Playwright extension suite.
-//
-// Each entry (background, content, popup) must be self-contained - content
-// scripts and MV3 service workers can't share chunks - so we run vite once
-// per entry rather than relying on rollup multi-input.
-//
-// This used to be a vite config (`vite.extension-test.config.ts`) that
-// triggered three nested `viteBuild()` calls from a `buildStart` plugin
-// hook. With `formats: []` on the outer config, vite 8 returns before
-// plugin hooks fire, leaving the build silently empty.
+// each entry must be self-contained: content scripts and MV3 service workers can't share chunks
+// do not fold this back into a vite config: as vite.extension-test.config.ts it ran three nested viteBuild() calls from a buildStart hook, and with `formats: []` on the outer config vite 8 returns before plugin hooks fire, leaving the extension build silently empty
 
 import { build as viteBuild } from 'vite'
 import { resolve, dirname } from 'node:path'

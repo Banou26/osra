@@ -1,7 +1,4 @@
-// Fast per-file validation of ```ts twoslash blocks without a full astro
-// build. Usage: node scripts/check-twoslash.mjs [file ...]
-// With no arguments, checks every .md/.mdx under src/content/docs.
-// compilerOptions must stay in sync with ec.config.mjs.
+// compilerOptions must stay in sync with ec.config.mjs
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { createTwoslasher } from 'twoslash'

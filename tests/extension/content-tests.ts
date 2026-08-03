@@ -16,7 +16,6 @@ export const setBgInitiatedApi = (newApi: TestAPI) => {
   bgInitiatedApi = newApi
 }
 
-// Content -> Background tests
 export const echo = () => base.echo(api)
 export const add = () => base.add(api)
 export const mathMultiply = () => base.mathMultiply(api)
@@ -31,7 +30,6 @@ export const getBuffer = () => base.getBuffer(api)
 export const getPromise = () => base.getPromise(api)
 export const getStream = () => base.getStream(api)
 
-// Background -> Content tests (via content-initiated connection)
 export const bgToContentGetInfo = () => bgToContent.bgToContentGetInfo(api)
 export const bgToContentProcess = () => bgToContent.bgToContentProcess(api)
 export const bgToContentCallback = () => bgToContent.bgToContentCallback(api)
@@ -40,7 +38,6 @@ export const bgToContentGetError = () => bgToContent.bgToContentGetError(api)
 export const bgToContentThrowError = () => bgToContent.bgToContentThrowError(api)
 export const bgToContentProcessBuffer = () => bgToContent.bgToContentProcessBuffer(api)
 
-// Background-initiated connection tests
 export const bgInitiatedConnect = () => bgInitiated.bgInitiatedConnect(api)
 export const bgInitiatedGetInfo = () => bgInitiated.bgInitiatedGetInfo(api)
 export const bgInitiatedProcess = () => bgInitiated.bgInitiatedProcess(api)

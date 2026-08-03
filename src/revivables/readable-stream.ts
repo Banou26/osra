@@ -52,9 +52,8 @@ export const box = <T extends ReadableStream, T2 extends RevivableContext>(
 
   const finish = (message: PushMessage) => {
     finished = true
-    // The terminal itself can fail to box - still close so the peer's
-    // close arm errors the consumer instead of hanging it.
-    try { localPort.postMessage(message) } catch { /* unboxable terminal */ }
+    // The terminal itself can fail to box - still close so the peer's close arm errors the consumer instead of hanging it
+    try { localPort.postMessage(message) } catch {}
     localPort.close()
   }
 
@@ -76,8 +75,6 @@ export const box = <T extends ReadableStream, T2 extends RevivableContext>(
       credit--
       try { localPort.postMessage({ type: 'chunk', value: result.value as Capable }) }
       catch (error) {
-        // Chunk failed to box (circular graph, detached buffer): error the
-        // consumer like 0.5.5 did instead of hanging it, and free the source.
         finish({ type: 'error', error: error as Capable })
         reader.cancel(error).catch(() => {})
         return
@@ -100,8 +97,6 @@ export const box = <T extends ReadableStream, T2 extends RevivableContext>(
       localPort.close()
     }
   })
-  // Abnormal channel death (consumer dropped, connection closed): stop the
-  // producer and release the source lock instead of leaking both forever.
   localPort.addEventListener('close', () => {
     if (finished) return
     finished = true
@@ -123,8 +118,7 @@ const reviveCredit = (port: AnyPort<Msg>): ReadableStream => {
   let done = false
   let outstanding = 0
   let averageChunkBytes: number | undefined
-  // Pipelined chunks wait here, not in the controller queue - controller.error
-  // discards queued chunks, and an early error must not eat delivered data.
+  // Pipelined chunks wait here, not in the controller queue - controller.error discards queued chunks, and an early error must not eat delivered data
   const buffered: unknown[] = []
   let ended = false
   let errored = false
@@ -135,10 +129,7 @@ const reviveCredit = (port: AnyPort<Msg>): ReadableStream => {
     reject: (error: unknown) => void
   } | undefined
 
-  // Chunk sizes aren't knowable up front, so the window adapts: deep for
-  // small chunks, shallow for large ones, bounded by an in-flight byte budget.
-  // Unmeasurable chunk types (plain objects, Maps, ...) stay at the initial
-  // window - jumping to MAX with zero byte accounting is how memory blows up.
+  // Unmeasurable chunk types (plain objects, Maps, ...) stay at the initial window - jumping to MAX with zero byte accounting is how memory blows up
   const targetWindow = () =>
     averageChunkBytes !== undefined
       ? Math.max(MIN_CREDIT_WINDOW, Math.min(MAX_CREDIT_WINDOW, Math.floor(CREDIT_BYTE_BUDGET / averageChunkBytes)))
@@ -176,8 +167,6 @@ const reviveCredit = (port: AnyPort<Msg>): ReadableStream => {
         if (data.type === 'chunk') {
           if (done) return
           if (outstanding <= 0) {
-            // Peer sent chunks past its granted credit - fail closed and stop
-            // dispatching instead of buffering a flood without bound.
             buffered.length = 0
             fail(new Error('osra: stream exceeded its credit window'))
             queueMicrotask(() => port.close())
@@ -208,8 +197,6 @@ const reviveCredit = (port: AnyPort<Msg>): ReadableStream => {
           fail(data.error)
         }
       })
-      // Channel death mid-stream (source dropped, connection closed): error
-      // the consumer once delivered chunks drain, instead of hanging a read.
       port.addEventListener('close', () => {
         if (done || ended || errored) return
         fail(new Error('osra: connection closed'))
@@ -219,8 +206,6 @@ const reviveCredit = (port: AnyPort<Msg>): ReadableStream => {
       if (done) return
       if (buffered.length) {
         controller.enqueue(buffered.shift())
-        // No top-up once the box has terminated - it would be a dead grant
-        // posted to a closed channel.
         if (!ended && !errored) topUp()
         return
       }
@@ -253,12 +238,10 @@ const revivePull = (port: AnyPort<Msg>): ReadableStream => {
   let done = false
   return new ReadableStream({
     start: (controller) => {
-      // Channel death mid-stream (source dropped, connection closed): error
-      // the consumer instead of hanging its pending read forever.
       port.addEventListener('close', () => {
         if (done) return
         done = true
-        try { controller.error(new Error('osra: connection closed')) } catch { /* already settled */ }
+        try { controller.error(new Error('osra: connection closed')) } catch {}
       }, { once: true })
     },
     pull: (controller) => new Promise<void>((resolve, reject) => {
@@ -269,7 +252,6 @@ const revivePull = (port: AnyPort<Msg>): ReadableStream => {
             if (result.done) {
               done = true
               controller.close()
-              // Stream exhausted - release the channel on both sides.
               port.postMessage({ type: 'cancel' })
               queueMicrotask(() => port.close())
             }
@@ -286,7 +268,6 @@ const revivePull = (port: AnyPort<Msg>): ReadableStream => {
     cancel: (reason) => {
       done = true
       port.postMessage({ type: 'cancel', reason: reason as Capable })
-      // Defer close so the cancel message dispatches before tear-down.
       queueMicrotask(() => port.close())
     },
   })
@@ -298,8 +279,7 @@ export const revive = <T extends BoxedReadableStream, T2 extends RevivableContex
 ): T[UnderlyingType] => {
   const port = reviveMessagePort(value.port, context)
   port.start()
-  // A box that doesn't advertise credit (osra <= 0.5.5) cancels on any
-  // unknown message, so it must only ever be spoken to in pull.
+  // A box that doesn't advertise credit (osra <= 0.5.5) cancels on any unknown message, so it must only ever be spoken to in pull
   return (value.credit ? reviveCredit(port) : revivePull(port)) as T[UnderlyingType]
 }
 

@@ -3,15 +3,11 @@ import type { ContentAPI } from './types'
 
 import { expose } from '../../src/index'
 
-// Content API from content-initiated connection
 let contentApi: ContentAPI | null = null
-// Content API from background-initiated connection
 let bgInitiatedContentApi: ContentAPI | null = null
-// Tab ID from the content-initiated connection (for background-initiated connection)
 let connectedTabId: number | null = null
 
 const resolvers = {
-  // Original background API (content->background)
   echo: async <T>(data: T): Promise<T> => data,
   add: async (a: number, b: number) => a + b,
   math: {
@@ -38,7 +34,6 @@ const resolvers = {
     }
   }),
 
-  // Background->Content via content-initiated connection
   bgToContent: {
     getInfo: async () => {
       if (!contentApi) throw new Error('Content not connected')
@@ -70,7 +65,6 @@ const resolvers = {
     },
   },
 
-  // Background-initiated connection methods
   bgInitiated: {
     connect: async () => {
       if (!connectedTabId) throw new Error('No tab connected yet')
@@ -113,10 +107,8 @@ const resolvers = {
 
 export type Resolvers = typeof resolvers
 
-// Listen for content-initiated connections (port-based)
 chrome.runtime.onConnect.addListener(async (port) => {
   if (port.name.startsWith('content-')) {
-    // Track the tab ID for background-initiated connections
     connectedTabId = port.sender?.tab?.id ?? null
     contentApi = await expose<ContentScriptResolvers>(resolvers, {
       transport: { isJson: true, emit: port, receive: port }
@@ -124,7 +116,6 @@ chrome.runtime.onConnect.addListener(async (port) => {
   }
 })
 
-// Listen for content-initiated connections (runtime sendMessage-based)
 let runtimeContentApi: ContentAPI | null = null
 
 chrome.runtime.onMessage.addListener(function runtimeInitialListener(message, sender) {

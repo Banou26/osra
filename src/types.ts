@@ -12,9 +12,7 @@ export const OSRA_BOX = '__OSRA_BOX__' as const
 
 export type Uuid = `${string}-${string}-${string}-${string}-${string}`
 
-/* `ReadonlyArray` (a supertype of `Array`) throughout these unions:
- * `expose()` infers its value with a `const` type parameter, so inline
- * array literals arrive as readonly tuples and must stay assignable. */
+/* `ReadonlyArray` throughout these unions: `expose()` infers its value with a `const` type parameter, so inline array literals arrive as readonly tuples and must stay assignable. */
 export type Jsonable =
   | boolean
   | null
@@ -25,7 +23,6 @@ export type Jsonable =
 
 export type Structurable =
   | Jsonable
-  /** not really structureable but here for convenience */
   | void
   | undefined
   | bigint
@@ -43,11 +40,7 @@ export type Structurable =
   | Map<Structurable, Structurable>
   | Set<Structurable>
 
-/** lib.dom declares some `Transferable` members as EMPTY interfaces
- *  (`MediaSourceHandle` as of TS 5.x/7.x). With no members they structurally
- *  absorb every object type, which would let `WeakMap` & co. slip past the
- *  `Capable` check unnoticed. Drop member-less types from the compile-time
- *  union; runtime transfer of those exotic types is unaffected. */
+/** lib.dom declares some `Transferable` members as EMPTY interfaces (`MediaSourceHandle`), and with no members they structurally absorb every object type. */
 type NonAbsorbing<T> = T extends unknown ? keyof T extends never ? never : T : never
 
 export type StructurableTransferable =
@@ -58,10 +51,7 @@ export type StructurableTransferable =
   | Map<StructurableTransferable, StructurableTransferable>
   | Set<StructurableTransferable>
 
-/** "Free" types in `Capable` - narrows to `Jsonable` on JSON transports so
- *  user code can't type a `Date`/`File`/etc. that JSON would silently coerce.
- *  Modules that DO support JSON (date, map, set, bigint, …) put their type
- *  back via `InferRevivables`. */
+/** Narrows to `Jsonable` on JSON transports; modules that DO support JSON put their type back via `InferRevivables`. */
 type CapableBase<Ctx extends RevivableContext> =
   IsJsonOnlyTransport<Ctx['transport']> extends true
     ? Jsonable | undefined | void
@@ -78,9 +68,7 @@ export type Capable<
   | Map<Capable<TModules, Ctx>, Capable<TModules, Ctx>>
   | Set<Capable<TModules, Ctx>>
 
-/** What a value looks like from the far side of the connection: functions
- *  become async (calls cross the wire), containers map recursively,
- *  everything else revives as itself. */
+/** What a value looks like from the far side of the connection: functions become async, containers map recursively, everything else revives as itself. */
 export type Remote<T> =
   T extends (...args: infer P) => infer R ? (...args: P) => Promise<Remote<Awaited<R>>>
   : T extends Promise<infer U> ? Promise<Remote<U>>
@@ -102,7 +90,6 @@ export type MessageFields = {
 
 export type MessageBase = {
   [OSRA_KEY]: string
-  /** UUID of the client that sent the message */
   uuid: Uuid
   name?: string
 }

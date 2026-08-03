@@ -3,9 +3,7 @@ import starlight from '@astrojs/starlight'
 
 export default defineConfig({
   site: 'https://osra.banou.dev',
-  // The site has no homepage; the root goes straight to the docs. The
-  // static build emits a meta-refresh page for local preview, while
-  // public/_redirects gives production a real 302 on Cloudflare Pages.
+  // the static build emits a meta-refresh page for local preview, while public/_redirects gives production a real 302 on Cloudflare Pages
   redirects: {
     '/': '/general/getting-started/',
     '/start/getting-started/': '/general/getting-started/',

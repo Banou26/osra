@@ -2,10 +2,6 @@ import { expect } from 'chai'
 
 import { expose } from '../../src/index'
 
-// Real MessageChannel exercises the structured-clone serialization path that
-// `window.postMessage`-loopback never hits (same realm, no actual cloning).
-// Each test gets its own pair so listeners don't leak.
-
 // No manual start() - registerOsraMessageListener must start the ports itself.
 const newPair = () => new MessageChannel()
 

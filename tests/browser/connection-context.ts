@@ -4,13 +4,10 @@ import type { Connected } from '../../src/index'
 
 import { expose, context } from '../../src/index'
 
-// The per-connection surface: a context built from local knowledge, iteration over every peer, and
-// a per-connection abort. Every case here stands for a defect that shipped once and must not again.
+// The per-connection surface. Every case here stands for a defect that shipped once and must not again.
 
 const newPair = () => new MessageChannel()
 
-// The factory runs once per connection and what it returns is what that peer receives, which is how
-// one server answers each realm differently instead of sharing one object across all of them.
 export const theFactoryBuildsTheValuePerConnection = async () => {
   const { port1, port2 } = newPair()
   let built = 0
@@ -23,8 +20,6 @@ export const theFactoryBuildsTheValuePerConnection = async () => {
   await expect(remote.who()).to.eventually.equal('peer-1-abort-function')
 }
 
-// A function VALUE must stay a plain exposed endpoint. Detecting a factory by `typeof` would have
-// swallowed it, which is why the marker exists.
 export const bareFunctionValueIsStillAnEndpoint = async () => {
   const { port1, port2 } = newPair()
   const value = async (n: number) => n * 2
@@ -33,9 +28,6 @@ export const bareFunctionValueIsStillAnEndpoint = async () => {
   await expect(remote(21)).to.eventually.equal(42)
 }
 
-// A MessagePort message carries origin '' and source null, so neither survives into the context.
-// Measured, not assumed: it is why a port-based server takes its peer's identity from the lexical
-// scope that created the port rather than from anything the connection can tell it.
 export const aPortObservesNothingButAbort = async () => {
   const { port1, port2 } = newPair()
   let seen: Record<string, unknown> | undefined
@@ -67,8 +59,6 @@ export const iterationYieldsTheConnection = async () => {
   expect(typeof seen[0]!.abort, 'iteration yields the selected shape').to.equal('function')
 }
 
-// No selector: the result is the peer's value, exactly what expose resolved to before any of this.
-// With one: whatever it returns, for the await and for iteration alike.
 export const theSelectorDecidesWhatAConnectionIs = async () => {
   const { port1, port2 } = newPair()
   const api = { ping: async () => 'pong' }
@@ -78,9 +68,7 @@ export const theSelectorDecidesWhatAConnectionIs = async () => {
   const bare = await expose<typeof api>({}, { transport: port2 })
   await expect(bare.ping(), 'no selector gives the remote itself').to.eventually.equal('pong')
 
-  // No explicit type argument here, deliberately: TypeScript has no partial type-argument inference,
-  // so supplying one makes every later parameter fall back to its default and the selector's return
-  // type stops being inferred. Type the remote on the selector's parameter instead.
+  // No explicit type argument here, deliberately: TypeScript has no partial type-argument inference, so supplying one makes the selector's return type stop being inferred
   const { value, context: ctx } = await expose({}, {
     transport: port2,
     key: 'paired',
@@ -90,7 +78,6 @@ export const theSelectorDecidesWhatAConnectionIs = async () => {
   expect(typeof ctx.abort, 'the context carries this peer\'s abort').to.equal('function')
 }
 
-// The selector can return anything, not just a wrapper: it decides what a connection MEANS here.
 export const theSelectorCanReturnAnything = async () => {
   const { port1, port2 } = newPair()
   expose({ ping: async () => 'pong' }, { transport: port1 })
@@ -101,8 +88,6 @@ export const theSelectorCanReturnAnything = async () => {
   expect(canDrop, 'a connection can be just the one thing this caller cares about').to.equal(true)
 }
 
-// Several loops over one expose each mean "tell me about every peer". A shared cursor would let
-// whichever one happened to be waiting eat the peer the other was waiting for.
 export const everyLoopSeesEveryPeer = async () => {
   const { port1, port2 } = newPair()
   const api = { ping: async () => 'pong' }
@@ -134,9 +119,6 @@ export const abortClosesOnlyThatConnection = async () => {
   await expect(remote.ping()).to.eventually.be.rejected
 }
 
-// Calling abort from inside the factory used to be a silent no-op AND the value had already been
-// sent, so the obvious deny pattern handed the peer a working connection. The value is now built
-// before the connection starts, so a refusal beats it out the door and the peer never resolves at all.
 export const abortInsideTheFactoryRefusesTheConnection = async () => {
   const { port1, port2 } = newPair()
   expose(
@@ -146,9 +128,6 @@ export const abortInsideTheFactoryRefusesTheConnection = async () => {
   await expect(expose<{ ping: () => Promise<string> }>({}, { transport: port2 })).to.eventually.be.rejected
 }
 
-// A throwing factory has to settle BOTH sides. The close carries our uuid, and the peer only tracks
-// us once it has seen our announce - which the announce branch sends before it builds anything, so
-// channel ordering guarantees the peer is tracking us by the time the close lands.
 export const throwingContextFactoryRejectsBothSides = async () => {
   const { port1, port2 } = newPair()
   const server = expose(
@@ -160,8 +139,6 @@ export const throwingContextFactoryRejectsBothSides = async () => {
   await expect(client).to.eventually.be.rejected
 }
 
-// Same, on the preset-uuid path, which skips the announce exchange entirely and registers the peer
-// synchronously instead.
 export const throwingContextFactoryRejectsBothSidesWithPresetUuids = async () => {
   const { port1, port2 } = newPair()
   const a = globalThis.crypto.randomUUID()
@@ -175,7 +152,6 @@ export const throwingContextFactoryRejectsBothSidesWithPresetUuids = async () =>
   await expect(client).to.eventually.be.rejected
 }
 
-// Aborting the whole expose has to end iteration; leaving the queue open hung the loop forever.
 export const unregisterAbortEndsIteration = async () => {
   const { port1, port2 } = newPair()
   const controller = new AbortController()
@@ -183,7 +159,7 @@ export const unregisterAbortEndsIteration = async () => {
   expose({}, { transport: port2 })
   let ended = false
   const looping = (async () => {
-    for await (const _ of connections) { /* drain */ }
+    for await (const _ of connections) {}
     ended = true
   })()
   controller.abort()
@@ -191,8 +167,6 @@ export const unregisterAbortEndsIteration = async () => {
   expect(ended, 'iteration terminated after the signal aborted').to.equal(true)
 }
 
-// An abandoned iterator used to leave its resolver in the shared queue, so the next connection was
-// handed to a dead iterator and neither delivered nor buffered.
 export const abandonedIteratorDoesNotSwallowAConnection = async () => {
   const { port1, port2 } = newPair()
   const connections = expose({}, { transport: port1 })
@@ -208,8 +182,6 @@ export const abandonedIteratorDoesNotSwallowAConnection = async () => {
   await firstNext.catch(() => {})
 }
 
-// An invalid transport used to throw synchronously once expose stopped being async, blowing past
-// every .catch a consumer had written.
 export const invalidTransportRejectsRatherThanThrows = async () => {
   const emitOnly = { emit: (() => {}) as never }
   let threw = false
