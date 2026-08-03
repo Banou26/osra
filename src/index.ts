@@ -18,11 +18,20 @@ export * from './utils/index.js'
 
 // named for the revivable context specifically: `ContextOf` is the PUBLIC helper for a connection
 // context builder, re-exported from connections/utils, and two of them in one module is a trap
+/** Synthetic context so `Capable` can narrow on the inferred transport
+ *  without an actual context object at the call site. Only `transport`
+ *  matters; the rest is stubbed with the broadest types.
+ *  Named for the revivable context specifically: `ContextOf` is the PUBLIC helper for a connection
+ *  context builder, re-exported from connections/utils, and two of them in one module is a trap. */
 type RevivableContextOf<TTransport extends Transport> = RevivableContext & { transport: TTransport }
 
 // picks between two error texts: when the value fails ONLY because the transport is JSON (it would
 // pass under the broad `RevivableContext`, whose transport union resolves to structured-clone
 // semantics), blame the transport instead of the value
+/** Error text for a failed check. When the value only fails because the
+ *  transport is JSON (it would pass under the broad `RevivableContext`,
+ *  whose transport union resolves to structured-clone semantics), blame
+ *  the transport instead of the value. */
 type CapableCheckMessage<
   T,
   TModules extends readonly RevivableModule[],
@@ -63,8 +72,8 @@ type CapableCheck<
  * for await (const remote of expose(resolvers, { transport })) { } // every peer's value
  * ```
  *
- * `connection` decides what that shape is. Omit it and it is the peer's value. Return whatever a
- * connection should mean instead:
+ * `connection` decides what that shape is. Omit it and it is the peer's value, which is what expose
+ * has always resolved to. Return whatever a connection should mean instead:
  *
  * ```ts
  * const { value, context } = await expose(resolvers, {

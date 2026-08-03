@@ -23,7 +23,8 @@ export type BoxedAbortSignal =
   & {
     aborted: boolean
     reason?: Capable
-    /** Absent when the signal was already aborted at box time - the reason rides the wrapper. */
+    /** Absent when the signal was already aborted at box time - the reason
+     *  rides the wrapper and no live channel is needed. */
     port?: BoxedMessagePort<AbortMessage>
   }
 

@@ -41,14 +41,23 @@ type FindBadField<T, TConstraint, TPath extends string = '', TParent = T> =
             : never
         : { value: T; path: TPath; parent: TParent }
 
-/** The first non-conforming value found by deep traversal of `T` against `TConstraint`. */
+/**
+ * The first non-conforming value found by deep traversal of `T` against
+ * `TConstraint`. Falls back to `T` if no traversal is applicable.
+ */
 export type BadFieldValue<T, TConstraint> =
   FindBadField<T, TConstraint> extends { value: infer V } ? V : T
 
-/** Dotted/bracketed path to the first non-conforming value (e.g. `"a.b[2]"`), empty if the root fails. */
+/**
+ * Dotted/bracketed path to the first non-conforming value (e.g. `"a.b[2]"`).
+ * Empty string if the root itself fails the check.
+ */
 export type BadFieldPath<T, TConstraint> =
   FindBadField<T, TConstraint> extends { path: infer P extends string } ? P : ''
 
-/** The immediate parent object/array containing the first non-conforming value, or `T` when the root fails. */
+/**
+ * The immediate parent object/array containing the first non-conforming
+ * value. Equals `T` when the root itself fails.
+ */
 export type BadFieldParent<T, TConstraint> =
   FindBadField<T, TConstraint> extends { parent: infer P } ? P : T

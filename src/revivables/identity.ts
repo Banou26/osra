@@ -32,7 +32,8 @@ export type BoxedIdentity<T extends Capable = Capable> = BoxBaseType<typeof type
 const isObjectOrFunction = (value: unknown): value is object =>
   value !== null && (typeof value === 'object' || typeof value === 'function')
 
-/** Excludes registered symbols (Symbol.for) - those throw at runtime. */
+/** Anything we can hand to WeakMap/WeakRef/FinalizationRegistry. Excludes
+ *  registered symbols (Symbol.for) - those throw at runtime. */
 const isWeakKeyable = (value: unknown): value is WeakKey => {
   if (value === null) return false
   const t = typeof value
@@ -55,15 +56,21 @@ const wrap = (value: object): IdentityWrapper => {
   return wrapper
 }
 
-/** Wrap a value so osra preserves reference identity across the RPC boundary. Idempotent; primitives pass through unchanged. */
+/** Wrap a value so osra preserves reference identity across the RPC
+ *  boundary. Idempotent; primitives pass through unchanged. Lies at the
+ *  type level - runtime value is an IdentityWrapper<T> typed as T. */
 export const identity = <T>(value: T): T =>
   (isObjectOrFunction(value) ? wrap(value) : value) as T
 
 type IdentityState = {
   readonly sendIds: WeakMap<WeakKey, string>
+  /** id → ref to the value we sent, so a round-trip resolves to the
+   *  original reference instead of building a fresh proxy. */
   readonly idToSent: Map<string, WeakRef<WeakKey>>
   readonly sendRegistry: FinalizationRegistry<string>
   readonly receiveCache: Map<string, unknown>
+  /** Revived value → id, so user code passing a revived value back to
+   *  its origin replays the peer's id and short-circuits to the real ref. */
   readonly revivedToId: WeakMap<WeakKey, string>
   listenerInstalled: boolean
 }
@@ -110,6 +117,9 @@ const installReceiveListener = (context: RevivableContext, state: IdentityState)
 export const isType = (value: unknown): value is IdentityWrapper =>
   isIdentityWrapper(value)
 
+/** Look up or assign the id for a referenceable value. Returns whether
+ *  the id is already-known (resend or round-trip) so the caller can skip
+ *  shipping the inner payload. */
 const registerForReference = (
   value: WeakKey,
   state: IdentityState,
@@ -140,7 +150,10 @@ export const box = <T extends Capable, TContext extends RevivableContext>(
   return { ...BoxBase, type, id, inner: innerBox } as BoxedIdentity<T>
 }
 
-/** Takes a caller-supplied inner box: recursing back through their own box would loop into this module again. */
+/** Identity-box a referenceable value with a caller-supplied inner box,
+ *  bypassing the recursive-box step. Used by revivables (symbol with
+ *  description=undefined) where recursing back through their own box
+ *  would loop into this module again. */
 export const boxByReference = <T extends WeakKey, TContext extends RevivableContext>(
   value: T,
   innerBox: Capable,

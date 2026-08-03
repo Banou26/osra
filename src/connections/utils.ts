@@ -27,6 +27,10 @@ export const normalizeTransport = (transport: Transport): Transport => {
   } as Transport
 }
 
+/** Resolves the final revivable module list. The user supplies a function
+ *  that takes the defaults and returns whatever ordering/composition they
+ *  want - add modules, drop defaults, reorder, override per-type. When
+ *  omitted, the defaults are used as-is. */
 export const mergeRevivableModules = <
   TModules extends readonly RevivableModule[] = DefaultRevivableModules
 >(
@@ -51,16 +55,24 @@ export type ProtocolContext<
   TModules extends readonly RevivableModule[] = DefaultRevivableModules
 > = {
   transport: Transport
+  /** The exposed value for ONE peer. A factory rather than a value so a server can answer each realm
+   *  differently (scoped resolvers per origin) instead of sharing one object across every connection. */
   valueFor: (peer: Context) => Capable<TModules>
   revivableModules: TModules
   connectionContexts: Map<string, ConnectionContext<TModules>>
   getUuid: () => Uuid
   presetRemoteUuid?: Uuid
+  /** targetOrigin overrides the configured origin for this one send - only
+   *  the unsolicited announce beacon broadcasts with '*'. */
   sendMessage: (message: MessageVariant, targetOrigin?: string) => void
   protocolEventTarget: ProtocolEventTarget<TModules>
   rejectRemoteValue: (error: unknown) => void
+  /** reports an established connection: settles the first-connection promise and feeds iteration, so
+   *  a caller sees every realm rather than only the one that happened to connect first */
   addConnection: (ctx: Context, value: Capable<TModules>) => void
+  /** tears down one connection: close to the peer, teardown locally, drop it from tracking */
   abortConnection: (remoteUuid: Uuid) => void
+  /** true when this uuid was aborted before it was registered, which means refuse the registration */
   claimPendingAbort: (remoteUuid: Uuid) => boolean
   createConnectionEventTarget: () => TypedEventTarget<MessageEventMap<TModules>>
   unregisterSignal?: AbortSignal
@@ -75,19 +87,48 @@ export type StartConnectionsOptions<
   key?: string
   origin?: string
   unregisterSignal?: AbortSignal
+  /** Configure the revivable module list. Receives the defaults and
+   *  returns the final ordered list - add modules, drop defaults, reorder,
+   *  or override per-type as needed. */
   revivableModules?: (defaults: DefaultRevivableModules) => TModules
   uuid?: Uuid
   remoteUuid?: Uuid
-  /** Runs per connection on this side after the handshake; nothing it returns crosses the wire. */
+  /** Decides what one connection resolves to, for the await and for iteration alike. Omit it and that
+   *  is the peer's value, which is what `expose` has always given back:
+   *
+   *  ```ts
+   *  const remote = await expose(api, { transport })
+   *
+   *  const { value, context } = await expose(api, {
+   *    transport,
+   *    connection: ({ value, context }) => ({ value, context }),
+   *  })
+   *
+   *  for await (const origin of expose(api, {
+   *    transport,
+   *    connection: ({ context }) => context.origin,
+   *  })) { }
+   *  ```
+   *
+   *  It runs per connection, on this side, after the handshake. It cannot change what is sent, and
+   *  nothing it returns crosses the wire. */
   connection?: (connected: Connected<unknown>) => unknown
 }
 
+/** An established connection: the value that realm exposed, and what this side knows about the realm
+ *  it came from. `context` is whatever the transport observed, plus an `abort` that drops this one
+ *  peer. Anything derived from it is the caller's to compute, in the value factory or in
+ *  `connection:`, rather than something to declare up front. */
 export type Connected<TValue> = {
   value: TValue
   context: Context
 }
 
-/** Awaiting gives the first peer, iterating gives every peer as it connects; the shape comes from the `connection:` option. */
+/** The result of `expose`. Awaiting it gives the first peer, iterating it gives every peer as it
+ *  connects, and both hand back the same thing: one shape, read once or read repeatedly.
+ *
+ *  What that shape IS comes from the `connection:` option. Without one it is the peer's value, which
+ *  is what `expose` has always resolved to. With one it is whatever that function returns. */
 export type Exposed<TResult> = Promise<TResult> & AsyncIterable<TResult>
 
 export type ConnectionQueue<TRemote> = {
@@ -97,8 +138,16 @@ export type ConnectionQueue<TRemote> = {
 }
 
 // bounds what a consumer that never iterates retains: each buffered connection pins a Remote proxy and a window or MessagePort
+/** Multicast: every iterator sees every peer, rather than several loops sharing one cursor and each
+ *  taking a slice. Two loops watching one server both mean "tell me about every peer", and a shared
+ *  cursor makes whichever one happens to be waiting eat the peer the other was waiting for. */
+/** Until someone asks to iterate, a connection is buffered only up to this many. Every consumer that
+ *  just awaits the first connection would otherwise retain every later one for the transport's life,
+ *  each pinning a Remote proxy and a window or MessagePort. Buffering a few keeps the ordinary
+ *  "expose now, iterate on the next tick" case lossless; a consumer that never iterates cannot leak. */
 const PRE_ITERATION_BUFFER = 32
 
+/** @internal protocol plumbing, not part of the public api */
 export const createConnectionQueue = <TRemote>(): ConnectionQueue<TRemote> => {
   type Result = IteratorResult<Connected<TRemote>>
   type Subscriber = { buffered: Connected<TRemote>[], wake?: (result: Result) => void }
@@ -156,6 +205,11 @@ export const createConnectionQueue = <TRemote>(): ConnectionQueue<TRemote> => {
   }
 }
 
+/** The awaited-and-iterable result, with every connection passed through `select` first. The promise
+ *  is DERIVED from the first-connection promise, so it needs its own no-op catch: a fire-and-forget
+ *  `expose(...)` handles the original, and an unhandled derived rejection would still reach the
+ *  console. */
+/** @internal not part of the public api */
 export const asExposed = <T, TResult>(
   first: Promise<Connected<T>>,
   queue: ConnectionQueue<T>,
@@ -182,15 +236,32 @@ export const asExposed = <T, TResult>(
   return Object.assign(result, { [Symbol.asyncIterator]: iterate }) as Exposed<TResult>
 }
 
+/** An exposed value can itself be a function - osra exposes functions as endpoints - so a bare
+ *  `typeof value === 'function'` cannot tell a per-peer factory from a plain function value. The
+ *  marker makes the intent explicit and unambiguous. */
+/** @internal */
 export const CONTEXT = Symbol.for('osra.context')
 
 export type Contextual<TValue> = {
   [CONTEXT]: (ctx: Context) => TValue
 }
 
-/** Builds the exposed value once per connection, from that connection's context, before it is boxed and sent. */
+/** Build the exposed value once per connection, from that connection's context, rather than sharing
+ *  one value across every realm that connects. It runs BEFORE the value is boxed and sent, which is
+ *  what lets one server answer each realm differently:
+ *
+ *  ```ts
+ *  expose(context(({ origin }) => resolvers(idFor(origin))), { transport })
+ *  ```
+ *
+ *  A wrapper rather than "pass a function", because osra exposes functions as endpoints, so a bare
+ *  `typeof value === 'function'` cannot tell a per-peer factory from a plain function value.
+ *
+ *  What the read side needs is not declared here: `connection:` sees the same context and derives its
+ *  own. */
 export const context = <TValue,>(make: (ctx: Context) => TValue): Contextual<TValue> =>
   ({ [CONTEXT]: make })
 
+/** @internal */
 export const isContextual = <TValue,>(value: unknown): value is Contextual<TValue> =>
   typeof value === 'object' && value !== null && CONTEXT in value

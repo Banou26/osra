@@ -1,3 +1,8 @@
+/** Per-connection teardown registry. Revivables register cleanup for state
+ *  tied to a connection (pending RPC settlements, port routing, caches);
+ *  the connection layer runs it on protocol close or unregisterSignal abort.
+ *  Registering against an already-torn-down scope runs the callback
+ *  immediately so late registrations fail fast instead of leaking. */
 const registries = new WeakMap<WeakKey, Set<() => void>>()
 const tornDown = new WeakSet<WeakKey>()
 

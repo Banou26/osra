@@ -6,7 +6,8 @@ import { recursiveBox, recursiveRevive } from './index.js'
 
 export const type = 'event' as const
 
-/** Subclass-specific fields (MessageEvent.data, ErrorEvent.error, etc.) are dropped on the wire */
+/** Boxes Event/CustomEvent only. Subclass-specific fields (MessageEvent.data,
+ *  ErrorEvent.error, ProgressEvent.loaded, etc.) are dropped on the wire. */
 export type BoxedEvent =
   & BoxBaseType<typeof type>
   & { eventType: string, bubbles: boolean, cancelable: boolean, composed: boolean, detail?: Capable }

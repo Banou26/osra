@@ -106,6 +106,8 @@ export type BidirectionalConnection<
   remoteValue: Promise<Capable>
 }
 
+/** Mounts bidirectional mode on the shared protocol context. Only active
+ *  when the transport can both emit and receive. */
 export const init = <TModules extends readonly RevivableModule[]>(
   ctx: ProtocolContext<TModules>
 ): void => {

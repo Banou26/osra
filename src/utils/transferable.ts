@@ -24,6 +24,12 @@ const isMustTransfer = (value: unknown): value is Transferable =>
 const isTransferBox = (value: unknown): value is { inner: unknown, degraded: boolean } =>
   isRevivableBox(value) && value.type === 'transfer'
 
+/** Walk a boxed message and collect Transferables to move (rather than copy)
+ *  on postMessage:
+ *    1. Must-transfer types are always included.
+ *    2. Clonable types (SharedArrayBuffer) are skipped.
+ *    3. Other Transferables are included only inside a non-degraded transfer
+ *       box (user opted in AND the platform supports transferring). */
 export const getTransferableObjects = (value: unknown): Transferable[] => {
   const transferables: Transferable[] = []
   const seen = new WeakSet<object>()

@@ -25,12 +25,17 @@ export type RevivableContext<
 > = {
   transport: Transport
   remoteUuid: Uuid
-  /** broad on purpose: revivables post their own message variants, and narrowing brings back contravariant mismatches */
+  /** Typed as a broad dispatcher so revivables can post their own message
+   *  variants without triggering contravariant function-parameter mismatches
+   *  across modules. The shape is enforced structurally via `MessageFields`. */
   sendMessage: (message: MessageFields & Record<string, unknown>) => void
   revivableModules: TModules
   eventTarget: MessageEventTarget<TModules>
 }
 
+/** Extract the type a module's `isType` narrows to. Modules marked
+ *  `capableOnly: true` (clonable, transferable) contribute `never` on JSON
+ *  transports so users can't type values JSON would silently drop. */
 export type ExtractType<T, Ctx extends RevivableContext = RevivableContext> =
   T extends { capableOnly: true }
     ? IsJsonOnlyTransport<Ctx['transport']> extends true

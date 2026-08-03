@@ -42,7 +42,10 @@ const isWrappableTransferable = (value: unknown): boolean => {
   ])
 }
 
-/** Opt into transfer (move) semantics: non-transferable inputs pass through, and transports that can't move ownership silently degrade to a copy. */
+/** Opt into transfer (move) semantics for a transferable value. Idempotent;
+ *  non-transferable inputs pass through unchanged. Silently degrades to a
+ *  copy when the platform/transport can't transfer the given type. Lies at
+ *  the type level - runtime value is a TransferWrapper<T> typed as T. */
 export const transfer = <T>(value: T): T =>
   (isWrappableTransferable(value)
     ? { [TRANSFER_MARKER]: true, value }

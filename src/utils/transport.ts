@@ -12,8 +12,17 @@ import {
   isWebExtensionPort, isWebExtensionRuntime, isWebSocket, isWindow, isSharedWorker
 } from './type-guards.js'
 
-/** `origin` and `source` are only OBSERVABLE on window transports: a MessagePort message carries origin "" and source null. */
+/** What the local side knows about the realm on the other end of a connection.
+ *
+ *  `origin` and `source` are only OBSERVABLE on window transports. A MessagePort message carries
+ *  origin "" and source null, so for a port the identity has to be declared by whoever created the
+ *  transport, which is the side that received the port over a trustworthy window message. That is why
+ *  `expose` takes a `context` option rather than only reporting what it can see: without it, every
+ *  port-based consumer would rebuild the same out-of-band handshake to learn who it is talking to. */
 export type Context = {
+  /** Tears down THIS connection and nothing else: the peer is sent a close, its revivables are torn
+   *  down, and it stops being tracked. `unregisterSignal` is the whole-expose equivalent; this is the
+   *  one a server reaches for when a single realm misbehaves or is finished with. */
   abort?: () => void
   origin?: string
   source?: MessageEventSource | null

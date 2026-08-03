@@ -7,7 +7,9 @@ export type TransportName = 'Web' | 'JSON'
 export type TransportEntry = {
   readonly name: TransportName
   readonly factory: () => Transport
+  /** Iteration count for memory leak tests on this transport. */
   readonly memoryIterations: number
+  /** Allowed heap growth (bytes) before a memory test fails. */
   readonly memoryThreshold: number
 }
 

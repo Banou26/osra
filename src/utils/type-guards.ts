@@ -76,6 +76,8 @@ export const isOsraMessage = (value: unknown): value is Message =>
 
 type AnyConstructor = abstract new (...args: any[]) => unknown
 
+/** True if `value` is an instance of any of the given constructors.
+ *  Tolerates undefined entries (constructors missing on this platform). */
 export const instanceOfAny = (value: unknown, ctors: readonly (AnyConstructor | undefined)[]): boolean => {
   for (const ctor of ctors) if (ctor && value instanceof ctor) return true
   return false

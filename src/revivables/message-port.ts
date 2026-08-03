@@ -50,8 +50,11 @@ type StructurableTransferablePort<T> = [T] extends [Capable]
 // the credit-window readable-stream protocol relies on that in-order delivery; port messages can also arrive BEFORE the message that revives the port and registers its handler, which is why handler-less routing entries exist at all
 type PortRouting = {
   handler?: (message: Messages) => void
+  /** Next incoming seq to deliver. */
   nextSeq: number
+  /** Out-of-order / early incoming messages, keyed by their seq. */
   buffer: Map<number, Messages>
+  /** Next outgoing seq to stamp on this side's messages for the port. */
   outSeq: number
 }
 
@@ -63,8 +66,12 @@ const TOMBSTONE_LIMIT = 128
 const PENDING_PORT_LIMIT = 1024
 
 type ConnectionMessagePortState = {
+  /** O(1) per-portId routing - avoids the O(N) addEventListener scan that was the
+   *  bottleneck for tight-loop RPC traffic. */
   ports: Map<string, PortRouting>
+  /** Recently closed portIds, insertion-ordered for bounded eviction. */
   tombstones: Set<string>
+  /** Count of handler-less entries in `ports`. */
   pendingPorts: number
 }
 
@@ -272,6 +279,9 @@ export const revive = <T extends Capable, T2 extends RevivableContext>(
   return reviveViaPortId<T>(value.portId, context, value.synthetic)
 }
 
+/** Wraps a real MessagePort so revivables can treat it like a transparent
+ *  EventTarget that auto-boxes/revives - letting live values (Promises,
+ *  Functions, …) ride a clone-only transport. */
 const createProtocolPort = <T>(
   port: TypedMessagePort<Capable>,
   ctx: RevivableContext,
@@ -300,6 +310,9 @@ const createProtocolPort = <T>(
   return target
 }
 
+/** Factory for revivable-internal channels. Returns a local port that
+ *  auto-boxes live values regardless of transport, plus a pre-boxed remote
+ *  port the revivable embeds in its Boxed* structure. */
 export const createRevivableChannel = <T extends Capable>(
   context: RevivableContext,
 ): { localPort: AnyPort<T>, boxedRemote: BoxedMessagePort<T> } => {
